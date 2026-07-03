@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3c4d5e6f7a8490123456789abcdef01, type: 3}
+  m_Name: GamePieceCatalog
+  m_EditorClassIdentifier: 
+  levelBasePrefab: {fileID: 8421016826777449551, guid: 3ed1a950fba0326429ffcbaacf02ce50,
+    type: 3}
+  defaultPiecePrefab: {fileID: 5791608547771276974, guid: 9400046abe790a94283fd9357b0adcdb,
+    type: 3}
+  tunnelPrefab: {fileID: 8308986599234529015, guid: 642cef658ba1e45b7b670c933f4ed3f4,
+    type: 3}

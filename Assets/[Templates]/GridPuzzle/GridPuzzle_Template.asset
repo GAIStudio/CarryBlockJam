@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28f4159541ba5164e90246c41c8db2d5, type: 3}
+  m_Name: GridPuzzle_Template
+  m_EditorClassIdentifier: 
+  templateId: grid_puzzle
+  displayName: Grid Puzzle
+  description: 2D grid cell layout for match, merge, or placement puzzle games.
+  icon: {fileID: 0}
+  mechanicType: 0
+  gameData: {fileID: 11400000, guid: 14fe7ecfaf0532e44a698e6996435f7e, type: 2}
+  levelConfig: {fileID: 11400000, guid: 326c812f22a5347408a76dec2cffd088, type: 2}
+  templateLevels:
+  - {fileID: 11400000, guid: 3d8a3f3f13ba16f448287efd5fccaaff, type: 2}
+  sampleLevelPrefab: {fileID: 6525900654956952325, guid: 3ed1a950fba0326429ffcbaacf02ce50,
+    type: 3}
+  boardRootPrefab: {fileID: 6525900654956952325, guid: 3ed1a950fba0326429ffcbaacf02ce50,
+    type: 3}

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28f4159541ba5164e90246c41c8db2d5, type: 3}
+  m_Name: SlideLanePuzzle_Template
+  m_EditorClassIdentifier: 
+  templateId: slide_lane_puzzle
+  displayName: Slide Lane Puzzle
+  description: Lanes with depth slots; front pieces tap away and back pieces slide
+    forward.
+  icon: {fileID: 0}
+  mechanicType: 1
+  gameData: {fileID: 11400000, guid: 14fe7ecfaf0532e44a698e6996435f7e, type: 2}
+  levelConfig: {fileID: 11400000, guid: 326c812f22a5347408a76dec2cffd088, type: 2}
+  templateLevels:
+  - {fileID: 11400000, guid: c774c86dd98f48ed8c69ead89b4bc3bd, type: 2}
+  sampleLevelPrefab: {fileID: 947291001, guid: 4fe5c6bf2a8943c4bf53231b71078fa1, type: 3}
+  boardRootPrefab: {fileID: 947291001, guid: 4fe5c6bf2a8943c4bf53231b71078fa1, type: 3}
