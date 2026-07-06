@@ -18,6 +18,8 @@ namespace CarryBlockJam
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float highlightHeight = 0.08f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
+        [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 1.0f, 0f);
+        [SerializeField] private float carriedPlateStackStep = 0.28f;
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -26,8 +28,9 @@ namespace CarryBlockJam
         private int _swipeStartColumn;
         private bool _trackingSwipe;
         private bool _isAnimating;
+        private bool _successTriggered;
         private CarryBlockJamBoardPiece _cylinder;
-        private CarryBlockJamBoardPiece _carriedBox;
+        private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
 
@@ -113,8 +116,8 @@ namespace CarryBlockJam
             if (_cylinder == null)
                 return;
 
-            if (_carriedBox != null)
-                ExecuteReleaseSwipe(rowStep, columnStep, requestedSteps);
+            if (HasCarriedPlates)
+                ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
             else
                 ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
         }
@@ -124,6 +127,7 @@ namespace CarryBlockJam
             int row = _cylinder.Row;
             int column = _cylinder.Column;
             var path = new List<Vector2Int>();
+            List<CarryBlockJamBoardPiece> pickupPieces = null;
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
             {
@@ -146,18 +150,16 @@ namespace CarryBlockJam
                     continue;
                 }
 
-                if (IsCarryablePiece(nextPiece))
+                if (CanPickUpPiece(nextPiece))
                 {
-                    bool pickupFromPreviousCell = nextPiece.StackedBelow != null;
-                    PrepareBoxForPickup(nextPiece, nextRow, nextColumn);
-
+                    bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
+                    pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
                     if (!pickupFromPreviousCell)
                         path.Add(new Vector2Int(nextRow, nextColumn));
 
                     MoveConnectedCylinder(path, () =>
                     {
-                        nextPiece.AttachToCarrier(_cylinder.transform);
-                        _carriedBox = nextPiece;
+                        AddPlatesToCarryStack(pickupPieces);
                     });
                     return;
                 }
@@ -169,13 +171,12 @@ namespace CarryBlockJam
                 AnimateCylinderTravel(path);
         }
 
-        private void ExecuteReleaseSwipe(int rowStep, int columnStep, int requestedSteps)
+        private void ExecuteCarrySwipe(int rowStep, int columnStep, int requestedSteps)
         {
-            int startRow = _cylinder.Row;
-            int startColumn = _cylinder.Column;
-            int currentRow = startRow;
-            int currentColumn = startColumn;
+            int currentRow = _cylinder.Row;
+            int currentColumn = _cylinder.Column;
             var cylinderPath = new List<Vector2Int>();
+            List<CarryBlockJamBoardPiece> pickupPieces = null;
             CarryBlockJamBoardPiece targetBox = null;
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
@@ -199,7 +200,19 @@ namespace CarryBlockJam
                     continue;
                 }
 
-                if (IsMatchingDropTarget(nextPiece))
+                CarryBlockJamBoardPiece storageBox = GetStorageBox(nextPiece);
+                if (storageBox != null && storageBox.Color == CarriedColor)
+                {
+                    targetBox = storageBox;
+                }
+                else if (CanPickUpPiece(nextPiece) && nextPiece.Color == CarriedColor)
+                {
+                    bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
+                    pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
+                    if (!pickupFromPreviousCell)
+                        cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
+                }
+                else if (IsMatchingDropTarget(nextPiece))
                 {
                     targetBox = nextPiece;
                 }
@@ -207,31 +220,37 @@ namespace CarryBlockJam
                 break;
             }
 
-            if (_carriedBox == null)
+            if (!HasCarriedPlates)
                 return;
+
+            if (pickupPieces != null && pickupPieces.Count > 0)
+            {
+                MoveConnectedCylinder(cylinderPath, () => AddPlatesToCarryStack(pickupPieces));
+                return;
+            }
 
             if (targetBox != null)
             {
-                MoveConnectedCylinder(cylinderPath, () => AnimateCarriedBoxToTarget(targetBox));
+                MoveConnectedCylinder(cylinderPath, () => AnimateCarriedPlatesToBox(targetBox));
                 return;
             }
 
             if (TryResolveExit(rowStep, columnStep, currentRow, currentColumn, out Transform edgeExit) ||
                 TryResolveExitAtCell(currentRow, currentColumn, out edgeExit))
             {
-                SendCarriedBoxToExit(edgeExit, cylinderPath);
+                SendCarriedPlatesToExit(edgeExit, cylinderPath);
                 return;
             }
 
             MoveConnectedCylinder(cylinderPath);
         }
 
-        private void SendCarriedBoxToExit(Transform exitTransform, List<Vector2Int> cylinderPath)
+        private void SendCarriedPlatesToExit(Transform exitTransform, List<Vector2Int> cylinderPath)
         {
-            if (_carriedBox == null || exitTransform == null)
+            if (!HasCarriedPlates || exitTransform == null)
                 return;
 
-            TweenCallback onCylinderComplete = () => AnimateBoxExit(exitTransform);
+            TweenCallback onCylinderComplete = () => AnimateCarriedPlatesToExit(exitTransform);
             if (cylinderPath != null && cylinderPath.Count > 0)
                 AnimateCylinderTravel(cylinderPath, onCylinderComplete);
             else
@@ -252,16 +271,42 @@ namespace CarryBlockJam
             AnimateCylinderTravel(cylinderPath, onComplete);
         }
 
-        private void PrepareBoxForPickup(CarryBlockJamBoardPiece box, int row, int column)
+        private List<CarryBlockJamBoardPiece> ExtractPickupPlates(CarryBlockJamBoardPiece piece, int row, int column)
         {
-            if (box == null)
-                return;
+            if (piece == null)
+                return null;
 
-            CarryBlockJamBoardPiece stackedBelow = box.StackedBelow;
-            box.ClearStackLinks();
+            var pickupPieces = new List<CarryBlockJamBoardPiece>();
+            CarryBlockJamBoardPiece current = GetPickupBasePiece(piece);
+            CarryBlockJamBoardPiece firstRemaining = null;
+
+            while (current != null)
+            {
+                CarryBlockJamBoardPiece nextAbove = current.StackedAbove;
+                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                {
+                    if (current.Color == piece.Color)
+                    {
+                        current.ClearStackLinks();
+                        pickupPieces.Add(current);
+                    }
+                    else if (firstRemaining == null)
+                    {
+                        firstRemaining = current;
+                    }
+                }
+                else if (current.Kind == CarryBlockJamPieceKind.Box && firstRemaining == null)
+                {
+                    firstRemaining = current;
+                }
+
+                current = nextAbove;
+            }
 
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
-                cell.Occupant = stackedBelow != null ? stackedBelow.gameObject : null;
+                cell.Occupant = firstRemaining != null ? firstRemaining.gameObject : null;
+
+            return pickupPieces;
         }
 
         private void MovePieceToCell(CarryBlockJamBoardPiece piece, int row, int column, bool occupiesCell)
@@ -323,52 +368,75 @@ namespace CarryBlockJam
             });
         }
 
-        private void AnimateBoxExit(Transform exitTransform)
+        private void AnimateCarriedPlatesToExit(Transform exitTransform)
         {
-            if (_carriedBox == null || exitTransform == null)
+            if (!HasCarriedPlates || exitTransform == null)
             {
                 _isAnimating = false;
                 return;
             }
 
             _isAnimating = true;
-            CarryBlockJamBoardPiece box = _carriedBox;
-            _carriedBox = null;
+            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
 
-            box.transform.SetParent(GetPiecesRoot(), true);
-            box.transform.DOMove(exitTransform.position, exitTravelDuration)
-                .SetEase(Ease.InQuad)
-                .OnComplete(() =>
+            Sequence sequence = DOTween.Sequence();
+            for (int i = 0; i < plates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = plates[i];
+                if (plate == null)
+                    continue;
+
+                plate.transform.SetParent(GetPiecesRoot(), true);
+                Vector3 targetPosition = exitTransform.position + Vector3.up * (0.05f * i);
+                sequence.Append(plate.transform.DOMove(targetPosition, exitTravelDuration).SetEase(Ease.InQuad));
+                sequence.AppendCallback(() =>
                 {
-                    Destroy(box.gameObject);
-                    _isAnimating = false;
+                    plate.gameObject.SetActive(false);
+                    Destroy(plate.gameObject);
                 });
+            }
+
+            sequence.OnComplete(() =>
+            {
+                _isAnimating = false;
+                TryTriggerSuccess(plates);
+            });
         }
 
-        private void AnimateCarriedBoxToTarget(CarryBlockJamBoardPiece targetBox)
+        private void AnimateCarriedPlatesToBox(CarryBlockJamBoardPiece targetBox)
         {
-            if (_carriedBox == null || targetBox == null)
+            if (!HasCarriedPlates || targetBox == null)
             {
                 _isAnimating = false;
                 return;
             }
 
             _isAnimating = true;
-            CarryBlockJamBoardPiece box = _carriedBox;
-            _carriedBox = null;
+            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            CarryBlockJamBoardPiece currentTop = GetTopStackPiece(targetBox);
+            Sequence sequence = DOTween.Sequence();
 
-            box.ClearStackLinks();
-            box.transform.SetParent(GetPiecesRoot(), true);
-            Vector3 stackWorldTarget = targetBox.transform.TransformPoint(box.StackedOffset);
-            box.transform.DOMove(stackWorldTarget, exitTravelDuration)
-                .SetEase(Ease.InQuad)
-                .OnComplete(() =>
+            for (int i = 0; i < plates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = plates[i];
+                CarryBlockJamBoardPiece basePiece = currentTop;
+                if (plate == null || basePiece == null)
+                    continue;
+
+                plate.ClearStackLinks();
+                plate.transform.SetParent(GetPiecesRoot(), true);
+                Vector3 stackWorldTarget = basePiece.transform.TransformPoint(plate.StackedOffset);
+                sequence.Append(plate.transform.DOMove(stackWorldTarget, exitTravelDuration).SetEase(Ease.InQuad));
+                sequence.AppendCallback(() =>
                 {
-                    box.StackOnPiece(targetBox);
+                    plate.StackOnPiece(basePiece);
                     if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
-                        cell.Occupant = box.gameObject;
-                    _isAnimating = false;
+                        cell.Occupant = plate.gameObject;
                 });
+                currentTop = plate;
+            }
+
+            sequence.OnComplete(() => _isAnimating = false);
         }
 
         private Vector3 GetPieceLocalPosition(CarryBlockJamBoardPiece piece, int row, int column)
@@ -436,7 +504,7 @@ namespace CarryBlockJam
                     ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
                     : null;
 
-                if (_carriedBox == null)
+                if (!HasCarriedPlates)
                 {
                     if (piece == null)
                     {
@@ -446,9 +514,9 @@ namespace CarryBlockJam
                         continue;
                     }
 
-                    if (IsCarryablePiece(piece))
+                    if (CanPickUpPiece(piece))
                     {
-                        if (piece.StackedBelow == null)
+                        if (!ShouldPickupFromPreviousCell(piece))
                             path.Add(new Vector2Int(nextRow, nextColumn));
                         break;
                     }
@@ -457,7 +525,15 @@ namespace CarryBlockJam
                 {
                     if (piece != null)
                     {
-                        if (IsMatchingDropTarget(piece))
+                        CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
+                        if (storageBox != null && storageBox.Color == CarriedColor)
+                            break;
+                        if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
+                        {
+                            if (!ShouldPickupFromPreviousCell(piece))
+                                path.Add(new Vector2Int(nextRow, nextColumn));
+                        }
+                        else if (IsMatchingDropTarget(piece))
                             path.Add(new Vector2Int(nextRow, nextColumn));
                         break;
                     }
@@ -509,14 +585,14 @@ namespace CarryBlockJam
         private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out Transform exitTransform)
         {
             exitTransform = null;
-            if (_carriedBox == null || board == null || (columnStep == 0 && rowStep == 0))
+            if (!HasCarriedPlates || board == null || (columnStep == 0 && rowStep == 0))
                 return false;
 
             BoardBorderSide side = ResolveExitSide(rowStep, columnStep);
             if (!IsOnExitBoundary(side, row, column))
                 return false;
 
-            BoardExitSettings settings = FindMatchingExit(side, row, column, _carriedBox.Color);
+            BoardExitSettings settings = FindMatchingExit(side, row, column, CarriedColor);
             if (settings == null)
                 return false;
 
@@ -527,10 +603,10 @@ namespace CarryBlockJam
         private bool TryResolveExitAtCell(int row, int column, out Transform exitTransform)
         {
             exitTransform = null;
-            if (_carriedBox == null || board == null)
+            if (!HasCarriedPlates || board == null)
                 return false;
 
-            BoardExitSettings settings = FindMatchingExit(row, column, _carriedBox.Color);
+            BoardExitSettings settings = FindMatchingExit(row, column, CarriedColor);
             if (settings == null)
                 return false;
 
@@ -785,15 +861,142 @@ namespace CarryBlockJam
                 _highlightPool[i].gameObject.SetActive(visible);
         }
 
-        private static bool IsCarryablePiece(CarryBlockJamBoardPiece piece)
+        private bool CanPickUpPiece(CarryBlockJamBoardPiece piece)
         {
             return piece != null &&
-                   (piece.Kind == CarryBlockJamPieceKind.Box || piece.Kind == CarryBlockJamPieceKind.Plate);
+                   piece.Kind == CarryBlockJamPieceKind.Plate &&
+                   (!HasCarriedPlates || piece.Color == CarriedColor);
         }
 
         private bool IsMatchingDropTarget(CarryBlockJamBoardPiece piece)
         {
-            return IsCarryablePiece(piece) && _carriedBox != null && piece.Color == _carriedBox.Color;
+            if (piece == null || !HasCarriedPlates)
+                return false;
+
+            if (piece.Kind == CarryBlockJamPieceKind.Box)
+                return piece.Color == CarriedColor;
+
+            CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
+            return storageBox != null && storageBox.Color == CarriedColor;
+        }
+
+        private bool HasCarriedPlates => _carriedPlates.Count > 0;
+
+        private PieceColorType CarriedColor =>
+            HasCarriedPlates ? _carriedPlates[0].Color : PieceColorType.None;
+
+        private void AddPlateToCarryStack(CarryBlockJamBoardPiece plate)
+        {
+            if (plate == null)
+                return;
+
+            plate.ClearStackLinks();
+            plate.transform.SetParent(_cylinder.transform, false);
+            if (!_carriedPlates.Contains(plate))
+                _carriedPlates.Add(plate);
+            UpdateCarriedPlateVisuals();
+        }
+
+        private void AddPlatesToCarryStack(List<CarryBlockJamBoardPiece> plates)
+        {
+            if (plates == null || plates.Count == 0)
+                return;
+
+            for (int i = 0; i < plates.Count; i++)
+                AddPlateToCarryStack(plates[i]);
+        }
+
+        private void UpdateCarriedPlateVisuals()
+        {
+            for (int i = 0; i < _carriedPlates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = _carriedPlates[i];
+                if (plate == null)
+                    continue;
+
+                plate.transform.SetParent(_cylinder.transform, false);
+                plate.transform.localPosition = carriedPlateBaseOffset + Vector3.up * (carriedPlateStackStep * i);
+                plate.transform.localRotation = Quaternion.identity;
+            }
+        }
+
+        private List<CarryBlockJamBoardPiece> DetachCarriedPlates()
+        {
+            var detached = new List<CarryBlockJamBoardPiece>(_carriedPlates);
+            _carriedPlates.Clear();
+            return detached;
+        }
+
+        private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
+        {
+            CarryBlockJamBoardPiece current = basePiece;
+            while (current != null && current.StackedAbove != null)
+                current = current.StackedAbove;
+
+            return current;
+        }
+
+        private static CarryBlockJamBoardPiece GetStorageBox(CarryBlockJamBoardPiece piece)
+        {
+            CarryBlockJamBoardPiece current = piece;
+            while (current != null)
+            {
+                if (current.Kind == CarryBlockJamPieceKind.Box)
+                    return current;
+
+                current = current.StackedBelow;
+            }
+
+            return null;
+        }
+
+        private static bool ShouldPickupFromPreviousCell(CarryBlockJamBoardPiece piece)
+        {
+            if (piece == null)
+                return false;
+
+            CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
+            return storageBox != null && storageBox != piece;
+        }
+
+        private static CarryBlockJamBoardPiece GetPickupBasePiece(CarryBlockJamBoardPiece piece)
+        {
+            if (piece == null)
+                return null;
+
+            CarryBlockJamBoardPiece current = piece;
+            while (current.StackedBelow != null && current.StackedBelow.Kind == CarryBlockJamPieceKind.Plate)
+                current = current.StackedBelow;
+
+            return current;
+        }
+
+        private void TryTriggerSuccess(List<CarryBlockJamBoardPiece> ignoredPlates = null)
+        {
+            if (_successTriggered)
+                return;
+
+            if (HasCarriedPlates)
+                return;
+
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
+                    continue;
+
+                if (ignoredPlates != null && ignoredPlates.Contains(piece))
+                    continue;
+
+                return;
+            }
+
+            if (LevelManager.instance == null)
+                return;
+
+            _successTriggered = true;
+            LevelManager.instance.Success();
         }
     }
 }

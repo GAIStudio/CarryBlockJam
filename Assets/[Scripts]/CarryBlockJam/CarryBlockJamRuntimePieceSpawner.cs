@@ -416,7 +416,7 @@ namespace CarryBlockJam
                 for (int column = 0; column < grid.Columns; column++)
                 {
                     var cell = new Vector2Int(row, column);
-                    if (occupied.Contains(cell) || IsBlockedSpawnCellForColor(grid, row, column, color))
+                    if (occupied.Contains(cell) || IsBlockedSpawnCellForBox(grid, row, column))
                         continue;
 
                     candidates.Add(cell);
@@ -475,6 +475,28 @@ namespace CarryBlockJam
             {
                 BoardExitSettings exit = exits[i];
                 if (exit == null || exit.color != color)
+                    continue;
+
+                if (IsExitFrontCell(grid, row, column, exit))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool IsBlockedSpawnCellForBox(PuzzleGrid grid, int row, int column)
+        {
+            if (board == null || grid == null)
+                return false;
+
+            var exits = board.Exits;
+            if (exits == null)
+                return false;
+
+            for (int i = 0; i < exits.Count; i++)
+            {
+                BoardExitSettings exit = exits[i];
+                if (exit == null)
                     continue;
 
                 if (IsExitFrontCell(grid, row, column, exit))
