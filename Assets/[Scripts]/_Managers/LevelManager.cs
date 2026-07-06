@@ -26,6 +26,13 @@ namespace GAITemplate
 
         private void ConstructLevel()
         {
+            if (GameManager.instance == null || GameManager.instance.LevelConfig == null)
+            {
+                Debug.LogWarning("[LevelManager] GameManager or LevelConfig is missing. Skipping level setup.");
+                startEvent.Invoke();
+                return;
+            }
+
             LevelConfig config = GameManager.instance.LevelConfig;
             currentLevelData = config.ResolveLevelData(
                 GameManager.instance.level,

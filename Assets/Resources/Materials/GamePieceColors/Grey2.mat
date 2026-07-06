@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Grey
+  m_Name: Grey2
   m_Shader: {fileID: -6465566751694194690, guid: edd7abf643fa4bc4e8561d4c280c97cf,
     type: 3}
   m_Parent: {fileID: 0}
@@ -207,7 +207,7 @@ Material:
     - _WorkflowMode: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0.6618903, g: 0.68072623, b: 0.6981132, a: 1}
+    - _BaseColor: {r: 0.53746885, g: 0.5800552, b: 0.6226415, a: 1}
     - _Color: {r: 1, g: 0.45921344, b: 0, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _HColor: {r: 1, g: 1, b: 1, a: 1}

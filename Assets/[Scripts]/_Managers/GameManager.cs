@@ -38,10 +38,16 @@ namespace GAITemplate
             if (levelConfig == null)
                 Debug.LogError("LevelConfig is not assigned on GameManager.", this);
 
-            DataManager.instance.Initialize(gameData);
+            DataManager dataManager = DataManager.instance != null
+                ? DataManager.instance
+                : GetComponent<DataManager>();
 
-            level = DataManager.instance.level;
-            money = DataManager.instance.money;
+            if (dataManager != null && gameData != null)
+            {
+                dataManager.Initialize(gameData);
+                level = dataManager.level;
+                money = dataManager.money;
+            }
         }
 
         public GameData Data => gameData;

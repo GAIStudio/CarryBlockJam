@@ -77,6 +77,9 @@ namespace GAITemplate
         [Tooltip("Per-cell colors. Empty cells use None.")]
         public LevelColorCell[] colorCells;
 
+        [Header("CarryBlockJam")]
+        public CarryBlockJam.CarryBlockJamLevelSettings carryBlockJam = new CarryBlockJam.CarryBlockJamLevelSettings();
+
         [Header("Tutorial")]
         public bool hasTutorial;
 

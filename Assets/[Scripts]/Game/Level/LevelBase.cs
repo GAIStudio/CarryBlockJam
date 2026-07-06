@@ -1,4 +1,5 @@
 using System.Collections;
+using CarryBlockJam;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -68,6 +69,10 @@ namespace GAITemplate
                     Debug.LogError($"[LevelBase] Unsupported mechanic type: {levelData.mechanicType}", this);
                     return;
             }
+
+            CarryBlockJamLevelController carryBlockJamController = GetComponent<CarryBlockJamLevelController>();
+            if (carryBlockJamController != null)
+                carryBlockJamController.ApplyLevel(levelData);
 
             SetupCamera(levelData);
 

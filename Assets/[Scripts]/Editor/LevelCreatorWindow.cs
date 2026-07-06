@@ -30,6 +30,7 @@ namespace GAITemplate.Editor
         private bool _pinLoadAtTop;
         private bool _cameraFoldout = true;
         private bool _tutorialFoldout = true;
+        private bool _carryBlockJamFoldout = true;
         private Vector2 _tutorialStagesScroll;
 
         [MenuItem("GAITemplate/Level Creator")]
@@ -86,6 +87,8 @@ namespace GAITemplate.Editor
             DrawGridSettings();
             GUILayout.Space(8f);
             DrawTunnelPiecesSection();
+            GUILayout.Space(8f);
+            DrawCarryBlockJamSection();
             GUILayout.Space(8f);
             DrawCameraSection();
             GUILayout.Space(8f);
@@ -475,6 +478,38 @@ namespace GAITemplate.Editor
                 EditorUtility.SetDirty(_levelData);
 
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawCarryBlockJamSection()
+        {
+            if (_levelDataSo == null || _levelDataSo.targetObject != _levelData)
+                _levelDataSo = new SerializedObject(_levelData);
+
+            GUILayout.Label("CarryBlockJam", EditorStyles.boldLabel);
+            _carryBlockJamFoldout = EditorGUILayout.Foldout(
+                _carryBlockJamFoldout,
+                "CarryBlockJam Level Settings",
+                true,
+                EditorStyles.foldoutHeader);
+            if (!_carryBlockJamFoldout)
+                return;
+
+            _levelDataSo.Update();
+
+            SerializedProperty carryBlockJamProperty = _levelDataSo.FindProperty("carryBlockJam");
+            if (carryBlockJamProperty == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "CarryBlockJam level settings could not be found on LevelData.",
+                    MessageType.Warning);
+                return;
+            }
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.PropertyField(carryBlockJamProperty, true);
+            EditorGUILayout.EndVertical();
+
+            _levelDataSo.ApplyModifiedProperties();
         }
 
         // Return true → caller bu stage'i listeden silmeli.

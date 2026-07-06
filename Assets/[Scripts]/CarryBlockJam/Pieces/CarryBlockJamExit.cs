@@ -1,0 +1,68 @@
+using System.Collections.Generic;
+using GAITemplate;
+using UnityEngine;
+
+namespace CarryBlockJam
+{
+    public class CarryBlockJamExit : MonoBehaviour
+    {
+        [SerializeField] private BoardBorderSide side;
+        [SerializeField] private int startIndex;
+        [SerializeField] private int length = 1;
+        [SerializeField] private List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>();
+        [SerializeField] private int currentGoalIndex;
+        [SerializeField] private int remainingPlateCount;
+
+        public BoardBorderSide Side => side;
+        public int StartIndex => startIndex;
+        public int Length => length;
+        public PieceColorType CurrentColor =>
+            currentGoalIndex >= 0 && currentGoalIndex < goals.Count
+                ? goals[currentGoalIndex].color
+                : PieceColorType.None;
+        public int RemainingPlateCount => remainingPlateCount;
+        public bool IsCompleted => currentGoalIndex >= goals.Count;
+
+        public void Configure(CarryBlockJamExitDefinition definition)
+        {
+            if (definition == null)
+                return;
+
+            side = definition.side;
+            startIndex = definition.startIndex;
+            length = Mathf.Max(1, definition.length);
+            goals = new List<CarryBlockJamExitGoal>(definition.goals ?? new List<CarryBlockJamExitGoal>());
+            currentGoalIndex = 0;
+            remainingPlateCount = goals.Count > 0 ? Mathf.Max(0, goals[0].requiredPlateCount) : 0;
+        }
+
+        public bool CanAccept(PieceColorType color) =>
+            !IsCompleted && color != PieceColorType.None && color == CurrentColor;
+
+        public int Consume(PieceColorType color, int plateCount)
+        {
+            if (!CanAccept(color) || plateCount <= 0)
+                return 0;
+
+            int consumed = Mathf.Min(remainingPlateCount, plateCount);
+            remainingPlateCount -= consumed;
+
+            if (remainingPlateCount == 0)
+                AdvanceGoal();
+
+            return consumed;
+        }
+
+        private void AdvanceGoal()
+        {
+            currentGoalIndex++;
+            if (currentGoalIndex >= goals.Count)
+            {
+                remainingPlateCount = 0;
+                return;
+            }
+
+            remainingPlateCount = Mathf.Max(0, goals[currentGoalIndex].requiredPlateCount);
+        }
+    }
+}

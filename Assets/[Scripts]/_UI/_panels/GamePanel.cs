@@ -39,15 +39,24 @@ namespace GAITemplate
 
         private void Start()
         {
-            restartButton.onClick.AddListener(OnClickRestartButton);
-            levelText.text = GameManager.instance.Data.FormatLevelText(GameManager.instance.level);
-            
-            // Set initial money text
+            if (GameManager.instance == null || GameManager.instance.Data == null)
+                return;
+
+            if (restartButton != null)
+                restartButton.onClick.AddListener(OnClickRestartButton);
+
+            if (levelText != null)
+                levelText.text = GameManager.instance.Data.FormatLevelText(GameManager.instance.level);
+
             _lastDisplayedMoney = GameManager.instance.money;
-            moneyText.text = _lastDisplayedMoney.ToString();
+            if (moneyText != null)
+                moneyText.text = _lastDisplayedMoney.ToString();
         }
         private void Update()
         {
+            if (GameManager.instance == null)
+                return;
+
             // Do not override if tween is actively animating the text
             if (tween != null && tween.IsActive() && tween.IsPlaying())
             {
@@ -67,7 +76,8 @@ namespace GAITemplate
                 }
             }
 
-            if (Input.GetKeyDown(KeyCode.H)) LevelManager.instance.Fail();
+            if (Input.GetKeyDown(KeyCode.H) && LevelManager.instance != null)
+                LevelManager.instance.Fail();
         }
 
         public void SetMoney(float to, float duration = 0.3f)
