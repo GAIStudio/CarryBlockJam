@@ -150,6 +150,25 @@ namespace CarryBlockJam
                     continue;
                 }
 
+                if (IsBoxCellBlocker(nextPiece))
+                {
+                    if (CanPickUpPiece(nextPiece))
+                    {
+                        bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
+                        pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
+                        if (!pickupFromPreviousCell)
+                            path.Add(new Vector2Int(nextRow, nextColumn));
+
+                        MoveConnectedCylinder(path, () =>
+                        {
+                            AddPlatesToCarryStack(pickupPieces);
+                        });
+                        return;
+                    }
+
+                    break;
+                }
+
                 if (CanPickUpPiece(nextPiece))
                 {
                     bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
@@ -198,6 +217,24 @@ namespace CarryBlockJam
                     currentColumn = nextColumn;
                     cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
                     continue;
+                }
+
+                if (IsBoxCellBlocker(nextPiece))
+                {
+                    CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(nextPiece);
+                    if (blockedStorageBox != null && blockedStorageBox.Color == CarriedColor)
+                    {
+                        targetBox = blockedStorageBox;
+                    }
+                    else if (CanPickUpPiece(nextPiece) && nextPiece.Color == CarriedColor)
+                    {
+                        bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
+                        pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
+                        if (!pickupFromPreviousCell)
+                            cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
+                    }
+
+                    break;
                 }
 
                 CarryBlockJamBoardPiece storageBox = GetStorageBox(nextPiece);
@@ -262,13 +299,14 @@ namespace CarryBlockJam
 
         private void MoveConnectedCylinder(List<Vector2Int> cylinderPath, TweenCallback onComplete = null)
         {
-            if (cylinderPath == null || cylinderPath.Count == 0)
+            List<Vector2Int> safePath = TrimPathBeforeBoxBlocker(cylinderPath);
+            if (safePath == null || safePath.Count == 0)
             {
                 onComplete?.Invoke();
                 return;
             }
 
-            AnimateCylinderTravel(cylinderPath, onComplete);
+            AnimateCylinderTravel(safePath, onComplete);
         }
 
         private List<CarryBlockJamBoardPiece> ExtractPickupPlates(CarryBlockJamBoardPiece piece, int row, int column)
@@ -348,24 +386,82 @@ namespace CarryBlockJam
                 Vector2Int step = path[i];
                 int targetRow = step.x;
                 int targetColumn = step.y;
+                if (IsBoxOwnedCell(targetRow, targetColumn))
+                    break;
+
                 Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
                 sequence.Append(_cylinder.transform.DOLocalJump(
                     targetPosition,
                     moveJumpPower,
                     1,
                     moveDurationPerCell).SetEase(Ease.OutQuad));
-                sequence.AppendCallback(() => _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), targetRow, targetColumn));
+                sequence.AppendCallback(() =>
+                {
+                    if (!IsBoxOwnedCell(targetRow, targetColumn))
+                        _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), targetRow, targetColumn);
+                });
             }
 
             Vector2Int finalStep = path[path.Count - 1];
             sequence.OnComplete(() =>
             {
                 if (_grid.TryGetCell(finalStep.x, finalStep.y, out PuzzleCell cell) && cell != null)
-                    cell.Occupant = _cylinder.gameObject;
+                {
+                    CarryBlockJamBoardPiece occupantPiece = cell.Occupant != null
+                        ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
+                        : null;
+
+                    if (!IsBoxCellBlocker(occupantPiece))
+                        cell.Occupant = _cylinder.gameObject;
+                }
 
                 _isAnimating = false;
                 onComplete?.Invoke();
             });
+        }
+
+        private List<Vector2Int> TrimPathBeforeBoxBlocker(List<Vector2Int> path)
+        {
+            if (path == null || path.Count == 0 || _grid == null)
+                return path;
+
+            var safePath = new List<Vector2Int>(path.Count);
+            for (int i = 0; i < path.Count; i++)
+            {
+                Vector2Int step = path[i];
+                if (IsBoxOwnedCell(step.x, step.y))
+                    break;
+
+                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
+                    break;
+
+                CarryBlockJamBoardPiece occupantPiece = cell.Occupant != null
+                    ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
+                    : null;
+
+                if (IsBoxCellBlocker(occupantPiece))
+                    break;
+
+                safePath.Add(step);
+            }
+
+            return safePath;
+        }
+
+        private bool IsBoxOwnedCell(int row, int column)
+        {
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Kind != CarryBlockJamPieceKind.Box)
+                    continue;
+
+                if (piece.Row == row && piece.Column == column)
+                    return true;
+            }
+
+            return false;
         }
 
         private void AnimateCarriedPlatesToExit(Transform exitTransform)
@@ -514,6 +610,13 @@ namespace CarryBlockJam
                         continue;
                     }
 
+                    if (IsBoxCellBlocker(piece))
+                    {
+                        if (CanPickUpPiece(piece) && !ShouldPickupFromPreviousCell(piece))
+                            path.Add(new Vector2Int(nextRow, nextColumn));
+                        break;
+                    }
+
                     if (CanPickUpPiece(piece))
                     {
                         if (!ShouldPickupFromPreviousCell(piece))
@@ -525,6 +628,19 @@ namespace CarryBlockJam
                 {
                     if (piece != null)
                     {
+                        if (IsBoxCellBlocker(piece))
+                        {
+                            CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(piece);
+                            if (blockedStorageBox != null && blockedStorageBox.Color == CarriedColor)
+                                break;
+                            if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
+                            {
+                                if (!ShouldPickupFromPreviousCell(piece))
+                                    path.Add(new Vector2Int(nextRow, nextColumn));
+                            }
+                            break;
+                        }
+
                         CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
                         if (storageBox != null && storageBox.Color == CarriedColor)
                             break;
@@ -957,6 +1073,17 @@ namespace CarryBlockJam
 
             CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
             return storageBox != null && storageBox != piece;
+        }
+
+        private static bool IsBoxCellBlocker(CarryBlockJamBoardPiece piece)
+        {
+            if (piece == null)
+                return false;
+
+            if (piece.Kind == CarryBlockJamPieceKind.Box)
+                return true;
+
+            return GetStorageBox(piece) != null;
         }
 
         private static CarryBlockJamBoardPiece GetPickupBasePiece(CarryBlockJamBoardPiece piece)

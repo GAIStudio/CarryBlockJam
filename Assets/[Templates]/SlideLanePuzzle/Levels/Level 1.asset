@@ -19,51 +19,156 @@ MonoBehaviour:
   - row: 0
     column: 0
     color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 0
     column: 1
     color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 0
     column: 2
     color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 1
     column: 0
     color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 1
     column: 1
     color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 1
     column: 2
     color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 2
     column: 0
     color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 2
     column: 1
     color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 2
     column: 2
     color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 3
     column: 0
     color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 3
     column: 1
     color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 3
     column: 2
     color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 4
     column: 0
     color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 4
     column: 1
     color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 4
     column: 2
     color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 4
     column: 3
     color: 9
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+  carryBlockJam:
+    gridSpacingX: 1.1
+    gridSpacingZ: 1.1
+    colorSetups:
+    - color: 1
+      minPlateCount: 1
+      maxPlateCount: 3
+      minPlateStacks: 1
+      maxPlateStacks: 2
+    exits:
+    - side: 2
+      startIndex: 0
+      length: 1
+      goals:
+      - color: 1
+        requiredPlateCount: 3
+    - side: 3
+      startIndex: 0
+      length: 1
+      goals:
+      - color: 1
+        requiredPlateCount: 3
+    stickmanSpawnMode: 0
+    fixedStickmanCell:
+      row: 2
+      column: 3
+    blockedCells: []
+    useLevelSeed: 0
+    generationSeed: 1
+    maxPlacementAttempts: 128
+    ensureReachableLayout: 1
+    avoidBlockedExitCells: 1
+    avoidSameColorExitFrontCells: 1
+    maxPlateCountPerCell: 3
+    allowPlateStacksOnSameCell: 1
+    preferCenteredSpawn: 1
+    requirePathToAtLeastOnePlate: 1
+    requirePathFromBoxToMatchingExit: 1
+  hasTutorial: 0
+  tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
+  tutorialStages: []
   cameraPosition: {x: 0, y: 8, z: -2}
   cameraRotation: {x: 50, y: 0, z: 0}
   cameraOrthographic: 1

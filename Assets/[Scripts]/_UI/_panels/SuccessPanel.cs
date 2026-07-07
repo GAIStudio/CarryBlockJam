@@ -54,6 +54,10 @@ namespace GAITemplate
         [Header("Feature Progression")]
         public FeatureProgressionUI featureProgression;
 
+        [Header("Success Visuals")]
+        [Tooltip("Optional direct reference to the main success emoji/graphic on the panel.")]
+        public RectTransform mainEmoji;
+
         [Header("Continue Button Reward")]
         [Tooltip("Continue butonunda gösterilen reward sayısı (örn. \"40\"). " +
                  "Boş bırakılırsa hiç güncellenmez.")]
@@ -63,21 +67,42 @@ namespace GAITemplate
                  "TMP sprite/ikon kullanmak için inline yazabilirsiniz: \"Next <sprite=0> {0}\".")]
         public string continueRewardFormat = "{0}";
 
+        [Tooltip("Açık ise SuccessPanel kendi reward miktarını buradan kullanır. " +
+                 "Kapalıysa GameData.levelCompleteReward kullanılır.")]
+        public bool overrideRewardAmount;
+
+        [Min(0)]
+        [Tooltip("overrideRewardAmount açıkken kullanılacak reward miktarı.")]
+        public int rewardAmount = 40;
+
+        [Header("Emoji Shine")]
+        [Min(0f)] public float emojiPulseDuration = 0.7f;
+        [Min(0f)] public float emojiShineDuration = 1.15f;
+        public Vector3 emojiPunchScale = new Vector3(0.16f, 0.16f, 0.16f);
+        public Vector3 emojiShineRotation = new Vector3(0f, 0f, 7f);
+
         // ── State ─────────────────────────────────────────────────────────────────────
 
         private bool _isFinishing;
         private int  _coinsInFlight;
+        private Tween _emojiLoopTween;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
         public override void Show()
         {
             AddCameraToStack();
+            ResolveSceneReferences();
+            UpdateContinueRewardText();
             base.Show(); // _shown guard'ı base'de
             featureProgression?.Refresh();
         }
 
-        private void OnDisable() => RemoveCameraFromStack();
+        private void OnDisable()
+        {
+            StopEmojiLoop();
+            RemoveCameraFromStack();
+        }
 
         /// <summary>Continue button tıklanınca çağrılır → coin spawn + uçma → restart.</summary>
         public override void OnPressRestart()
@@ -87,9 +112,7 @@ namespace GAITemplate
 
             SetContinueInteractable(false);
 
-            int amount = GameManager.instance != null && GameManager.instance.Data != null
-                ? GameManager.instance.Data.levelCompleteReward
-                : 0;
+            int amount = ResolveRewardAmount();
 
             bool willFly = amount > 0 && coinPrefab != null && coinTarget != null && coinSpawnPoint != null;
             if (willFly)
@@ -111,6 +134,9 @@ namespace GAITemplate
         {
             base.ResetVisuals();
 
+            ResolveSceneReferences();
+            StopEmojiLoop();
+
             if (confetti != null)
                 confetti.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
@@ -127,6 +153,7 @@ namespace GAITemplate
 
             // Reveal sırasında sadece button text + confetti.
             seq.InsertCallback(rewardDelay, UpdateContinueRewardText);
+            seq.InsertCallback(rewardDelay, StartEmojiLoop);
             if (confetti != null)
                 seq.InsertCallback(rewardDelay, () => confetti.Play(true));
 
@@ -138,11 +165,10 @@ namespace GAITemplate
 
         private void UpdateContinueRewardText()
         {
+            ResolveSceneReferences();
             if (continueRewardText == null) return;
 
-            int amount = GameManager.instance != null && GameManager.instance.Data != null
-                ? GameManager.instance.Data.levelCompleteReward
-                : 0;
+            int amount = ResolveRewardAmount();
 
             continueRewardText.text = string.Format(continueRewardFormat, amount);
         }
@@ -233,6 +259,55 @@ namespace GAITemplate
                 _resolvedMoneyText.text = GameManager.instance.money.ToString();
         }
 
+        private void ResolveSceneReferences()
+        {
+            if (continueRewardText == null && continueButton != null)
+                continueRewardText = continueButton.GetComponentInChildren<TextMeshProUGUI>(true);
+
+            if (mainEmoji == null)
+            {
+                Transform emojiTransform = transform.Find("main-emoji");
+                if (emojiTransform == null)
+                    emojiTransform = transform.Find("MainEmoji");
+
+                if (emojiTransform != null)
+                    mainEmoji = emojiTransform as RectTransform;
+            }
+        }
+
+        private void StartEmojiLoop()
+        {
+            if (mainEmoji == null)
+                return;
+
+            StopEmojiLoop();
+
+            mainEmoji.localScale = Vector3.one;
+            mainEmoji.localRotation = Quaternion.identity;
+
+            Sequence sequence = DOTween.Sequence().SetUpdate(true);
+            sequence.Append(mainEmoji.DOPunchScale(emojiPunchScale, emojiPulseDuration, vibrato: 1, elasticity: 0.6f));
+            sequence.Join(mainEmoji.DOLocalRotate(emojiShineRotation, emojiShineDuration).SetEase(Ease.InOutSine));
+            sequence.Append(mainEmoji.DOLocalRotate(Vector3.zero, emojiShineDuration).SetEase(Ease.InOutSine));
+            sequence.SetLoops(-1, LoopType.Restart);
+            _emojiLoopTween = sequence;
+        }
+
+        private void StopEmojiLoop()
+        {
+            if (_emojiLoopTween != null)
+            {
+                _emojiLoopTween.Kill();
+                _emojiLoopTween = null;
+            }
+
+            if (mainEmoji != null)
+            {
+                mainEmoji.localScale = Vector3.one;
+                mainEmoji.localRotation = Quaternion.identity;
+            }
+        }
+
         // ── Button helper ────────────────────────────────────────────────────────────
 
         private void SetContinueInteractable(bool value)
@@ -267,6 +342,21 @@ namespace GAITemplate
 
             var mainData = main.GetUniversalAdditionalCameraData();
             mainData.cameraStack.Remove(successCamera);
+        }
+
+        private int ResolveRewardAmount()
+        {
+            if (overrideRewardAmount)
+                return Mathf.Max(0, rewardAmount);
+
+            int configuredReward = GameManager.instance != null && GameManager.instance.Data != null
+                ? GameManager.instance.Data.levelCompleteReward
+                : 0;
+
+            if (configuredReward > 0)
+                return configuredReward;
+
+            return Mathf.Max(0, rewardAmount);
         }
     }
 }

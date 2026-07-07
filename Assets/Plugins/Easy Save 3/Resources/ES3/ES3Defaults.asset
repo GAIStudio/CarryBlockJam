@@ -31,12 +31,12 @@ MonoBehaviour:
     assemblyNames:
     - Assembly-CSharp-firstpass
     - ToonyColorsPro2.Demo
+    - Assembly-CSharp
     - ToonyColorsPro.Editor
     - UniTask.Linq
     - StompyRobot.SRDebugger
     - UniTask
     - StompyRobot.SRF
-    - Assembly-CSharp
     - PPv2URPConverters
     - StompyRobot.SRDebugger.Editor
     - ToonyColorsPro.Runtime
