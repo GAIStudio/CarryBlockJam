@@ -1,6 +1,6 @@
 using CarryBlockJam;
 using GAITemplate;
-using System.Collections.Generic;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -13,10 +13,6 @@ namespace CarryBlockJam.Editor
         private const string ScenePath = "Assets/[Scenes]/SampleScene.unity";
         private const string CellPrefabPath = "Assets/[Prefabs]/GamePiece.prefab";
         private const string LevelConfigPath = "Assets/[LevelDatas]/LevelConfig.asset";
-
-        private const float ExitInset = 0.58f;
-        private const float ExitHeight = 0.5f;
-        private const float ExitThickness = 0.16f;
 
         [MenuItem("CarryBlockJam/Build 6x6 Board In SampleScene")]
         public static void BuildInSampleSceneMenu()
@@ -37,16 +33,26 @@ namespace CarryBlockJam.Editor
             EnsureMainCamera();
             DisableRuntimeLevelSpawn();
 
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
+            if (!Application.isPlaying)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
         }
 
         public static void BuildBoard(CarryBlockJamSimpleBoard board)
         {
+            BuildBoard(board, null);
+        }
+
+        public static void BuildBoard(CarryBlockJamSimpleBoard board, LevelData levelData)
+        {
             if (board == null)
                 return;
 
-            Undo.RegisterFullObjectHierarchyUndo(board.gameObject, "Build CarryBlockJam Board");
+            if (!Application.isPlaying)
+                Undo.RegisterFullObjectHierarchyUndo(board.gameObject, "Build CarryBlockJam Board");
+            ApplyLevelPreview(board, levelData);
 
             GameObject cellPrefab = board.CellPrefab;
             if (cellPrefab == null)
@@ -66,14 +72,12 @@ namespace CarryBlockJam.Editor
 
             grid.BeginLayout(board.Rows, board.Columns, board.GridSpacingX, board.GridSpacingZ);
             BuildCells(board, grid, board.CellsRoot, cellPrefab, board.CellScaleXYZ, board.CellColor);
-            BuildExits(board, grid, board.ExitsRoot);
+            BuildExits(board, grid, board.ExitsRoot, levelData);
             grid.EndLayout();
 
             EditorUtility.SetDirty(board);
-            if (board.gameObject.scene.IsValid())
+            if (!Application.isPlaying && board.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(board.gameObject.scene);
-
-            Debug.Log($"[CarryBlockJam] Built {board.Rows}x{board.Columns} board.");
         }
 
         public static void ClearBoard(CarryBlockJamSimpleBoard board)
@@ -88,7 +92,7 @@ namespace CarryBlockJam.Editor
                 ClearChildren(board.ExitsRoot);
 
             EditorUtility.SetDirty(board);
-            if (board.gameObject.scene.IsValid())
+            if (!Application.isPlaying && board.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(board.gameObject.scene);
         }
 
@@ -111,11 +115,9 @@ namespace CarryBlockJam.Editor
             serializedBoard.FindProperty("gridSpacingZ").floatValue = CarryBlockJamSimpleBoard.DefaultSpacing;
             serializedBoard.FindProperty("cellScale").vector3Value = CarryBlockJamSimpleBoard.DefaultCellScale;
             serializedBoard.FindProperty("cellColor").enumValueIndex = (int)PieceColorType.Grey;
-
-            SerializedProperty exits = serializedBoard.FindProperty("exits");
-            exits.arraySize = 0;
-            AddExit(exits, BoardExitSettings.CreateLeftDefault());
-            AddExit(exits, BoardExitSettings.CreateRightDefault());
+            SerializedProperty exitsProperty = serializedBoard.FindProperty("exits");
+            if (exitsProperty != null)
+                exitsProperty.arraySize = 0;
 
             if (serializedBoard.FindProperty("cellPrefab").objectReferenceValue == null)
             {
@@ -126,24 +128,18 @@ namespace CarryBlockJam.Editor
             serializedBoard.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void ApplyExitDefaults(SerializedProperty exitProperty, BoardExitSettings defaults)
+        private static void ApplyLevelPreview(CarryBlockJamSimpleBoard board, LevelData levelData)
         {
-            if (exitProperty == null || defaults == null)
+            if (board == null || levelData == null || levelData.carryBlockJam == null)
                 return;
 
-            exitProperty.FindPropertyRelative("side").enumValueIndex = (int)defaults.side;
-            exitProperty.FindPropertyRelative("startIndex").intValue = defaults.startIndex;
-            exitProperty.FindPropertyRelative("length").intValue = defaults.length;
-            exitProperty.FindPropertyRelative("color").enumValueIndex = (int)defaults.color;
-            exitProperty.FindPropertyRelative("positionOffset").vector3Value = defaults.positionOffset;
-            exitProperty.FindPropertyRelative("rotation").vector3Value = defaults.rotation;
-        }
-
-        private static void AddExit(SerializedProperty exitsProperty, BoardExitSettings defaults)
-        {
-            int index = exitsProperty.arraySize;
-            exitsProperty.InsertArrayElementAtIndex(index);
-            ApplyExitDefaults(exitsProperty.GetArrayElementAtIndex(index), defaults);
+            SerializedObject serializedBoard = new SerializedObject(board);
+            serializedBoard.FindProperty("rows").intValue = Mathf.Max(1, levelData.gridRows);
+            serializedBoard.FindProperty("columns").intValue = Mathf.Max(1, levelData.gridColumns);
+            serializedBoard.FindProperty("gridSpacingX").floatValue = Mathf.Max(0.01f, levelData.carryBlockJam.gridSpacingX);
+            serializedBoard.FindProperty("gridSpacingZ").floatValue = Mathf.Max(0.01f, levelData.carryBlockJam.gridSpacingZ);
+            serializedBoard.FindProperty("cellScale").vector3Value = levelData.carryBlockJam.gridCellScale;
+            serializedBoard.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void EnsureRoots(CarryBlockJamSimpleBoard board)
@@ -206,77 +202,121 @@ namespace CarryBlockJam.Editor
             EditorUtility.SetDirty(board);
         }
 
-        private static void BuildExits(CarryBlockJamSimpleBoard board, PuzzleGrid grid, Transform exitsRoot)
+        private static void BuildExits(
+            CarryBlockJamSimpleBoard board,
+            PuzzleGrid grid,
+            Transform exitsRoot,
+            LevelData levelData)
         {
             ClearChildren(exitsRoot);
 
-            IReadOnlyList<BoardExitSettings> exits = board.Exits;
-            if (exits == null)
+            if (levelData?.carryBlockJam?.exits == null)
                 return;
 
-            for (int i = 0; i < exits.Count; i++)
-                BuildExit(grid, exitsRoot, exits[i]);
+            for (int i = 0; i < levelData.carryBlockJam.exits.Count; i++)
+                BuildExit(grid, exitsRoot, levelData.carryBlockJam.exits[i], i);
         }
 
         private static void BuildExit(
             PuzzleGrid grid,
             Transform exitsRoot,
-            BoardExitSettings settings)
+            CarryBlockJamExitDefinition definition,
+            int index)
         {
-            if (settings == null)
+            if (grid == null || exitsRoot == null || definition == null)
                 return;
 
-            Vector3 localPos = GetExitLocalPosition(grid, settings.side, settings) + settings.positionOffset;
-            Quaternion localRot = Quaternion.Euler(settings.rotation);
+            PieceColorType color = PieceColorType.None;
+            int count = 0;
+            if (definition.goals != null && definition.goals.Count > 0 && definition.goals[0] != null)
+            {
+                color = definition.goals[0].color;
+                count = definition.goals[0].requiredPlateCount;
+            }
 
-            var exitObject = new GameObject($"Exit_{settings.side}_{settings.startIndex}_{settings.color}");
+            Vector3 localPos = GetExitLocalPosition(grid, definition) + definition.positionOffset;
+            Quaternion localRot = Quaternion.Euler(definition.rotation);
+
+            var exitObject = new GameObject($"Exit_{definition.side}_{definition.startIndex}_{index}");
             exitObject.transform.SetParent(exitsRoot, false);
             exitObject.transform.localPosition = localPos;
             exitObject.transform.localRotation = localRot;
             exitObject.transform.localScale = Vector3.one;
 
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            visual.name = "Visual";
-            visual.transform.SetParent(exitObject.transform, false);
-            visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            visual.transform.localScale = GetExitLocalScale(grid, settings.side, settings.length);
+            GameObject gate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            gate.name = "Gate";
+            gate.transform.SetParent(exitObject.transform, false);
+            gate.transform.localPosition = Vector3.zero;
+            gate.transform.localRotation = Quaternion.identity;
+            gate.transform.localScale = GetExitLocalScale(grid, definition.side, definition.length);
+            ApplyColor(gate, color);
+            Object.DestroyImmediate(gate.GetComponent<Collider>());
 
-            Material material = PieceColorPalette.GetMaterial(settings.color);
-            if (material != null)
-                visual.GetComponent<Renderer>().sharedMaterial = material;
+            GameObject car = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            car.name = "Car";
+            car.transform.SetParent(exitObject.transform, false);
+            car.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+            car.transform.localRotation = Quaternion.identity;
+            car.transform.localScale = new Vector3(1.2f, 0.7f, 0.8f);
+            ApplyColor(car, color);
+            Object.DestroyImmediate(car.GetComponent<Collider>());
 
-            Object.DestroyImmediate(visual.GetComponent<Collider>());
-            AddChevrons(exitObject.transform, settings.rotation);
+            TMP_Text label = CarryBlockJamExitLabelUtility.CreateLabel(exitObject.transform);
+            if (label == null)
+                return;
+
+            label.text = count > 0 ? count.ToString() : string.Empty;
+            label.color = Color.white;
+
+            CarryBlockJamExit exit = exitObject.AddComponent<CarryBlockJamExit>();
+            exit.Configure(definition);
+            exit.BindVisuals(
+                EnsureGamePiece(gate),
+                EnsureGamePiece(car),
+                label);
         }
 
-        private static Vector3 GetExitLocalPosition(PuzzleGrid grid, BoardBorderSide side, BoardExitSettings settings)
+        private static GamePiece EnsureGamePiece(GameObject target)
         {
-            float sx = grid.GridSpacingX;
-            float centerIndex = settings.startIndex + (settings.length - 1) * 0.5f;
+            if (target == null)
+                return null;
 
-            switch (side)
+            GamePiece piece = target.GetComponent<GamePiece>();
+            if (piece == null)
+                piece = target.AddComponent<GamePiece>();
+
+            return piece;
+        }
+
+        private static void ApplyColor(GameObject target, PieceColorType color)
+        {
+            if (target == null || !PieceColorPalette.IsPaintable(color))
+                return;
+
+            Renderer renderer = target.GetComponent<Renderer>();
+            Material material = PieceColorPalette.GetMaterial(color);
+            if (renderer != null && material != null)
+                renderer.sharedMaterial = material;
+        }
+
+        private static Vector3 GetExitLocalPosition(PuzzleGrid grid, CarryBlockJamExitDefinition definition)
+        {
+            float centerIndex = definition.startIndex + (Mathf.Max(1, definition.length) - 1) * 0.5f;
+
+            switch (definition.side)
             {
                 case BoardBorderSide.Left:
-                {
-                    int row = Mathf.RoundToInt(centerIndex);
-                    return grid.GetLocalPosition(row, 0) + new Vector3(-sx * ExitInset, ExitHeight * 0.75f, 0f);
-                }
+                    return grid.GetLocalPosition(Mathf.RoundToInt(centerIndex), 0) +
+                           new Vector3(-grid.GridSpacingX * 0.58f, 0.375f, 0f);
                 case BoardBorderSide.Right:
-                {
-                    int row = Mathf.RoundToInt(centerIndex);
-                    return grid.GetLocalPosition(row, grid.Columns - 1) + new Vector3(sx * ExitInset, ExitHeight * 0.75f, 0f);
-                }
+                    return grid.GetLocalPosition(Mathf.RoundToInt(centerIndex), grid.Columns - 1) +
+                           new Vector3(grid.GridSpacingX * 0.58f, 0.375f, 0f);
                 case BoardBorderSide.Top:
-                {
-                    int col = Mathf.RoundToInt(centerIndex);
-                    return grid.GetLocalPosition(0, col) + new Vector3(0f, ExitHeight * 0.75f, grid.GridSpacingZ * ExitInset);
-                }
+                    return grid.GetLocalPosition(0, Mathf.RoundToInt(centerIndex)) +
+                           new Vector3(0f, 0.375f, grid.GridSpacingZ * 0.58f);
                 case BoardBorderSide.Bottom:
-                {
-                    int col = Mathf.RoundToInt(centerIndex);
-                    return grid.GetLocalPosition(grid.Rows - 1, col) + new Vector3(0f, ExitHeight * 0.75f, -grid.GridSpacingZ * ExitInset);
-                }
+                    return grid.GetLocalPosition(grid.Rows - 1, Mathf.RoundToInt(centerIndex)) +
+                           new Vector3(0f, 0.375f, -grid.GridSpacingZ * 0.58f);
                 default:
                     return Vector3.zero;
             }
@@ -284,46 +324,15 @@ namespace CarryBlockJam.Editor
 
         private static Vector3 GetExitLocalScale(PuzzleGrid grid, BoardBorderSide side, int length)
         {
-            float sx = grid.GridSpacingX;
-            float sz = grid.GridSpacingZ;
-
+            int resolvedLength = Mathf.Max(1, length);
             return side switch
             {
                 BoardBorderSide.Left or BoardBorderSide.Right =>
-                    new Vector3(ExitThickness, ExitHeight, sz * length * 0.94f),
+                    new Vector3(0.16f, 0.5f, grid.GridSpacingZ * resolvedLength * 0.94f),
                 BoardBorderSide.Top or BoardBorderSide.Bottom =>
-                    new Vector3(sx * length * 0.94f, ExitHeight, ExitThickness),
+                    new Vector3(grid.GridSpacingX * resolvedLength * 0.94f, 0.5f, 0.16f),
                 _ => Vector3.one,
             };
-        }
-
-        private static void AddChevrons(Transform exitRoot, Vector3 exitRotation)
-        {
-            Material chevronMat = PieceColorPalette.GetMaterial(PieceColorType.White);
-            if (chevronMat == null)
-            {
-                chevronMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                chevronMat.color = Color.white;
-            }
-
-            float spacing = 0.1f;
-            float size = 0.065f;
-            float yaw = exitRotation.y;
-
-            for (int i = 0; i < 2; i++)
-            {
-                var chevron = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                chevron.name = $"Chevron_{i}";
-                chevron.transform.SetParent(exitRoot, false);
-                Object.DestroyImmediate(chevron.GetComponent<Collider>());
-                chevron.GetComponent<Renderer>().sharedMaterial = chevronMat;
-
-                float lane = (i - 0.5f) * spacing;
-                float forwardSign = Mathf.Abs(Mathf.DeltaAngle(yaw, 90f)) < Mathf.Abs(Mathf.DeltaAngle(yaw, 270f)) ? 1f : -1f;
-                chevron.transform.localPosition = new Vector3(0.1f * forwardSign, 0.02f, lane);
-                chevron.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-                chevron.transform.localScale = new Vector3(size, size * 1.4f, size * 0.35f);
-            }
         }
 
         private static void EnsureMainCamera()

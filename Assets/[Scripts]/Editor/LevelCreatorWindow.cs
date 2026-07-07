@@ -1,5 +1,7 @@
 using UnityEditor;
 using UnityEngine;
+using CarryBlockJam;
+using CarryBlockJam.Editor;
 
 namespace GAITemplate.Editor
 {
@@ -32,6 +34,7 @@ namespace GAITemplate.Editor
         private bool _tutorialFoldout = true;
         private bool _carryBlockJamFoldout = true;
         private Vector2 _tutorialStagesScroll;
+        private bool _scenePreviewRefreshQueued;
 
         [MenuItem("GAITemplate/Level Creator")]
         public static void Open()
@@ -96,10 +99,20 @@ namespace GAITemplate.Editor
 
             EditorGUILayout.EndScrollView();
 
+            EditorGUILayout.HelpBox(
+                "Grid cell colors apply after Save. CarryBlockJam settings apply immediately. " +
+                "Use Apply To Scene to rebuild the open scene board from the current level data.",
+                MessageType.Info);
+
+            GUILayout.BeginHorizontal();
             GUI.color = Color.green;
             if (GUILayout.Button("Save", GUILayout.Height(30f)))
                 SaveLevel();
             GUI.color = Color.white;
+
+            if (GUILayout.Button("Apply To Scene", GUILayout.Height(30f), GUILayout.Width(140f)))
+                ApplyToScene();
+            GUILayout.EndHorizontal();
         }
 
         private void DrawLoadFromLevelManagerRow(bool canLoadFromLevelManager)
@@ -506,10 +519,21 @@ namespace GAITemplate.Editor
             }
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(carryBlockJamProperty, true);
+            bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
-            _levelDataSo.ApplyModifiedProperties();
+            if (changed)
+            {
+                _levelDataSo.ApplyModifiedProperties();
+                EditorUtility.SetDirty(_levelData);
+                RequestScenePreviewRefresh();
+            }
+            else
+            {
+                _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
+            }
         }
 
         // Return true → caller bu stage'i listeden silmeli.
@@ -654,7 +678,31 @@ namespace GAITemplate.Editor
                 _lastLoadedLevelData = _levelData;
             }
 
+            RequestScenePreviewRefresh();
             Repaint();
+        }
+
+        private void OnDisable()
+        {
+            _scenePreviewRefreshQueued = false;
+        }
+
+        private void RequestScenePreviewRefresh()
+        {
+            if (_scenePreviewRefreshQueued)
+                return;
+
+            _scenePreviewRefreshQueued = true;
+            EditorApplication.delayCall += RunQueuedScenePreviewRefresh;
+        }
+
+        private void RunQueuedScenePreviewRefresh()
+        {
+            _scenePreviewRefreshQueued = false;
+            if (this == null)
+                return;
+
+            RefreshCarryBlockJamScenePreview();
         }
 
         private void EnsureGridLoaded()
@@ -781,7 +829,36 @@ namespace GAITemplate.Editor
 
             EditorUtility.SetDirty(_levelData);
             AssetDatabase.SaveAssets();
+            RefreshCarryBlockJamScenePreview();
             Debug.Log($"[Level Creator] Saved \"{_levelData.name}\".", _levelData);
+        }
+
+        private void ApplyToScene()
+        {
+            SyncPreviewGridDimensions();
+            if (CarryBlockJamSceneLevelApplicator.TryApply(_levelData, true, out string message))
+                Debug.Log($"[Level Creator] {message}", _levelData);
+            else
+                Debug.LogWarning($"[Level Creator] {message}", _levelData);
+        }
+
+        private void SyncPreviewGridDimensions()
+        {
+            if (_levelData == null)
+                return;
+
+            _levelData.gridRows = _rows;
+            _levelData.gridColumns = _columns;
+        }
+
+        private void RefreshCarryBlockJamScenePreview()
+        {
+            if (_levelData == null)
+                return;
+
+            SyncPreviewGridDimensions();
+            if (CarryBlockJamSceneLevelApplicator.TryApply(_levelData, out _))
+                Repaint();
         }
     }
 }

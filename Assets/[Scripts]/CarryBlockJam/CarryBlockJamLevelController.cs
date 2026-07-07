@@ -1,4 +1,6 @@
 using GAITemplate;
+using TMPro;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CarryBlockJam
@@ -32,8 +34,69 @@ namespace CarryBlockJam
             if (board == null || levelData == null)
                 return;
 
-            board.ApplyLevelData(levelData);
+            board.ApplyLevelData(levelData, rebuildVisuals: true);
             EnsureRoots();
+            BuildRuntimeExits(levelData);
+        }
+
+        public void EnsureGameplayFromLevel(LevelData levelData)
+        {
+            if (board == null || levelData == null)
+                return;
+
+            board.ApplyLevelData(levelData, rebuildVisuals: false);
+            EnsureRoots();
+            EnsureExitGameplay(levelData);
+        }
+
+        private void EnsureExitGameplay(LevelData levelData)
+        {
+            Transform exitsRoot = board.ExitsRoot != null ? board.ExitsRoot : exitsVisualRoot;
+            if (levelData?.carryBlockJam?.exits == null || exitsRoot == null)
+                return;
+
+            List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
+            int wiredCount = 0;
+
+            for (int i = 0; i < exitsRoot.childCount && i < definitions.Count; i++)
+            {
+                Transform exitTransform = exitsRoot.GetChild(i);
+                CarryBlockJamExitDefinition definition = definitions[i];
+                if (definition == null)
+                    continue;
+
+                CarryBlockJamExit exit = exitTransform.GetComponent<CarryBlockJamExit>();
+                if (exit == null)
+                    exit = exitTransform.gameObject.AddComponent<CarryBlockJamExit>();
+
+                exit.Configure(definition);
+                exit.BindVisuals(
+                    FindExitVisual(exitTransform, "Gate"),
+                    FindExitVisual(exitTransform, "Car"),
+                    exitTransform.GetComponentInChildren<TMP_Text>(true));
+                wiredCount++;
+            }
+
+            if (wiredCount > 0 || exitsRoot.childCount > 0)
+                return;
+
+            BuildRuntimeExits(levelData);
+        }
+
+        private static GamePiece FindExitVisual(Transform exitTransform, string childName)
+        {
+            if (exitTransform == null)
+                return null;
+
+            Transform child = exitTransform.Find(childName);
+            if (child == null)
+                return null;
+
+            GamePiece piece = child.GetComponent<GamePiece>();
+            if (piece == null)
+                piece = child.gameObject.AddComponent<GamePiece>();
+
+            return piece;
         }
 
         private void EnsureRoots()
@@ -71,6 +134,166 @@ namespace CarryBlockJam
             }
 
             return current;
+        }
+
+        private void BuildRuntimeExits(LevelData levelData)
+        {
+            Transform exitsRoot = board.ExitsRoot != null ? board.ExitsRoot : exitsVisualRoot;
+            if (levelData?.carryBlockJam?.exits == null || exitsRoot == null)
+                return;
+
+            for (int i = exitsRoot.childCount - 1; i >= 0; i--)
+                Object.Destroy(exitsRoot.GetChild(i).gameObject);
+
+            PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
+            if (grid == null)
+                return;
+
+            CarryBlockJamPrefabSettings settings = prefabSettings != null ? prefabSettings : board.PrefabSettings;
+            List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
+            for (int i = 0; i < definitions.Count; i++)
+                BuildExitVisual(grid, exitsRoot, settings, definitions[i], i);
+        }
+
+        private static void BuildExitVisual(
+            PuzzleGrid grid,
+            Transform exitsRoot,
+            CarryBlockJamPrefabSettings settings,
+            CarryBlockJamExitDefinition definition,
+            int index)
+        {
+            if (grid == null || exitsRoot == null || definition == null)
+                return;
+
+            var exitObject = new GameObject($"Exit_{definition.side}_{definition.startIndex}_{index}");
+            exitObject.transform.SetParent(exitsRoot, false);
+            exitObject.transform.localPosition = GetExitLocalPosition(grid, definition) + definition.positionOffset;
+            exitObject.transform.localRotation = Quaternion.Euler(definition.rotation);
+            exitObject.transform.localScale = Vector3.one;
+
+            CarryBlockJamExit exit = exitObject.AddComponent<CarryBlockJamExit>();
+            exit.Configure(definition);
+
+            GamePiece gatePiece = CreateVisual(
+                "Gate",
+                exitObject.transform,
+                settings != null ? settings.exitVisual : null,
+                exit.CurrentColor,
+                GetExitLocalScale(grid, definition.side, definition.length));
+
+            GamePiece carPiece = CreateVisual(
+                "Car",
+                exitObject.transform,
+                settings != null ? settings.exitCarVisual : null,
+                exit.CurrentColor,
+                Vector3.one);
+
+            if (carPiece != null)
+            {
+                carPiece.transform.localPosition += Vector3.up * 0.35f;
+                if (settings != null && !settings.exitCarVisual.tintWithPieceColor)
+                    carPiece.ApplyColor(settings.exitCarColor);
+            }
+
+            TMP_Text label = CreateGoalLabel(exitObject.transform);
+            exit.BindVisuals(gatePiece, carPiece, label);
+        }
+
+        private static GamePiece CreateVisual(
+            string objectName,
+            Transform parent,
+            CarryBlockJamPrimitiveVisualSettings visualSettings,
+            PieceColorType color,
+            Vector3 fallbackScale)
+        {
+            if (parent == null)
+                return null;
+
+            GameObject visualObject = null;
+            if (visualSettings != null && visualSettings.prefab != null)
+            {
+                visualObject = Object.Instantiate(visualSettings.prefab, parent, false);
+                visualObject.name = objectName;
+            }
+            else
+            {
+                PrimitiveType primitiveType = visualSettings != null ? visualSettings.primitiveType : PrimitiveType.Cube;
+                visualObject = GameObject.CreatePrimitive(primitiveType);
+                visualObject.name = objectName;
+                visualObject.transform.SetParent(parent, false);
+            }
+
+            if (visualObject == null)
+                return null;
+
+            visualObject.transform.localPosition = visualSettings != null ? visualSettings.localPosition : Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.Euler(
+                visualSettings != null ? visualSettings.localRotation : Vector3.zero);
+            visualObject.transform.localScale = visualSettings != null && visualSettings.localScale != Vector3.zero
+                ? Vector3.Scale(fallbackScale, visualSettings.localScale)
+                : fallbackScale;
+
+            GamePiece piece = visualObject.GetComponent<GamePiece>();
+            if (piece == null)
+                piece = visualObject.AddComponent<GamePiece>();
+
+            if (visualSettings == null || visualSettings.tintWithPieceColor)
+                piece.ApplyColor(PieceColorPalette.IsPaintable(color) ? color : PieceColorType.White);
+
+            Collider collider = visualObject.GetComponent<Collider>();
+            if (collider != null)
+                Object.Destroy(collider);
+
+            return piece;
+        }
+
+        private static TMP_Text CreateGoalLabel(Transform parent)
+        {
+            return CarryBlockJamExitLabelUtility.CreateLabel(parent);
+        }
+
+        private static Vector3 GetExitLocalPosition(PuzzleGrid grid, CarryBlockJamExitDefinition settings)
+        {
+            float centerIndex = settings.startIndex + (Mathf.Max(1, settings.length) - 1) * 0.5f;
+
+            switch (settings.side)
+            {
+                case BoardBorderSide.Left:
+                {
+                    int row = Mathf.RoundToInt(centerIndex);
+                    return grid.GetLocalPosition(row, 0) + new Vector3(-grid.GridSpacingX * 0.58f, 0.375f, 0f);
+                }
+                case BoardBorderSide.Right:
+                {
+                    int row = Mathf.RoundToInt(centerIndex);
+                    return grid.GetLocalPosition(row, grid.Columns - 1) + new Vector3(grid.GridSpacingX * 0.58f, 0.375f, 0f);
+                }
+                case BoardBorderSide.Top:
+                {
+                    int column = Mathf.RoundToInt(centerIndex);
+                    return grid.GetLocalPosition(0, column) + new Vector3(0f, 0.375f, grid.GridSpacingZ * 0.58f);
+                }
+                case BoardBorderSide.Bottom:
+                {
+                    int column = Mathf.RoundToInt(centerIndex);
+                    return grid.GetLocalPosition(grid.Rows - 1, column) + new Vector3(0f, 0.375f, -grid.GridSpacingZ * 0.58f);
+                }
+                default:
+                    return Vector3.zero;
+            }
+        }
+
+        private static Vector3 GetExitLocalScale(PuzzleGrid grid, BoardBorderSide side, int length)
+        {
+            int resolvedLength = Mathf.Max(1, length);
+            return side switch
+            {
+                BoardBorderSide.Left or BoardBorderSide.Right =>
+                    new Vector3(1f, 1f, grid.GridSpacingZ * resolvedLength * 0.94f),
+                BoardBorderSide.Top or BoardBorderSide.Bottom =>
+                    new Vector3(grid.GridSpacingX * resolvedLength * 0.94f, 1f, 1f),
+                _ => Vector3.one,
+            };
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections;
+using CarryBlockJam;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -40,6 +41,8 @@ namespace GAITemplate
 
             if (config.autoSpawnLevel && currentLevelData != null)
                 SpawnLevelBase(currentLevelData);
+            else if (currentLevelData != null)
+                CarryBlockJamSceneLevelRuntime.EnsureGameplayOnSceneBoards(currentLevelData);
 
             ApplyLevelCamera(currentLevelData);
             if (currentLevelData != null)

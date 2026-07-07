@@ -272,7 +272,7 @@ namespace CarryBlockJam
                 return;
             }
 
-            if (TryResolveExit(rowStep, columnStep, currentRow, currentColumn, out Transform edgeExit) ||
+            if (TryResolveExit(rowStep, columnStep, currentRow, currentColumn, out CarryBlockJamExit edgeExit) ||
                 TryResolveExitAtCell(currentRow, currentColumn, out edgeExit))
             {
                 SendCarriedPlatesToExit(edgeExit, cylinderPath);
@@ -282,12 +282,12 @@ namespace CarryBlockJam
             MoveConnectedCylinder(cylinderPath);
         }
 
-        private void SendCarriedPlatesToExit(Transform exitTransform, List<Vector2Int> cylinderPath)
+        private void SendCarriedPlatesToExit(CarryBlockJamExit exitComponent, List<Vector2Int> cylinderPath)
         {
-            if (!HasCarriedPlates || exitTransform == null)
+            if (!HasCarriedPlates || exitComponent == null)
                 return;
 
-            TweenCallback onCylinderComplete = () => AnimateCarriedPlatesToExit(exitTransform);
+            TweenCallback onCylinderComplete = () => AnimateCarriedPlatesToExit(exitComponent);
             if (cylinderPath != null && cylinderPath.Count > 0)
                 AnimateCylinderTravel(cylinderPath, onCylinderComplete);
             else
@@ -464,16 +464,23 @@ namespace CarryBlockJam
             return false;
         }
 
-        private void AnimateCarriedPlatesToExit(Transform exitTransform)
+        private void AnimateCarriedPlatesToExit(CarryBlockJamExit exitComponent)
         {
-            if (!HasCarriedPlates || exitTransform == null)
+            if (!HasCarriedPlates || exitComponent == null || !exitComponent.CanAccept(CarriedColor))
             {
                 _isAnimating = false;
                 return;
             }
 
             _isAnimating = true;
-            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            int consumedCount = exitComponent.Consume(CarriedColor, _carriedPlates.Count);
+            if (consumedCount <= 0)
+            {
+                _isAnimating = false;
+                return;
+            }
+
+            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(consumedCount);
 
             Sequence sequence = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
@@ -483,7 +490,7 @@ namespace CarryBlockJam
                     continue;
 
                 plate.transform.SetParent(GetPiecesRoot(), true);
-                Vector3 targetPosition = exitTransform.position + Vector3.up * (0.05f * i);
+                Vector3 targetPosition = exitComponent.transform.position + Vector3.up * (0.05f * i);
                 sequence.Append(plate.transform.DOMove(targetPosition, exitTravelDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {
@@ -494,6 +501,7 @@ namespace CarryBlockJam
 
             sequence.OnComplete(() =>
             {
+                UpdateCarriedPlateVisuals();
                 _isAnimating = false;
                 TryTriggerSuccess(plates);
             });
@@ -698,9 +706,9 @@ namespace CarryBlockJam
             return requestedSteps > 0;
         }
 
-        private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out Transform exitTransform)
+        private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out CarryBlockJamExit exitComponent)
         {
-            exitTransform = null;
+            exitComponent = null;
             if (!HasCarriedPlates || board == null || (columnStep == 0 && rowStep == 0))
                 return false;
 
@@ -708,26 +716,24 @@ namespace CarryBlockJam
             if (!IsOnExitBoundary(side, row, column))
                 return false;
 
-            BoardExitSettings settings = FindMatchingExit(side, row, column, CarriedColor);
-            if (settings == null)
+            exitComponent = FindMatchingExit(side, row, column, CarriedColor);
+            if (exitComponent == null)
                 return false;
 
-            exitTransform = FindExitTransform(settings);
-            return exitTransform != null;
+            return true;
         }
 
-        private bool TryResolveExitAtCell(int row, int column, out Transform exitTransform)
+        private bool TryResolveExitAtCell(int row, int column, out CarryBlockJamExit exitComponent)
         {
-            exitTransform = null;
+            exitComponent = null;
             if (!HasCarriedPlates || board == null)
                 return false;
 
-            BoardExitSettings settings = FindMatchingExit(row, column, CarriedColor);
-            if (settings == null)
+            exitComponent = FindMatchingExit(row, column, CarriedColor);
+            if (exitComponent == null)
                 return false;
 
-            exitTransform = FindExitTransform(settings);
-            return exitTransform != null;
+            return true;
         }
 
         private static BoardBorderSide ResolveExitSide(int rowStep, int columnStep)
@@ -753,35 +759,28 @@ namespace CarryBlockJam
             };
         }
 
-        private Transform FindExitTransform(BoardExitSettings settings)
+        private CarryBlockJamExit[] GetRuntimeExits()
         {
-            if (board == null || board.ExitsRoot == null || settings == null)
-                return null;
+            if (board == null || board.ExitsRoot == null)
+                return System.Array.Empty<CarryBlockJamExit>();
 
-            for (int i = 0; i < board.ExitsRoot.childCount; i++)
-            {
-                Transform child = board.ExitsRoot.GetChild(i);
-                if (child.name == $"Exit_{settings.side}_{settings.startIndex}_{settings.color}")
-                    return child;
-            }
-
-            return null;
+            return board.ExitsRoot.GetComponentsInChildren<CarryBlockJamExit>(true);
         }
 
-        private BoardExitSettings FindMatchingExit(
+        private CarryBlockJamExit FindMatchingExit(
             BoardBorderSide side,
             int row,
             int column,
             PieceColorType color)
         {
-            IReadOnlyList<BoardExitSettings> exits = board.Exits;
+            CarryBlockJamExit[] exits = GetRuntimeExits();
             if (exits == null)
                 return null;
 
-            for (int i = 0; i < exits.Count; i++)
+            for (int i = 0; i < exits.Length; i++)
             {
-                BoardExitSettings exit = exits[i];
-                if (exit == null || exit.side != side || exit.color != color)
+                CarryBlockJamExit exit = exits[i];
+                if (exit == null || exit.Side != side || !exit.CanAccept(color))
                     continue;
 
                 if (IsCellOnExit(row, column, exit))
@@ -791,16 +790,16 @@ namespace CarryBlockJam
             return null;
         }
 
-        private BoardExitSettings FindMatchingExit(int row, int column, PieceColorType color)
+        private CarryBlockJamExit FindMatchingExit(int row, int column, PieceColorType color)
         {
-            IReadOnlyList<BoardExitSettings> exits = board.Exits;
+            CarryBlockJamExit[] exits = GetRuntimeExits();
             if (exits == null)
                 return null;
 
-            for (int i = 0; i < exits.Count; i++)
+            for (int i = 0; i < exits.Length; i++)
             {
-                BoardExitSettings exit = exits[i];
-                if (exit == null || exit.color != color)
+                CarryBlockJamExit exit = exits[i];
+                if (exit == null || !exit.CanAccept(color))
                     continue;
 
                 if (IsCellOnExit(row, column, exit))
@@ -810,26 +809,26 @@ namespace CarryBlockJam
             return null;
         }
 
-        private bool IsCellOnExit(int row, int column, BoardExitSettings exit)
+        private bool IsCellOnExit(int row, int column, CarryBlockJamExit exit)
         {
             if (exit == null || _grid == null)
                 return false;
 
-            int length = Mathf.Max(1, exit.length);
-            return exit.side switch
+            int length = Mathf.Max(1, exit.Length);
+            return exit.Side switch
             {
                 BoardBorderSide.Left => column == 0 &&
-                                        row >= exit.startIndex &&
-                                        row < exit.startIndex + length,
+                                        row >= exit.StartIndex &&
+                                        row < exit.StartIndex + length,
                 BoardBorderSide.Right => column == _grid.Columns - 1 &&
-                                         row >= exit.startIndex &&
-                                         row < exit.startIndex + length,
+                                         row >= exit.StartIndex &&
+                                         row < exit.StartIndex + length,
                 BoardBorderSide.Top => row == 0 &&
-                                       column >= exit.startIndex &&
-                                       column < exit.startIndex + length,
+                                       column >= exit.StartIndex &&
+                                       column < exit.StartIndex + length,
                 BoardBorderSide.Bottom => row == _grid.Rows - 1 &&
-                                          column >= exit.startIndex &&
-                                          column < exit.startIndex + length,
+                                          column >= exit.StartIndex &&
+                                          column < exit.StartIndex + length,
                 _ => false,
             };
         }
@@ -1043,6 +1042,19 @@ namespace CarryBlockJam
             return detached;
         }
 
+        private List<CarryBlockJamBoardPiece> DetachCarriedPlates(int count)
+        {
+            int resolvedCount = Mathf.Clamp(count, 0, _carriedPlates.Count);
+            var detached = new List<CarryBlockJamBoardPiece>(resolvedCount);
+            for (int i = 0; i < resolvedCount; i++)
+                detached.Add(_carriedPlates[i]);
+
+            if (resolvedCount > 0)
+                _carriedPlates.RemoveRange(0, resolvedCount);
+
+            return detached;
+        }
+
         private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
         {
             CarryBlockJamBoardPiece current = basePiece;
@@ -1121,6 +1133,13 @@ namespace CarryBlockJam
 
             if (LevelManager.instance == null)
                 return;
+
+            CarryBlockJamExit[] exits = GetRuntimeExits();
+            for (int i = 0; i < exits.Length; i++)
+            {
+                if (exits[i] != null && !exits[i].IsCompleted)
+                    return;
+            }
 
             _successTriggered = true;
             LevelManager.instance.Success();

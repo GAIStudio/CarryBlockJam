@@ -15,164 +15,11 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 5
   gridColumns: 5
-  colorCells:
-  - row: 0
-    column: 1
-    color: 5
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 0
-    column: 3
-    color: 5
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 0
-    column: 4
-    color: 6
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 1
-    column: 0
-    color: 17
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 1
-    column: 1
-    color: 13
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 1
-    column: 3
-    color: 3
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 1
-    column: 4
-    color: 9
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 2
-    column: 0
-    color: 18
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 2
-    column: 1
-    color: 14
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 2
-    column: 2
-    color: 10
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 2
-    column: 3
-    color: 4
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 2
-    column: 4
-    color: 11
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 3
-    column: 0
-    color: 10
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 3
-    column: 1
-    color: 5
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 3
-    column: 2
-    color: 9
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 3
-    column: 3
-    color: 21
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 3
-    column: 4
-    color: 0
-    flag: 4
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 4
-    column: 0
-    color: 14
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 4
-    column: 1
-    color: 16
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 4
-    column: 2
-    color: 2
-    flag: 2
-    flagValue: 10
-    direction: 0
-    tunnelPieces: 
-  - row: 4
-    column: 3
-    color: 7
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 4
-    column: 4
-    color: 2
-    flag: 0
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
+  colorCells: []
   carryBlockJam:
-    gridSpacingX: 1.1
-    gridSpacingZ: 1.1
+    gridCellScale: {x: 0.75, y: 0.1, z: 0.75}
+    gridSpacingX: 1.6
+    gridSpacingZ: 1.6
     colorSetups:
     - color: 1
       minPlateCount: 1
@@ -182,39 +29,36 @@ MonoBehaviour:
     exits:
     - side: 2
       startIndex: 0
-      length: 1
+      length: 2
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 90, z: 0}
       goals:
       - color: 1
         requiredPlateCount: 3
     - side: 3
       startIndex: 0
       length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 270, z: 0}
       goals:
-      - color: 1
+      - color: 6
         requiredPlateCount: 3
+    boxPlacements:
+    - color: 0
+      row: 0
+      column: 0
+    platePlacements: []
     stickmanSpawnMode: 0
     fixedStickmanCell:
       row: 2
       column: 3
-    blockedCells: []
-    useLevelSeed: 0
-    generationSeed: 1
-    maxPlacementAttempts: 128
-    ensureReachableLayout: 1
-    avoidBlockedExitCells: 1
-    avoidSameColorExitFrontCells: 1
-    maxPlateCountPerCell: 3
-    allowPlateStacksOnSameCell: 1
-    preferCenteredSpawn: 1
-    requirePathToAtLeastOnePlate: 1
-    requirePathFromBoxToMatchingExit: 1
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []
-  cameraPosition: {x: 0, y: 13.5, z: -7}
+  cameraPosition: {x: 0, y: 13.5, z: -9}
   cameraRotation: {x: 50, y: 0, z: 0}
   cameraOrthographic: 1
-  cameraOrthographicSize: 9
+  cameraOrthographicSize: 11
   cameraFieldOfView: 60
   levelPrefab: {fileID: 0}
   gridKey: 

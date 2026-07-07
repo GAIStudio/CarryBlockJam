@@ -28,8 +28,13 @@ namespace CarryBlockJam
 
         private void Start()
         {
+            RespawnFromLevel();
+        }
+
+        public void RespawnFromLevel()
+        {
             if (board == null)
-                board = FindObjectOfType<CarryBlockJamSimpleBoard>();
+                board = GetComponent<CarryBlockJamSimpleBoard>() ?? FindObjectOfType<CarryBlockJamSimpleBoard>();
 
             if (board == null)
             {
@@ -117,6 +122,7 @@ namespace CarryBlockJam
             if (cylinder == null)
                 cylinder = BoardCylinderPlacement.CreateDefault();
 
+            ResolveStickmanSpawn(grid);
             if (!IsInsideGrid(grid, cylinder.row, cylinder.column))
             {
                 cylinder.row = Mathf.Clamp((grid.Rows - 1) / 2, 0, grid.Rows - 1);
@@ -283,10 +289,30 @@ namespace CarryBlockJam
                     placement.color,
                     placement.positionOffset,
                     new Vector3(0f, 1.15f, 0f));
-                piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
 
-                if (grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell) && cell != null)
-                    cell.Occupant = plateObject;
+                grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell);
+                if (cell != null && cell.Occupant != null)
+                {
+                    CarryBlockJamBoardPiece basePiece = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                    basePiece = GetTopStackPiece(basePiece);
+                    if (basePiece != null)
+                    {
+                        piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
+                        piece.StackOnPiece(basePiece);
+                        cell.Occupant = plateObject;
+                    }
+                    else
+                    {
+                        piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
+                        cell.Occupant = plateObject;
+                    }
+                }
+                else
+                {
+                    piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
+                    if (cell != null)
+                        cell.Occupant = plateObject;
+                }
 
                 spawnedCount++;
             }
@@ -299,6 +325,10 @@ namespace CarryBlockJam
             List<PieceColorType> activeColors,
             HashSet<Vector2Int> occupied)
         {
+            BoardBoxPlacement[] levelPlacements = GetLevelBoxPlacements(activeColors);
+            if (levelPlacements.Length > 0)
+                return levelPlacements;
+
             if (!randomizeBoxes && boxes != null && boxes.Length > 0)
                 return GetManualBoxPlacements(activeColors);
 
@@ -330,6 +360,10 @@ namespace CarryBlockJam
             List<PieceColorType> activeColors,
             HashSet<Vector2Int> occupied)
         {
+            BoardPlatePlacement[] levelPlacements = GetLevelPlatePlacements();
+            if (levelPlacements.Length > 0)
+                return levelPlacements;
+
             if (!randomizeBoxes && plates != null && plates.Length > 0)
                 return plates;
 
@@ -585,6 +619,26 @@ namespace CarryBlockJam
             return row >= 0 && row < grid.Rows && column >= 0 && column < grid.Columns;
         }
 
+        private void ResolveStickmanSpawn(PuzzleGrid grid)
+        {
+            LevelData levelData = ResolveLevelData();
+            if (grid == null || levelData?.carryBlockJam == null)
+                return;
+
+            CarryBlockJamLevelSettings settings = levelData.carryBlockJam;
+            switch (settings.stickmanSpawnMode)
+            {
+                case CarryBlockJamStickmanSpawnMode.FixedCell:
+                    cylinder.row = settings.fixedStickmanCell.row;
+                    cylinder.column = settings.fixedStickmanCell.column;
+                    break;
+                case CarryBlockJamStickmanSpawnMode.Center:
+                    cylinder.row = Mathf.Clamp((grid.Rows - 1) / 2, 0, grid.Rows - 1);
+                    cylinder.column = Mathf.Clamp(grid.Columns / 2, 0, grid.Columns - 1);
+                    break;
+            }
+        }
+
         private LevelData ResolveLevelData()
         {
             if (LevelManager.instance != null && LevelManager.instance.currentLevelData != null)
@@ -651,6 +705,58 @@ namespace CarryBlockJam
             }
 
             return placements.ToArray();
+        }
+
+        private BoardBoxPlacement[] GetLevelBoxPlacements(List<PieceColorType> activeColors)
+        {
+            LevelData levelData = ResolveLevelData();
+            if (levelData?.carryBlockJam?.boxPlacements == null || levelData.carryBlockJam.boxPlacements.Count == 0)
+                return Array.Empty<BoardBoxPlacement>();
+
+            var placements = new List<BoardBoxPlacement>();
+            for (int i = 0; i < levelData.carryBlockJam.boxPlacements.Count; i++)
+            {
+                CarryBlockJamBoxPlacement placement = levelData.carryBlockJam.boxPlacements[i];
+                if (placement == null)
+                    continue;
+
+                if (activeColors != null && activeColors.Count > 0 && !activeColors.Contains(placement.color))
+                    continue;
+
+                placements.Add(BoardBoxPlacement.Create(placement.row, placement.column, placement.color));
+            }
+
+            return placements.ToArray();
+        }
+
+        private BoardPlatePlacement[] GetLevelPlatePlacements()
+        {
+            LevelData levelData = ResolveLevelData();
+            if (levelData?.carryBlockJam?.platePlacements == null || levelData.carryBlockJam.platePlacements.Count == 0)
+                return Array.Empty<BoardPlatePlacement>();
+
+            var placements = new List<BoardPlatePlacement>();
+            for (int i = 0; i < levelData.carryBlockJam.platePlacements.Count; i++)
+            {
+                CarryBlockJamPlatePlacement placement = levelData.carryBlockJam.platePlacements[i];
+                if (placement == null)
+                    continue;
+
+                int resolvedCount = Mathf.Max(1, placement.count);
+                for (int countIndex = 0; countIndex < resolvedCount; countIndex++)
+                    placements.Add(BoardPlatePlacement.Create(placement.row, placement.column, placement.color));
+            }
+
+            return placements.ToArray();
+        }
+
+        private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
+        {
+            CarryBlockJamBoardPiece current = basePiece;
+            while (current != null && current.StackedAbove != null)
+                current = current.StackedAbove;
+
+            return current;
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using GAITemplate;
+using TMPro;
 using UnityEngine;
 
 namespace CarryBlockJam
@@ -12,6 +13,9 @@ namespace CarryBlockJam
         [SerializeField] private List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>();
         [SerializeField] private int currentGoalIndex;
         [SerializeField] private int remainingPlateCount;
+        [SerializeField] private GamePiece gateVisual;
+        [SerializeField] private GamePiece carVisual;
+        [SerializeField] private TMP_Text goalLabel;
 
         public BoardBorderSide Side => side;
         public int StartIndex => startIndex;
@@ -34,6 +38,16 @@ namespace CarryBlockJam
             goals = new List<CarryBlockJamExitGoal>(definition.goals ?? new List<CarryBlockJamExitGoal>());
             currentGoalIndex = 0;
             remainingPlateCount = goals.Count > 0 ? Mathf.Max(0, goals[0].requiredPlateCount) : 0;
+            RefreshVisuals();
+        }
+
+        public void BindVisuals(GamePiece gatePiece, GamePiece carPiece, TMP_Text label)
+        {
+            gateVisual = gatePiece;
+            carVisual = carPiece;
+            goalLabel = label;
+            CarryBlockJamExitLabelUtility.ApplyRuntimeOutline(label);
+            RefreshVisuals();
         }
 
         public bool CanAccept(PieceColorType color) =>
@@ -49,6 +63,8 @@ namespace CarryBlockJam
 
             if (remainingPlateCount == 0)
                 AdvanceGoal();
+            else
+                RefreshVisuals();
 
             return consumed;
         }
@@ -59,10 +75,27 @@ namespace CarryBlockJam
             if (currentGoalIndex >= goals.Count)
             {
                 remainingPlateCount = 0;
+                RefreshVisuals();
                 return;
             }
 
             remainingPlateCount = Mathf.Max(0, goals[currentGoalIndex].requiredPlateCount);
+            RefreshVisuals();
+        }
+
+        private void RefreshVisuals()
+        {
+            if (gateVisual != null)
+                gateVisual.ApplyColor(PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
+
+            if (carVisual != null && PieceColorPalette.IsPaintable(CurrentColor))
+                carVisual.ApplyColor(CurrentColor);
+
+            if (goalLabel != null)
+            {
+                goalLabel.text = IsCompleted ? string.Empty : remainingPlateCount.ToString();
+                goalLabel.color = Color.white;
+            }
         }
     }
 }

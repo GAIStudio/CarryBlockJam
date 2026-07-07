@@ -42,6 +42,23 @@ namespace CarryBlockJam
     }
 
     [Serializable]
+    public class CarryBlockJamBoxPlacement
+    {
+        public PieceColorType color = PieceColorType.Red;
+        public int row;
+        public int column;
+    }
+
+    [Serializable]
+    public class CarryBlockJamPlatePlacement
+    {
+        public PieceColorType color = PieceColorType.Red;
+        public int row;
+        public int column;
+        [Min(1)] public int count = 1;
+    }
+
+    [Serializable]
     public class CarryBlockJamExitGoal
     {
         public PieceColorType color = PieceColorType.Red;
@@ -54,6 +71,8 @@ namespace CarryBlockJam
         public BoardBorderSide side = BoardBorderSide.Left;
         [Min(0)] public int startIndex = 0;
         [Min(1)] public int length = 1;
+        public Vector3 positionOffset;
+        public Vector3 rotation = new Vector3(0f, 90f, 0f);
         public List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>
         {
             new CarryBlockJamExitGoal(),
