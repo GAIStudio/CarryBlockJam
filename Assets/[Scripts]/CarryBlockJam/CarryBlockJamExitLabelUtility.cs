@@ -105,7 +105,12 @@ namespace CarryBlockJam
                 return;
 
             BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
-            if (!resolvedSettings.useOutline)
+            ApplyRuntimeOutline(text, resolvedSettings.useOutline);
+        }
+
+        public static void ApplyRuntimeOutline(TMP_Text text, bool useOutline)
+        {
+            if (text == null || !Application.isPlaying || !useOutline)
                 return;
 
             text.outlineColor = Color.black;

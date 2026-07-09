@@ -41,5 +41,8 @@ namespace CarryBlockJam
         [Header("Stickman Spawn")]
         public CarryBlockJamStickmanSpawnMode stickmanSpawnMode = CarryBlockJamStickmanSpawnMode.Center;
         public CarryBlockJamGridCoordinate fixedStickmanCell = new CarryBlockJamGridCoordinate(2, 3);
+
+        [Header("Frozen Box Visual")]
+        public BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
     }
 }

@@ -15,10 +15,13 @@ namespace CarryBlockJam
     public class CarryBlockJamRuntimePieceSpawner : MonoBehaviour
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
+        private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
 
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
+        [SerializeField] private BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
 
         [Header("Box Visual (All Levels)")]
         [SerializeField] private BoardPieceVisualSettings boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
@@ -72,15 +75,46 @@ namespace CarryBlockJam
             if (plates == null || plates.Length == 0)
                 plates = BoardPlatePlacement.CreateDefaults();
 
+            EnsureRuntimeAssets();
             board.EnsureGridLayout();
             SpawnPieces();
         }
+
+        private void EnsureRuntimeAssets()
+        {
+#if UNITY_EDITOR
+            if (cylinderVisualPrefab == null)
+                cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
+
+            EnsureFrozenBoxVisualDefaults(frozenBoxVisual);
+
+            LevelData levelData = ResolveLevelData();
+            if (levelData?.carryBlockJam?.frozenBoxVisual != null)
+                EnsureFrozenBoxVisualDefaults(levelData.carryBlockJam.frozenBoxVisual);
+#endif
+        }
+
+#if UNITY_EDITOR
+        private static void EnsureFrozenBoxVisualDefaults(BoardFrozenBoxVisualSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            if (settings.model == null)
+                settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(FrozenBoxModelPath);
+
+            if (settings.material == null)
+                settings.material = AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
+        }
+#endif
 
 #if UNITY_EDITOR
         private void OnValidate()
         {
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
+
+            EnsureFrozenBoxVisualDefaults(frozenBoxVisual);
 
             if (boxVisual == null)
                 boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
@@ -294,6 +328,16 @@ namespace CarryBlockJam
                     CarryBlockJamHiddenBox hiddenBox = boxObject.AddComponent<CarryBlockJamHiddenBox>();
                     hiddenBox.Bind(piece, visualPiece);
                 }
+                else if (placement.isFrozen)
+                {
+                    piece.SetFrozen(true);
+                    CarryBlockJamFrozenBox frozenBox = boxObject.AddComponent<CarryBlockJamFrozenBox>();
+                    frozenBox.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        placement.unlockMoves,
+                        ResolveFrozenBoxVisualSettings());
+                }
 
                 if (grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell) && cell != null)
                     cell.Occupant = boxObject;
@@ -302,6 +346,16 @@ namespace CarryBlockJam
             }
 
             return spawnedCount;
+        }
+
+        private BoardFrozenBoxVisualSettings ResolveFrozenBoxVisualSettings()
+        {
+            LevelData levelData = ResolveLevelData();
+            BoardFrozenBoxVisualSettings levelSettings = levelData?.carryBlockJam?.frozenBoxVisual;
+            if (levelSettings != null)
+                return levelSettings;
+
+            return frozenBoxVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
         }
 
         private int SpawnPlates(PuzzleGrid grid, BoardPlatePlacement[] placements)
@@ -1253,15 +1307,20 @@ namespace CarryBlockJam
                     if (!usedCells.Add(cell))
                         continue;
 
-                    placements.Add(BoardBoxPlacement.Create(
-                        placement.row,
-                        placement.column,
-                        placement.color,
-                        placement.isHidden));
+                    placements.Add(new BoardBoxPlacement
+                    {
+                        row = placement.row,
+                        column = placement.column,
+                        color = placement.color,
+                        isHidden = placement.isHidden,
+                        isFrozen = placement.isFrozen,
+                        unlockMoves = Mathf.Max(1, placement.unlockMoves),
+                    });
                 }
             }
 
             AppendHiddenBoxPlacementsFromGrid(levelData, placements, usedCells);
+            AppendFrozenBoxPlacementsFromGrid(levelData, placements, usedCells);
             return placements.ToArray();
         }
 
@@ -1292,6 +1351,40 @@ namespace CarryBlockJam
                 }
 
                 placements.Add(BoardBoxPlacement.Create(cell.row, cell.column, cell.color, isHidden: true));
+            }
+        }
+
+        private static void AppendFrozenBoxPlacementsFromGrid(
+            LevelData levelData,
+            List<BoardBoxPlacement> placements,
+            HashSet<Vector2Int> usedCells)
+        {
+            if (levelData?.colorCells == null || placements == null || usedCells == null)
+                return;
+
+            for (int i = 0; i < levelData.colorCells.Length; i++)
+            {
+                LevelColorCell cell = levelData.colorCells[i];
+                if ((cell.flag & LevelCellFlag.Ice) == 0)
+                    continue;
+
+                var gridCell = new Vector2Int(cell.row, cell.column);
+                if (!usedCells.Add(gridCell))
+                    continue;
+
+                if (!PieceColorPalette.IsPaintable(cell.color))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] needs a color to spawn a frozen box.");
+                    usedCells.Remove(gridCell);
+                    continue;
+                }
+
+                placements.Add(BoardBoxPlacement.CreateFrozen(
+                    cell.row,
+                    cell.column,
+                    cell.color,
+                    Mathf.Max(1, cell.flagValue)));
             }
         }
 

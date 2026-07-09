@@ -16,4 +16,3 @@ MonoBehaviour:
   loopFromLevel: 1
   levels:
   - {fileID: 11400000, guid: 3d8a3f3f13ba16f448287efd5fccaaff, type: 2}
-  - {fileID: 11400000, guid: 40e08870a22b9427c91ee160bb870576, type: 2}

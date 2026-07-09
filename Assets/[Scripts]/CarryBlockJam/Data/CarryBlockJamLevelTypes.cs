@@ -48,6 +48,8 @@ namespace CarryBlockJam
         public int row;
         public int column;
         public bool isHidden;
+        public bool isFrozen;
+        [Min(1)] public int unlockMoves = 3;
     }
 
     [Serializable]

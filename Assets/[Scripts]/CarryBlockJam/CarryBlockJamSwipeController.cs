@@ -495,6 +495,7 @@ namespace CarryBlockJam
                 sequence.AppendCallback(() =>
                 {
                     CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
+                    CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
                     plate.gameObject.SetActive(false);
                     Destroy(plate.gameObject);
                 });
@@ -1022,6 +1023,7 @@ namespace CarryBlockJam
             {
                 AddPlateToCarryStack(plates[i]);
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plates[i]);
+                CarryBlockJamFrozenBox.NotifyPlateCollected(plates[i]);
             }
         }
 

@@ -70,12 +70,37 @@ namespace CarryBlockJam
     }
 
     [Serializable]
+    public class BoardFrozenBoxVisualSettings
+    {
+        public GameObject model;
+        public Material material;
+        public Vector3 scale = Vector3.one;
+        public Vector3 offset;
+        public bool autoFitToBox = true;
+        [Min(0.1f)] public float coverPadding = 1.1f;
+        public TMP_FontAsset font;
+        public float fontSize = 48f;
+        public Vector3 textOffset;
+        public Vector3 textScale = Vector3.one * 0.45f;
+        public Color textColor = Color.white;
+        public bool bold = true;
+        public bool useOutline = true;
+
+        public static BoardFrozenBoxVisualSettings CreateDefault()
+        {
+            return new BoardFrozenBoxVisualSettings();
+        }
+    }
+
+    [Serializable]
     public class BoardBoxPlacement
     {
         public int row;
         public int column;
         public PieceColorType color = PieceColorType.Red;
         public bool isHidden;
+        public bool isFrozen;
+        [Min(1)] public int unlockMoves = 3;
 
         public static BoardBoxPlacement Create(int row, int column, PieceColorType color, bool isHidden = false)
         {
@@ -85,6 +110,22 @@ namespace CarryBlockJam
                 column = column,
                 color = color,
                 isHidden = isHidden,
+            };
+        }
+
+        public static BoardBoxPlacement CreateFrozen(
+            int row,
+            int column,
+            PieceColorType color,
+            int unlockMoves)
+        {
+            return new BoardBoxPlacement
+            {
+                row = row,
+                column = column,
+                color = color,
+                isFrozen = true,
+                unlockMoves = Mathf.Max(1, unlockMoves),
             };
         }
 

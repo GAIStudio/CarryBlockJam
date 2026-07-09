@@ -23,6 +23,13 @@ MonoBehaviour:
     flagValue: 0
     direction: 0
     tunnelPieces: 
+  - row: 3
+    column: 0
+    color: 4
+    flag: 2
+    flagValue: 3
+    direction: 0
+    tunnelPieces: 
   carryBlockJam:
     gridCellScale: {x: 0.75, y: 0.1, z: 0.75}
     gridSpacingX: 1.6
@@ -58,6 +65,21 @@ MonoBehaviour:
     fixedStickmanCell:
       row: 2
       column: 3
+    frozenBoxVisual:
+      model: {fileID: 919132149155446097, guid: a9c8c615477d1468fbefdfbffa346c9f,
+        type: 3}
+      material: {fileID: 2100000, guid: cf3ab68d24ba247389423c15d361179a, type: 2}
+      scale: {x: 1, y: 1, z: 1}
+      offset: {x: 0, y: 0, z: 0}
+      autoFitToBox: 1
+      coverPadding: 1.2
+      font: {fileID: 11400000, guid: 9a2157e1f9c4c4d38841fbb92558f587, type: 2}
+      fontSize: 7
+      textOffset: {x: -0.2, y: -0.5, z: 0.7}
+      textScale: {x: 1, y: 1, z: 1}
+      textColor: {r: 0.57872015, g: 0.77744794, b: 0.8018868, a: 1}
+      bold: 1
+      useOutline: 1
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []

@@ -16,13 +16,20 @@ namespace CarryBlockJam.Editor
             SerializedProperty rowProperty = property.FindPropertyRelative("row");
             SerializedProperty columnProperty = property.FindPropertyRelative("column");
             SerializedProperty hiddenProperty = property.FindPropertyRelative("isHidden");
+            SerializedProperty frozenProperty = property.FindPropertyRelative("isFrozen");
+            SerializedProperty unlockMovesProperty = property.FindPropertyRelative("unlockMoves");
 
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float spacing = EditorGUIUtility.standardVerticalSpacing;
             Rect rowRect = new Rect(position.x, position.y, position.width, lineHeight);
 
-            string hiddenSuffix = hiddenProperty != null && hiddenProperty.boolValue ? " (Hidden)" : string.Empty;
-            EditorGUI.LabelField(rowRect, label.text + hiddenSuffix, EditorStyles.boldLabel);
+            string suffix = string.Empty;
+            if (hiddenProperty != null && hiddenProperty.boolValue)
+                suffix = " (Hidden)";
+            else if (frozenProperty != null && frozenProperty.boolValue)
+                suffix = " (Frozen)";
+
+            EditorGUI.LabelField(rowRect, label.text + suffix, EditorStyles.boldLabel);
 
             EditorGUI.indentLevel++;
             rowRect.y += lineHeight + spacing;
@@ -48,7 +55,19 @@ namespace CarryBlockJam.Editor
             }
 
             if (hiddenProperty != null)
+            {
                 EditorGUI.PropertyField(rowRect, hiddenProperty, new GUIContent("Hidden Box"));
+                rowRect.y += lineHeight + spacing;
+            }
+
+            if (frozenProperty != null)
+            {
+                EditorGUI.PropertyField(rowRect, frozenProperty, new GUIContent("Frozen Box"));
+                rowRect.y += lineHeight + spacing;
+            }
+
+            if (unlockMovesProperty != null && frozenProperty != null && frozenProperty.boolValue)
+                EditorGUI.PropertyField(rowRect, unlockMovesProperty, new GUIContent("Unlock Moves"));
 
             EditorGUI.indentLevel--;
             EditorGUI.EndProperty();
@@ -56,9 +75,11 @@ namespace CarryBlockJam.Editor
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
+            SerializedProperty frozenProperty = property.FindPropertyRelative("isFrozen");
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float spacing = EditorGUIUtility.standardVerticalSpacing;
-            return (lineHeight + spacing) * 5f;
+            int lines = frozenProperty != null && frozenProperty.boolValue ? 7 : 6;
+            return (lineHeight + spacing) * lines;
         }
     }
 }

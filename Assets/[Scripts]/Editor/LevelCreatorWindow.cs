@@ -12,7 +12,7 @@ namespace GAITemplate.Editor
 
         private enum CellTool { None, Hidden, Ice, Tunnel }
 
-        private const int IceDefaultCount = 1;
+        private const int IceDefaultCount = 3;
 
         private LevelData _levelData;
         private LevelData _lastLoadedLevelData;
@@ -202,6 +202,9 @@ namespace GAITemplate.Editor
                 CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Hidden cell + color spawns a hidden CarryBlockJam box at that cell. " +
                     "Other boxes still auto-fill to match exit count.",
+                CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
+                    "Ice cell + color spawns a frozen CarryBlockJam box. Set unlock moves below the cell. " +
+                    "Each collected plate counts down until the box unlocks.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -306,11 +309,16 @@ namespace GAITemplate.Editor
                     GUILayout.Width(70f));
             }
 
-            // Ice cell ise count alanı.
+            // Ice cell: unlock moves for frozen CarryBlockJam boxes.
             if ((flags & LevelCellFlag.Ice) == LevelCellFlag.Ice)
             {
+                bool isCarryBlockJamGrid = _levelData != null &&
+                    _levelData.mechanicType == PuzzleMechanicType.Grid;
+                if (isCarryBlockJamGrid)
+                    EditorGUILayout.LabelField("Unlock Moves", EditorStyles.miniLabel);
+
                 int prevValue = _cellFlagValues[row, column];
-                int newValue  = EditorGUILayout.IntField(prevValue, GUILayout.Width(70f));
+                int newValue = EditorGUILayout.IntField(prevValue, GUILayout.Width(70f));
                 if (newValue < 1) newValue = 1;
                 if (newValue != prevValue)
                     _cellFlagValues[row, column] = newValue;
@@ -524,7 +532,12 @@ namespace GAITemplate.Editor
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUI.BeginChangeCheck();
             DrawCarryBlockJamBoxPlacementHelp(carryBlockJamProperty);
-            EditorGUILayout.PropertyField(carryBlockJamProperty, true);
+            SerializedProperty frozenVisualProperty = carryBlockJamProperty.FindPropertyRelative("frozenBoxVisual");
+            CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
+                "Frozen Box Visual",
+                frozenVisualProperty);
+            EditorGUILayout.Space(6f);
+            DrawCarryBlockJamSettingsWithoutFrozenVisual(carryBlockJamProperty, frozenVisualProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -546,10 +559,30 @@ namespace GAITemplate.Editor
                 return;
 
             EditorGUILayout.HelpBox(
-                "Box count follows exit count. Paint Hidden cells on the grid (set color below the cell) " +
-                "or use boxPlacements for manual/hidden boxes. Missing boxes are auto-generated. " +
-                "Hidden boxes stay grey until adjacent plates are collected.",
+                "Box count follows exit count. Paint Hidden/Ice cells on the grid (set color + unlock moves for ice) " +
+                "or use boxPlacements. Missing boxes are auto-generated. " +
+                "Hidden boxes reveal when adjacent plates are collected. Frozen boxes unlock after N collected plates.",
                 MessageType.Info);
+        }
+
+        private static void DrawCarryBlockJamSettingsWithoutFrozenVisual(
+            SerializedProperty carryBlockJamProperty,
+            SerializedProperty frozenVisualProperty)
+        {
+            if (carryBlockJamProperty == null)
+                return;
+
+            SerializedProperty iterator = carryBlockJamProperty.Copy();
+            SerializedProperty endProperty = iterator.GetEndProperty();
+            bool enterChildren = true;
+            while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, endProperty))
+            {
+                enterChildren = false;
+                if (frozenVisualProperty != null && iterator.propertyPath == frozenVisualProperty.propertyPath)
+                    continue;
+
+                EditorGUILayout.PropertyField(iterator, true);
+            }
         }
 
         // Return true → caller bu stage'i listeden silmeli.
