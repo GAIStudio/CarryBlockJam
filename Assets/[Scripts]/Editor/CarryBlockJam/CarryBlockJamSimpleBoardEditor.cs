@@ -13,6 +13,7 @@ namespace CarryBlockJam.Editor
         private SerializedProperty _cellsRoot;
         private SerializedProperty _exitsRoot;
         private SerializedProperty _prefabSettings;
+        private SerializedProperty _exitLabel;
 
         private void OnEnable()
         {
@@ -21,6 +22,7 @@ namespace CarryBlockJam.Editor
             _cellsRoot = serializedObject.FindProperty("cellsRoot");
             _exitsRoot = serializedObject.FindProperty("exitsRoot");
             _prefabSettings = serializedObject.FindProperty("prefabSettings");
+            _exitLabel = serializedObject.FindProperty("exitLabel");
         }
 
         public override void OnInspectorGUI()
@@ -39,7 +41,29 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.PropertyField(_cellsRoot);
             EditorGUILayout.PropertyField(_exitsRoot);
 
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.HelpBox(
+                "Exit number text comes from Level Creator (required plate count per exit). " +
+                "These prefab settings only control label position, offset, and rendering.",
+                MessageType.None);
+            DrawExitLabelSettings("Exit Label Render (All Levels)", _exitLabel);
+
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private static void DrawExitLabelSettings(string title, SerializedProperty labelProperty)
+        {
+            EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("font"), new GUIContent("Font"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("material"), new GUIContent("Material"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("fontSize"), new GUIContent("Font Size"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("scale"), new GUIContent("Scale"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("offset"), new GUIContent("Offset"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("color"), new GUIContent("Color"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("bold"), new GUIContent("Bold"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("useOutline"), new GUIContent("Use Outline"));
+            EditorGUILayout.EndVertical();
         }
     }
 }

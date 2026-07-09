@@ -28,25 +28,24 @@ MonoBehaviour:
       maxPlateStacks: 2
     exits:
     - side: 2
-      startIndex: 0
-      length: 2
-      positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 90, z: 0}
-      goals:
-      - color: 1
-        requiredPlateCount: 3
-    - side: 3
-      startIndex: 0
+      startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 270, z: 0}
+      rotation: {x: 0, y: -180, z: 0}
       goals:
-      - color: 6
-        requiredPlateCount: 3
-    boxPlacements:
-    - color: 0
-      row: 0
-      column: 0
+      - color: 1
+        requiredPlateCount: 2
+      - color: 4
+        requiredPlateCount: 2
+    - side: 3
+      startIndex: 3
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: -180, z: 0}
+      goals:
+      - color: 4
+        requiredPlateCount: 2
+    boxPlacements: []
     platePlacements: []
     stickmanSpawnMode: 0
     fixedStickmanCell:

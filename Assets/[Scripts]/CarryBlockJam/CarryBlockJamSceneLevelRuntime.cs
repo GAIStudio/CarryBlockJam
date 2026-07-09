@@ -53,7 +53,7 @@ namespace CarryBlockJam
 
                 CarryBlockJamRuntimePieceSpawner spawner = board.GetComponent<CarryBlockJamRuntimePieceSpawner>();
                 if (spawner != null)
-                    spawner.RespawnFromLevel();
+                    spawner.RespawnFromLevel(levelData);
 
                 appliedCount++;
             }

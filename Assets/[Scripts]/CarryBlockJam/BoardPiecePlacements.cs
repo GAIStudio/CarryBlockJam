@@ -1,5 +1,6 @@
 using System;
 using GAITemplate;
+using TMPro;
 using UnityEngine;
 
 namespace CarryBlockJam
@@ -27,13 +28,53 @@ namespace CarryBlockJam
     }
 
     [Serializable]
+    public class BoardPieceVisualSettings
+    {
+        public GameObject model;
+        public Material material;
+        public Vector3 scale = Vector3.one;
+        public Vector3 offset;
+
+        public static BoardPieceVisualSettings CreateBoxDefault()
+        {
+            return new BoardPieceVisualSettings
+            {
+                scale = Vector3.one * 1.1f,
+                offset = new Vector3(0f, 0.75f, 0f),
+            };
+        }
+
+        public static BoardPieceVisualSettings CreatePlateDefault()
+        {
+            return new BoardPieceVisualSettings
+            {
+                scale = new Vector3(0.9f, 0.16f, 0.9f),
+                offset = new Vector3(0f, 0.18f, 0f),
+            };
+        }
+    }
+
+    [Serializable]
+    public class BoardExitLabelSettings
+    {
+        public TMP_FontAsset font;
+        public Material material;
+        public float fontSize = 48f;
+        public Vector3 scale = Vector3.one * 0.45f;
+        public Vector3 offset;
+        public Color color = Color.white;
+        public bool bold = true;
+        public bool useOutline = true;
+
+        public static BoardExitLabelSettings CreateDefault() => new BoardExitLabelSettings();
+    }
+
+    [Serializable]
     public class BoardBoxPlacement
     {
         public int row;
         public int column;
         public PieceColorType color = PieceColorType.Red;
-        public Vector3 localScale = Vector3.one * 1.1f;
-        public Vector3 positionOffset = new Vector3(0f, 0.75f, 0f);
 
         public static BoardBoxPlacement Create(int row, int column, PieceColorType color)
         {
@@ -42,8 +83,6 @@ namespace CarryBlockJam
                 row = row,
                 column = column,
                 color = color,
-                localScale = Vector3.one * 1.1f,
-                positionOffset = new Vector3(0f, 0.75f, 0f),
             };
         }
 
@@ -63,8 +102,6 @@ namespace CarryBlockJam
         public int row;
         public int column;
         public PieceColorType color = PieceColorType.Red;
-        public Vector3 localScale = new Vector3(0.9f, 0.16f, 0.9f);
-        public Vector3 positionOffset = new Vector3(0f, 0.18f, 0f);
 
         public static BoardPlatePlacement Create(int row, int column, PieceColorType color)
         {
@@ -73,8 +110,6 @@ namespace CarryBlockJam
                 row = row,
                 column = column,
                 color = color,
-                localScale = new Vector3(0.9f, 0.16f, 0.9f),
-                positionOffset = new Vector3(0f, 0.18f, 0f),
             };
         }
 

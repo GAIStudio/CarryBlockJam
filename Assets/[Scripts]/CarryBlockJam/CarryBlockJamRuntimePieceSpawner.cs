@@ -14,21 +14,42 @@ namespace CarryBlockJam
     [DefaultExecutionOrder(100)]
     public class CarryBlockJamRuntimePieceSpawner : MonoBehaviour
     {
-        private const int DefaultPlateCountPerColor = 2;
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
 
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
+
+        [Header("Box Visual (All Levels)")]
+        [SerializeField] private BoardPieceVisualSettings boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
+
+        [Header("Plate Visual (All Levels)")]
+        [SerializeField] private BoardPieceVisualSettings plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
+
+        [Header("Manual Fallback Placements")]
         [SerializeField] private bool randomizeBoxes = true;
         [SerializeField] private BoardBoxPlacement[] boxes = BoardBoxPlacement.CreateDefaults();
         [SerializeField] private BoardPlatePlacement[] plates = BoardPlatePlacement.CreateDefaults();
 
         private Transform _piecesRoot;
+        private LevelData _levelDataOverride;
 
         private void Start()
         {
             RespawnFromLevel();
+        }
+
+        public void RespawnFromLevel(LevelData levelData)
+        {
+            _levelDataOverride = levelData;
+            try
+            {
+                RespawnFromLevel();
+            }
+            finally
+            {
+                _levelDataOverride = null;
+            }
         }
 
         public void RespawnFromLevel()
@@ -60,6 +81,12 @@ namespace CarryBlockJam
         {
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
+
+            if (boxVisual == null)
+                boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
+
+            if (plateVisual == null)
+                plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
         }
 #endif
 
@@ -76,19 +103,18 @@ namespace CarryBlockJam
             ClearSpawnedPieces(grid);
 
             int spawnedCount = 0;
+            var occupied = new HashSet<Vector2Int>();
             if (SpawnCylinder(grid))
                 spawnedCount++;
 
-            List<PieceColorType> activeColors = GetActiveColors();
-            var occupied = new HashSet<Vector2Int>();
             if (cylinder != null)
                 occupied.Add(new Vector2Int(cylinder.row, cylinder.column));
 
-            BoardBoxPlacement[] boxPlacements = GetBoxPlacements(grid, activeColors, occupied);
+            BoardBoxPlacement[] boxPlacements = GetBoxPlacements(grid, occupied);
             spawnedCount += SpawnBoxes(grid, boxPlacements);
             RegisterOccupiedCells(boxPlacements, occupied);
 
-            BoardPlatePlacement[] platePlacements = GetPlatePlacements(grid, activeColors, occupied);
+            BoardPlatePlacement[] platePlacements = GetPlatePlacements(grid, occupied, boxPlacements);
             spawnedCount += SpawnPlates(grid, platePlacements);
 
             if (spawnedCount == 0)
@@ -98,6 +124,10 @@ namespace CarryBlockJam
             }
 
             Debug.Log($"[CarryBlockJam] Spawned {spawnedCount} runtime pieces under {board.name}/RuntimePieces.");
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                EditorUtility.SetDirty(board);
+#endif
         }
 
         private void EnsurePiecesRoot()
@@ -172,7 +202,7 @@ namespace CarryBlockJam
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
-                Destroy(colliders[i]);
+                DestroyObject(colliders[i]);
 
             return true;
         }
@@ -236,17 +266,12 @@ namespace CarryBlockJam
                 boxObject.transform.localRotation = Quaternion.identity;
                 boxObject.transform.localScale = Vector3.one;
 
-                CreatePrimitiveVisual(
-                    PrimitiveType.Cube,
-                    "Visual",
-                    boxObject.transform,
-                    placement.localScale,
-                    placement.color);
+                CreatePieceVisual(boxVisual, "Visual", boxObject.transform, placement.color, PrimitiveType.Cube);
                 CarryBlockJamBoardPiece piece = boxObject.AddComponent<CarryBlockJamBoardPiece>();
                 piece.Initialize(
                     CarryBlockJamPieceKind.Box,
                     placement.color,
-                    placement.positionOffset,
+                    boxVisual != null ? boxVisual.offset : Vector3.zero,
                     new Vector3(0f, 1.55f, 0f));
                 piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
 
@@ -277,17 +302,12 @@ namespace CarryBlockJam
                 plateObject.transform.localRotation = Quaternion.identity;
                 plateObject.transform.localScale = Vector3.one;
 
-                CreatePrimitiveVisual(
-                    PrimitiveType.Cylinder,
-                    "Visual",
-                    plateObject.transform,
-                    placement.localScale,
-                    placement.color);
+                CreatePieceVisual(plateVisual, "Visual", plateObject.transform, placement.color, PrimitiveType.Cylinder);
                 CarryBlockJamBoardPiece piece = plateObject.AddComponent<CarryBlockJamBoardPiece>();
                 piece.Initialize(
                     CarryBlockJamPieceKind.Plate,
                     placement.color,
-                    placement.positionOffset,
+                    plateVisual != null ? plateVisual.offset : Vector3.zero,
                     new Vector3(0f, 1.15f, 0f));
 
                 grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell);
@@ -322,43 +342,22 @@ namespace CarryBlockJam
 
         private BoardBoxPlacement[] GetBoxPlacements(
             PuzzleGrid grid,
-            List<PieceColorType> activeColors,
             HashSet<Vector2Int> occupied)
         {
-            BoardBoxPlacement[] levelPlacements = GetLevelBoxPlacements(activeColors);
+            BoardBoxPlacement[] levelPlacements = GetLevelBoxPlacements();
             if (levelPlacements.Length > 0)
                 return levelPlacements;
 
             if (!randomizeBoxes && boxes != null && boxes.Length > 0)
-                return GetManualBoxPlacements(activeColors);
+                return GetManualBoxPlacements(GetActiveColors());
 
-            if (activeColors == null || activeColors.Count == 0)
-            {
-                Debug.LogWarning("[CarryBlockJam] No active colors found for runtime box generation.");
-                return Array.Empty<BoardBoxPlacement>();
-            }
-
-            var placements = new List<BoardBoxPlacement>(activeColors.Count);
-            HashSet<Vector2Int> localOccupied = occupied != null
-                ? new HashSet<Vector2Int>(occupied)
-                : new HashSet<Vector2Int>();
-
-            for (int colorIndex = 0; colorIndex < activeColors.Count; colorIndex++)
-            {
-                if (!TryAddRandomBoxPlacement(grid, activeColors[colorIndex], localOccupied, placements))
-                {
-                    Debug.LogWarning("[CarryBlockJam] Could not place one box for each active color.");
-                    break;
-                }
-            }
-
-            return placements.ToArray();
+            return GenerateExitDrivenBoxPlacements(grid, occupied);
         }
 
         private BoardPlatePlacement[] GetPlatePlacements(
             PuzzleGrid grid,
-            List<PieceColorType> activeColors,
-            HashSet<Vector2Int> occupied)
+            HashSet<Vector2Int> occupied,
+            BoardBoxPlacement[] boxPlacements)
         {
             BoardPlatePlacement[] levelPlacements = GetLevelPlatePlacements();
             if (levelPlacements.Length > 0)
@@ -367,23 +366,176 @@ namespace CarryBlockJam
             if (!randomizeBoxes && plates != null && plates.Length > 0)
                 return plates;
 
-            if (activeColors == null || activeColors.Count == 0)
-                return Array.Empty<BoardPlatePlacement>();
+            return GenerateExitDrivenPlatePlacements(grid, occupied, boxPlacements);
+        }
 
-            var placements = new List<BoardPlatePlacement>();
+        private readonly struct ExitDrivenSpawnPlan
+        {
+            public ExitDrivenSpawnPlan(List<PieceColorType> boxColors, Dictionary<PieceColorType, int> plateCountsByColor)
+            {
+                BoxColors = boxColors ?? new List<PieceColorType>();
+                PlateCountsByColor = plateCountsByColor ?? new Dictionary<PieceColorType, int>();
+            }
+
+            public List<PieceColorType> BoxColors { get; }
+            public Dictionary<PieceColorType, int> PlateCountsByColor { get; }
+        }
+
+        private ExitDrivenSpawnPlan BuildExitDrivenSpawnPlan()
+        {
+            var boxColors = new List<PieceColorType>();
+            var plateCountsByColor = new Dictionary<PieceColorType, int>();
+
+            LevelData levelData = ResolveLevelData();
+            List<CarryBlockJamExitDefinition> exits = levelData?.carryBlockJam?.exits;
+            if (exits == null)
+                return new ExitDrivenSpawnPlan(boxColors, plateCountsByColor);
+
+            for (int exitIndex = 0; exitIndex < exits.Count; exitIndex++)
+            {
+                CarryBlockJamExitDefinition exit = exits[exitIndex];
+                if (exit?.goals == null || exit.goals.Count == 0)
+                    continue;
+
+                bool boxColorAssigned = false;
+                for (int goalIndex = 0; goalIndex < exit.goals.Count; goalIndex++)
+                {
+                    CarryBlockJamExitGoal goal = exit.goals[goalIndex];
+                    if (goal == null || !PieceColorPalette.IsPaintable(goal.color))
+                        continue;
+
+                    if (!boxColorAssigned)
+                    {
+                        boxColors.Add(goal.color);
+                        boxColorAssigned = true;
+                    }
+
+                    plateCountsByColor.TryGetValue(goal.color, out int currentCount);
+                    plateCountsByColor[goal.color] = currentCount + Mathf.Max(0, goal.requiredPlateCount);
+                }
+            }
+
+            return new ExitDrivenSpawnPlan(boxColors, plateCountsByColor);
+        }
+
+        private BoardBoxPlacement[] GenerateExitDrivenBoxPlacements(PuzzleGrid grid, HashSet<Vector2Int> occupied)
+        {
+            ExitDrivenSpawnPlan plan = BuildExitDrivenSpawnPlan();
+            if (plan.BoxColors.Count == 0)
+            {
+                Debug.LogWarning("[CarryBlockJam] No exits found for auto box generation.");
+                return Array.Empty<BoardBoxPlacement>();
+            }
+
+            var placements = new List<BoardBoxPlacement>(plan.BoxColors.Count);
+            var boxCells = new HashSet<Vector2Int>();
             HashSet<Vector2Int> localOccupied = occupied != null
                 ? new HashSet<Vector2Int>(occupied)
                 : new HashSet<Vector2Int>();
+            Vector2Int stickmanCell = GetStickmanCell();
 
-            for (int colorIndex = 0; colorIndex < activeColors.Count; colorIndex++)
+            for (int i = 0; i < plan.BoxColors.Count; i++)
             {
-                PieceColorType color = activeColors[colorIndex];
-                int plateCount = GetPlateCountForColor(color);
-                for (int plateIndex = 0; plateIndex < plateCount; plateIndex++)
+                PieceColorType color = plan.BoxColors[i];
+                List<Vector2Int> candidates = CollectBoxCandidates(grid, localOccupied);
+                Shuffle(candidates);
+
+                bool placed = false;
+                for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
                 {
-                    if (!TryAddRandomPlatePlacement(grid, color, localOccupied, placements))
+                    Vector2Int candidate = candidates[candidateIndex];
+                    var trialBoxCells = new HashSet<Vector2Int>(boxCells) { candidate };
+                    if (!IsStickmanAreaConnected(stickmanCell, trialBoxCells, grid, localOccupied))
+                        continue;
+
+                    placements.Add(BoardBoxPlacement.Create(candidate.x, candidate.y, color));
+                    boxCells.Add(candidate);
+                    localOccupied.Add(candidate);
+                    placed = true;
+                    break;
+                }
+
+                if (!placed)
+                    Debug.LogWarning($"[CarryBlockJam] Could not place box for exit color {color}.");
+            }
+
+            return placements.ToArray();
+        }
+
+        private BoardPlatePlacement[] GenerateExitDrivenPlatePlacements(
+            PuzzleGrid grid,
+            HashSet<Vector2Int> occupied,
+            BoardBoxPlacement[] boxPlacements)
+        {
+            ExitDrivenSpawnPlan plan = BuildExitDrivenSpawnPlan();
+            if (plan.PlateCountsByColor.Count == 0)
+                return Array.Empty<BoardPlatePlacement>();
+
+            var placements = new List<BoardPlatePlacement>();
+            var boxCells = new HashSet<Vector2Int>();
+            var boxColorsByCell = new Dictionary<Vector2Int, PieceColorType>();
+            if (boxPlacements != null)
+            {
+                for (int i = 0; i < boxPlacements.Length; i++)
+                {
+                    BoardBoxPlacement placement = boxPlacements[i];
+                    if (placement == null)
+                        continue;
+
+                    var cell = new Vector2Int(placement.row, placement.column);
+                    boxCells.Add(cell);
+                    boxColorsByCell[cell] = placement.color;
+                }
+            }
+
+            HashSet<Vector2Int> localOccupied = occupied != null
+                ? new HashSet<Vector2Int>(occupied)
+                : new HashSet<Vector2Int>();
+            Vector2Int stickmanCell = GetStickmanCell();
+
+            foreach (KeyValuePair<PieceColorType, int> entry in plan.PlateCountsByColor)
+            {
+                PieceColorType color = entry.Key;
+                int requiredCount = entry.Value;
+                for (int plateIndex = 0; plateIndex < requiredCount; plateIndex++)
+                {
+                    List<PlateSpawnCandidate> candidates = CollectPlateCandidates(
+                        grid,
+                        color,
+                        localOccupied,
+                        boxCells,
+                        boxColorsByCell);
+                    Shuffle(candidates);
+
+                    bool placed = false;
+                    for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
                     {
-                        Debug.LogWarning($"[CarryBlockJam] Could not place all plates for color {color}.");
+                        PlateSpawnCandidate candidate = candidates[candidateIndex];
+                        if (!CanPlacePlateForStickmanPath(stickmanCell, candidate, boxCells, grid))
+                            continue;
+
+                        placements.Add(BoardPlatePlacement.Create(candidate.Row, candidate.Column, color));
+                        if (!candidate.OnBox)
+                            localOccupied.Add(candidate.Cell);
+                        placed = true;
+                        break;
+                    }
+
+                    if (!placed && candidates.Count > 0)
+                    {
+                        PlateSpawnCandidate fallback = candidates[0];
+                        placements.Add(BoardPlatePlacement.Create(fallback.Row, fallback.Column, color));
+                        if (!fallback.OnBox)
+                            localOccupied.Add(fallback.Cell);
+                        placed = true;
+                        Debug.LogWarning(
+                            $"[CarryBlockJam] Placed plate for {color} without path validation because no reachable cell was found.");
+                    }
+
+                    if (!placed)
+                    {
+                        Debug.LogWarning(
+                            $"[CarryBlockJam] Could not place plate {plateIndex + 1}/{requiredCount} for color {color} while keeping stickman path.");
                         break;
                     }
                 }
@@ -392,6 +544,201 @@ namespace CarryBlockJam
             return placements.ToArray();
         }
 
+        private readonly struct PlateSpawnCandidate
+        {
+            public PlateSpawnCandidate(int row, int column, bool onBox)
+            {
+                Row = row;
+                Column = column;
+                OnBox = onBox;
+            }
+
+            public int Row { get; }
+            public int Column { get; }
+            public bool OnBox { get; }
+            public Vector2Int Cell => new Vector2Int(Row, Column);
+        }
+
+        private Vector2Int GetStickmanCell() => new Vector2Int(cylinder.row, cylinder.column);
+
+        private List<Vector2Int> CollectBoxCandidates(PuzzleGrid grid, HashSet<Vector2Int> occupied)
+        {
+            var candidates = new List<Vector2Int>();
+            for (int row = 0; row < grid.Rows; row++)
+            {
+                for (int column = 0; column < grid.Columns; column++)
+                {
+                    var cell = new Vector2Int(row, column);
+                    if (occupied.Contains(cell) || IsBlockedSpawnCellForBox(grid, row, column))
+                        continue;
+
+                    candidates.Add(cell);
+                }
+            }
+
+            return candidates;
+        }
+
+        private List<PlateSpawnCandidate> CollectPlateCandidates(
+            PuzzleGrid grid,
+            PieceColorType color,
+            HashSet<Vector2Int> occupied,
+            HashSet<Vector2Int> boxCells,
+            Dictionary<Vector2Int, PieceColorType> boxColorsByCell)
+        {
+            var candidates = new List<PlateSpawnCandidate>();
+
+            for (int row = 0; row < grid.Rows; row++)
+            {
+                for (int column = 0; column < grid.Columns; column++)
+                {
+                    var cell = new Vector2Int(row, column);
+                    if (boxCells.Contains(cell))
+                    {
+                        if (boxColorsByCell.TryGetValue(cell, out PieceColorType boxColor) && boxColor == color)
+                            candidates.Add(new PlateSpawnCandidate(row, column, true));
+                        continue;
+                    }
+
+                    if (occupied.Contains(cell) || IsBlockedSpawnCellForColor(grid, row, column, color))
+                        continue;
+
+                    candidates.Add(new PlateSpawnCandidate(row, column, false));
+                }
+            }
+
+            return candidates;
+        }
+
+        private bool CanPlacePlateForStickmanPath(
+            Vector2Int stickmanCell,
+            PlateSpawnCandidate candidate,
+            HashSet<Vector2Int> boxCells,
+            PuzzleGrid grid)
+        {
+            if (candidate.OnBox)
+            {
+                for (int directionIndex = 0; directionIndex < CardinalDirections.Length; directionIndex++)
+                {
+                    Vector2Int offset = CardinalDirections[directionIndex];
+                    Vector2Int adjacent = candidate.Cell + offset;
+                    if (!IsInsideGrid(grid, adjacent.x, adjacent.y))
+                        continue;
+
+                    if (CanStickmanReachCell(stickmanCell, adjacent, boxCells, grid))
+                        return true;
+                }
+
+                return false;
+            }
+
+            return CanStickmanReachCell(stickmanCell, candidate.Cell, boxCells, grid);
+        }
+
+        private bool IsStickmanAreaConnected(
+            Vector2Int stickmanCell,
+            HashSet<Vector2Int> boxCells,
+            PuzzleGrid grid,
+            HashSet<Vector2Int> occupied)
+        {
+            if (!IsInsideGrid(grid, stickmanCell.x, stickmanCell.y))
+                return false;
+
+            int reachableWalkableCells = 0;
+            var visited = new HashSet<Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+            queue.Enqueue(stickmanCell);
+            visited.Add(stickmanCell);
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                if (!current.Equals(stickmanCell))
+                    reachableWalkableCells++;
+
+                for (int directionIndex = 0; directionIndex < CardinalDirections.Length; directionIndex++)
+                {
+                    Vector2Int next = current + CardinalDirections[directionIndex];
+                    if (!IsInsideGrid(grid, next.x, next.y) || visited.Contains(next))
+                        continue;
+
+                    if (boxCells.Contains(next))
+                        continue;
+
+                    if (IsBlockedSpawnCellForBox(grid, next.x, next.y))
+                        continue;
+
+                    visited.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+
+            int totalWalkableCells = 0;
+            for (int row = 0; row < grid.Rows; row++)
+            {
+                for (int column = 0; column < grid.Columns; column++)
+                {
+                    var cell = new Vector2Int(row, column);
+                    if (boxCells.Contains(cell) || IsBlockedSpawnCellForBox(grid, row, column))
+                        continue;
+
+                    totalWalkableCells++;
+                }
+            }
+
+            return reachableWalkableCells > 0 || totalWalkableCells <= 1;
+        }
+
+        private bool CanStickmanReachCell(
+            Vector2Int stickmanCell,
+            Vector2Int targetCell,
+            HashSet<Vector2Int> boxCells,
+            PuzzleGrid grid)
+        {
+            if (!IsInsideGrid(grid, targetCell.x, targetCell.y))
+                return false;
+
+            if (stickmanCell == targetCell)
+                return true;
+
+            var visited = new HashSet<Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+            queue.Enqueue(stickmanCell);
+            visited.Add(stickmanCell);
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                if (current == targetCell)
+                    return true;
+
+                for (int directionIndex = 0; directionIndex < CardinalDirections.Length; directionIndex++)
+                {
+                    Vector2Int next = current + CardinalDirections[directionIndex];
+                    if (!IsInsideGrid(grid, next.x, next.y) || visited.Contains(next))
+                        continue;
+
+                    if (boxCells.Contains(next))
+                        continue;
+
+                    if (IsBlockedSpawnCellForBox(grid, next.x, next.y))
+                        continue;
+
+                    visited.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+
+            return false;
+        }
+
+        private static readonly Vector2Int[] CardinalDirections =
+        {
+            Vector2Int.up,
+            Vector2Int.down,
+            Vector2Int.left,
+            Vector2Int.right,
+        };
         private List<PieceColorType> GetActiveColors()
         {
             List<PieceColorType> levelColors = GetSpawnColorsFromLevelSettings();
@@ -436,64 +783,6 @@ namespace CarryBlockJam
             }
 
             return colors;
-        }
-
-        private bool TryAddRandomBoxPlacement(
-            PuzzleGrid grid,
-            PieceColorType color,
-            HashSet<Vector2Int> occupied,
-            List<BoardBoxPlacement> placements)
-        {
-            var candidates = new List<Vector2Int>();
-            for (int row = 0; row < grid.Rows; row++)
-            {
-                for (int column = 0; column < grid.Columns; column++)
-                {
-                    var cell = new Vector2Int(row, column);
-                    if (occupied.Contains(cell) || IsBlockedSpawnCellForBox(grid, row, column))
-                        continue;
-
-                    candidates.Add(cell);
-                }
-            }
-
-            if (candidates.Count == 0)
-                return false;
-
-            Shuffle(candidates);
-            Vector2Int chosen = candidates[0];
-            occupied.Add(chosen);
-            placements.Add(BoardBoxPlacement.Create(chosen.x, chosen.y, color));
-            return true;
-        }
-
-        private bool TryAddRandomPlatePlacement(
-            PuzzleGrid grid,
-            PieceColorType color,
-            HashSet<Vector2Int> occupied,
-            List<BoardPlatePlacement> placements)
-        {
-            var candidates = new List<Vector2Int>();
-            for (int row = 0; row < grid.Rows; row++)
-            {
-                for (int column = 0; column < grid.Columns; column++)
-                {
-                    var cell = new Vector2Int(row, column);
-                    if (occupied.Contains(cell) || IsBlockedSpawnCellForColor(grid, row, column, color))
-                        continue;
-
-                    candidates.Add(cell);
-                }
-            }
-
-            if (candidates.Count == 0)
-                return false;
-
-            Shuffle(candidates);
-            Vector2Int chosen = candidates[0];
-            occupied.Add(chosen);
-            placements.Add(BoardPlatePlacement.Create(chosen.x, chosen.y, color));
-            return true;
         }
 
         private bool IsBlockedSpawnCellForColor(PuzzleGrid grid, int row, int column, PieceColorType color)
@@ -563,6 +852,55 @@ namespace CarryBlockJam
             };
         }
 
+        private GameObject CreatePieceVisual(
+            BoardPieceVisualSettings visual,
+            string objectName,
+            Transform parent,
+            PieceColorType color,
+            PrimitiveType fallbackPrimitive)
+        {
+            BoardPieceVisualSettings resolvedVisual = visual ?? new BoardPieceVisualSettings();
+            GameObject visualObject;
+
+            if (resolvedVisual.model != null)
+            {
+                visualObject = Instantiate(resolvedVisual.model, parent, false);
+                visualObject.name = objectName;
+            }
+            else
+            {
+                visualObject = GameObject.CreatePrimitive(fallbackPrimitive);
+                visualObject.name = objectName;
+                visualObject.transform.SetParent(parent, false);
+                DestroyObject(visualObject.GetComponent<Collider>());
+            }
+
+            visualObject.transform.localPosition = Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.identity;
+            visualObject.transform.localScale = resolvedVisual.scale;
+
+            GamePiece piece = visualObject.GetComponent<GamePiece>();
+            if (piece == null)
+                piece = visualObject.AddComponent<GamePiece>();
+
+            if (resolvedVisual.material != null)
+            {
+                Renderer renderer = visualObject.GetComponentInChildren<Renderer>();
+                if (renderer != null)
+                    renderer.sharedMaterial = resolvedVisual.material;
+            }
+            else
+            {
+                piece.ApplyColor(color);
+            }
+
+            Collider collider = visualObject.GetComponent<Collider>();
+            if (collider != null)
+                DestroyObject(collider);
+
+            return visualObject;
+        }
+
         private GameObject CreatePrimitiveVisual(
             PrimitiveType primitiveType,
             string objectName,
@@ -582,7 +920,7 @@ namespace CarryBlockJam
 
             Collider collider = visual.GetComponent<Collider>();
             if (collider != null)
-                Destroy(collider);
+                DestroyObject(collider);
 
             return visual;
         }
@@ -602,15 +940,30 @@ namespace CarryBlockJam
                 return;
 
             for (int i = _piecesRoot.childCount - 1; i >= 0; i--)
-                Destroy(_piecesRoot.GetChild(i).gameObject);
+                DestroyObject(_piecesRoot.GetChild(i).gameObject);
         }
 
-        private static void Shuffle(List<Vector2Int> cells)
+        private static void DestroyObject(UnityEngine.Object target)
         {
-            for (int i = cells.Count - 1; i > 0; i--)
+            if (target == null)
+                return;
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                DestroyImmediate(target);
+                return;
+            }
+#endif
+            Destroy(target);
+        }
+
+        private static void Shuffle<T>(List<T> items)
+        {
+            for (int i = items.Count - 1; i > 0; i--)
             {
                 int swapIndex = UnityEngine.Random.Range(0, i + 1);
-                (cells[i], cells[swapIndex]) = (cells[swapIndex], cells[i]);
+                (items[i], items[swapIndex]) = (items[swapIndex], items[i]);
             }
         }
 
@@ -622,25 +975,64 @@ namespace CarryBlockJam
         private void ResolveStickmanSpawn(PuzzleGrid grid)
         {
             LevelData levelData = ResolveLevelData();
-            if (grid == null || levelData?.carryBlockJam == null)
+            if (grid == null)
                 return;
+
+            if (levelData?.carryBlockJam == null)
+            {
+                cylinder.row = Mathf.Clamp((grid.Rows - 1) / 2, 0, grid.Rows - 1);
+                cylinder.column = Mathf.Clamp(grid.Columns / 2, 0, grid.Columns - 1);
+                return;
+            }
 
             CarryBlockJamLevelSettings settings = levelData.carryBlockJam;
             switch (settings.stickmanSpawnMode)
             {
                 case CarryBlockJamStickmanSpawnMode.FixedCell:
-                    cylinder.row = settings.fixedStickmanCell.row;
-                    cylinder.column = settings.fixedStickmanCell.column;
+                    ApplyStickmanCell(grid, settings.fixedStickmanCell.row, settings.fixedStickmanCell.column);
                     break;
                 case CarryBlockJamStickmanSpawnMode.Center:
-                    cylinder.row = Mathf.Clamp((grid.Rows - 1) / 2, 0, grid.Rows - 1);
-                    cylinder.column = Mathf.Clamp(grid.Columns / 2, 0, grid.Columns - 1);
+                    ApplyStickmanCell(grid, (grid.Rows - 1) / 2, grid.Columns / 2);
+                    break;
+                default:
+                    ApplyStickmanCell(grid, (grid.Rows - 1) / 2, grid.Columns / 2);
                     break;
             }
+
+            if (OverlapsManualBoxPlacement(levelData))
+                ApplyStickmanCell(grid, settings.fixedStickmanCell.row, settings.fixedStickmanCell.column);
+        }
+
+        private void ApplyStickmanCell(PuzzleGrid grid, int row, int column)
+        {
+            cylinder.row = Mathf.Clamp(row, 0, grid.Rows - 1);
+            cylinder.column = Mathf.Clamp(column, 0, grid.Columns - 1);
+        }
+
+        private bool OverlapsManualBoxPlacement(LevelData levelData)
+        {
+            List<CarryBlockJamBoxPlacement> placements = levelData?.carryBlockJam?.boxPlacements;
+            if (placements == null || placements.Count == 0)
+                return false;
+
+            for (int i = 0; i < placements.Count; i++)
+            {
+                CarryBlockJamBoxPlacement placement = placements[i];
+                if (placement == null)
+                    continue;
+
+                if (placement.row == cylinder.row && placement.column == cylinder.column)
+                    return true;
+            }
+
+            return false;
         }
 
         private LevelData ResolveLevelData()
         {
+            if (_levelDataOverride != null)
+                return _levelDataOverride;
+
             if (LevelManager.instance != null && LevelManager.instance.currentLevelData != null)
                 return LevelManager.instance.currentLevelData;
 
@@ -648,26 +1040,6 @@ namespace CarryBlockJam
                 return LevelBase.Instance.ActiveLevelData;
 
             return null;
-        }
-
-        private int GetPlateCountForColor(PieceColorType color)
-        {
-            LevelData levelData = ResolveLevelData();
-            if (levelData?.carryBlockJam?.colorSetups == null)
-                return DefaultPlateCountPerColor;
-
-            for (int i = 0; i < levelData.carryBlockJam.colorSetups.Count; i++)
-            {
-                CarryBlockJamColorSetup setup = levelData.carryBlockJam.colorSetups[i];
-                if (setup == null || setup.color != color)
-                    continue;
-
-                int minCount = Mathf.Max(0, setup.minPlateCount);
-                int maxCount = Mathf.Max(minCount, setup.maxPlateCount);
-                return UnityEngine.Random.Range(minCount, maxCount + 1);
-            }
-
-            return DefaultPlateCountPerColor;
         }
 
         private static void RegisterOccupiedCells(BoardBoxPlacement[] placements, HashSet<Vector2Int> occupied)
@@ -707,7 +1079,7 @@ namespace CarryBlockJam
             return placements.ToArray();
         }
 
-        private BoardBoxPlacement[] GetLevelBoxPlacements(List<PieceColorType> activeColors)
+        private BoardBoxPlacement[] GetLevelBoxPlacements()
         {
             LevelData levelData = ResolveLevelData();
             if (levelData?.carryBlockJam?.boxPlacements == null || levelData.carryBlockJam.boxPlacements.Count == 0)
@@ -718,9 +1090,6 @@ namespace CarryBlockJam
             {
                 CarryBlockJamBoxPlacement placement = levelData.carryBlockJam.boxPlacements[i];
                 if (placement == null)
-                    continue;
-
-                if (activeColors != null && activeColors.Count > 0 && !activeColors.Contains(placement.color))
                     continue;
 
                 placements.Add(BoardBoxPlacement.Create(placement.row, placement.column, placement.color));

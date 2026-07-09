@@ -214,10 +214,11 @@ namespace CarryBlockJam.Editor
                 return;
 
             for (int i = 0; i < levelData.carryBlockJam.exits.Count; i++)
-                BuildExit(grid, exitsRoot, levelData.carryBlockJam.exits[i], i);
+                BuildExit(board, grid, exitsRoot, levelData.carryBlockJam.exits[i], i);
         }
 
         private static void BuildExit(
+            CarryBlockJamSimpleBoard board,
             PuzzleGrid grid,
             Transform exitsRoot,
             CarryBlockJamExitDefinition definition,
@@ -227,12 +228,8 @@ namespace CarryBlockJam.Editor
                 return;
 
             PieceColorType color = PieceColorType.None;
-            int count = 0;
             if (definition.goals != null && definition.goals.Count > 0 && definition.goals[0] != null)
-            {
                 color = definition.goals[0].color;
-                count = definition.goals[0].requiredPlateCount;
-            }
 
             Vector3 localPos = GetExitLocalPosition(grid, definition) + definition.positionOffset;
             Quaternion localRot = Quaternion.Euler(definition.rotation);
@@ -252,28 +249,19 @@ namespace CarryBlockJam.Editor
             ApplyColor(gate, color);
             Object.DestroyImmediate(gate.GetComponent<Collider>());
 
-            GameObject car = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            car.name = "Car";
-            car.transform.SetParent(exitObject.transform, false);
-            car.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-            car.transform.localRotation = Quaternion.identity;
-            car.transform.localScale = new Vector3(1.2f, 0.7f, 0.8f);
-            ApplyColor(car, color);
-            Object.DestroyImmediate(car.GetComponent<Collider>());
-
-            TMP_Text label = CarryBlockJamExitLabelUtility.CreateLabel(exitObject.transform);
-            if (label == null)
-                return;
-
-            label.text = count > 0 ? count.ToString() : string.Empty;
-            label.color = Color.white;
-
             CarryBlockJamExit exit = exitObject.AddComponent<CarryBlockJamExit>();
             exit.Configure(definition);
+
+            TMP_Text label = CarryBlockJamExitLabelUtility.EnsureGoalLabel(
+                exitObject.transform,
+                definition.side,
+                board != null ? board.ExitLabel : null);
+
             exit.BindVisuals(
                 EnsureGamePiece(gate),
-                EnsureGamePiece(car),
-                label);
+                null,
+                label,
+                board != null ? board.ExitLabel : null);
         }
 
         private static GamePiece EnsureGamePiece(GameObject target)

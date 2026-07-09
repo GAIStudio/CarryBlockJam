@@ -41,12 +41,21 @@ namespace CarryBlockJam
             RefreshVisuals();
         }
 
-        public void BindVisuals(GamePiece gatePiece, GamePiece carPiece, TMP_Text label)
+        public void BindVisuals(
+            GamePiece gatePiece,
+            GamePiece carPiece,
+            TMP_Text label,
+            BoardExitLabelSettings labelSettings = null)
         {
             gateVisual = gatePiece;
             carVisual = carPiece;
             goalLabel = label;
-            CarryBlockJamExitLabelUtility.ApplyRuntimeOutline(label);
+
+            if (goalLabel != null && labelSettings != null)
+                CarryBlockJamExitLabelUtility.ApplyLabelSettings(goalLabel, labelSettings);
+            else
+                CarryBlockJamExitLabelUtility.ApplyRuntimeOutline(goalLabel, labelSettings);
+
             RefreshVisuals();
         }
 
@@ -94,7 +103,7 @@ namespace CarryBlockJam
             if (goalLabel != null)
             {
                 goalLabel.text = IsCompleted ? string.Empty : remainingPlateCount.ToString();
-                goalLabel.color = Color.white;
+                goalLabel.ForceMeshUpdate();
             }
         }
     }

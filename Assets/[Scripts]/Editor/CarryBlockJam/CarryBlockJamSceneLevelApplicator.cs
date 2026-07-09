@@ -66,6 +66,7 @@ namespace CarryBlockJam.Editor
             {
                 CarryBlockJamSimpleBoard board = boards[i];
                 CarryBlockJamSimpleBoardBuilder.BuildBoard(board, levelData);
+                PreviewRuntimePieces(board, levelData);
                 EditorSceneManager.MarkSceneDirty(board.gameObject.scene);
             }
 
@@ -89,6 +90,23 @@ namespace CarryBlockJam.Editor
             }
 
             return sceneBoards.ToArray();
+        }
+
+        private static void PreviewRuntimePieces(CarryBlockJamSimpleBoard board, LevelData levelData)
+        {
+            if (board == null || levelData == null)
+                return;
+
+            CarryBlockJamLevelController controller = board.GetComponent<CarryBlockJamLevelController>();
+            if (controller != null)
+                controller.EnsureGameplayFromLevel(levelData);
+
+            CarryBlockJamRuntimePieceSpawner spawner = board.GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner == null)
+                spawner = board.gameObject.AddComponent<CarryBlockJamRuntimePieceSpawner>();
+
+            spawner.RespawnFromLevel(levelData);
+            EditorUtility.SetDirty(spawner);
         }
     }
 }

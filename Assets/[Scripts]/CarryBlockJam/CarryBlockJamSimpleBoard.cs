@@ -24,6 +24,9 @@ namespace CarryBlockJam
         [SerializeField] private Transform cellsRoot;
         [SerializeField] private Transform exitsRoot;
 
+        [Header("Exit Label (All Levels)")]
+        [SerializeField] private BoardExitLabelSettings exitLabel = BoardExitLabelSettings.CreateDefault();
+
         [Header("Exits")]
         [HideInInspector]
         [SerializeField] private List<BoardExitSettings> exits = new List<BoardExitSettings>();
@@ -37,6 +40,7 @@ namespace CarryBlockJam
         public PieceColorType CellColor => cellColor;
         public GameObject CellPrefab => cellPrefab;
         public CarryBlockJamPrefabSettings PrefabSettings => prefabSettings;
+        public BoardExitLabelSettings ExitLabel => exitLabel;
         public Transform CellsRoot => cellsRoot;
         public Transform ExitsRoot => exitsRoot;
         public IReadOnlyList<BoardExitSettings> Exits => exits;

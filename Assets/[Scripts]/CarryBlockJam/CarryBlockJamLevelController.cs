@@ -70,10 +70,17 @@ namespace CarryBlockJam
                     exit = exitTransform.gameObject.AddComponent<CarryBlockJamExit>();
 
                 exit.Configure(definition);
+                TMP_Text label = CarryBlockJamExitLabelUtility.EnsureGoalLabel(
+                    exitTransform,
+                    definition.side,
+                    board != null ? board.ExitLabel : null);
+
                 exit.BindVisuals(
                     FindExitVisual(exitTransform, "Gate"),
-                    FindExitVisual(exitTransform, "Car"),
-                    exitTransform.GetComponentInChildren<TMP_Text>(true));
+                    null,
+                    label,
+                    board != null ? board.ExitLabel : null);
+                RemoveLegacyCarVisual(exitTransform);
                 wiredCount++;
             }
 
@@ -150,15 +157,17 @@ namespace CarryBlockJam
                 return;
 
             CarryBlockJamPrefabSettings settings = prefabSettings != null ? prefabSettings : board.PrefabSettings;
+            BoardExitLabelSettings exitLabelSettings = board.ExitLabel;
             List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
             for (int i = 0; i < definitions.Count; i++)
-                BuildExitVisual(grid, exitsRoot, settings, definitions[i], i);
+                BuildExitVisual(grid, exitsRoot, settings, exitLabelSettings, definitions[i], i);
         }
 
         private static void BuildExitVisual(
             PuzzleGrid grid,
             Transform exitsRoot,
             CarryBlockJamPrefabSettings settings,
+            BoardExitLabelSettings exitLabelSettings,
             CarryBlockJamExitDefinition definition,
             int index)
         {
@@ -181,22 +190,28 @@ namespace CarryBlockJam
                 exit.CurrentColor,
                 GetExitLocalScale(grid, definition.side, definition.length));
 
-            GamePiece carPiece = CreateVisual(
-                "Car",
+            TMP_Text label = CarryBlockJamExitLabelUtility.EnsureGoalLabel(
                 exitObject.transform,
-                settings != null ? settings.exitCarVisual : null,
-                exit.CurrentColor,
-                Vector3.one);
+                definition.side,
+                exitLabelSettings);
+            exit.BindVisuals(gatePiece, null, label, exitLabelSettings);
+        }
 
-            if (carPiece != null)
-            {
-                carPiece.transform.localPosition += Vector3.up * 0.35f;
-                if (settings != null && !settings.exitCarVisual.tintWithPieceColor)
-                    carPiece.ApplyColor(settings.exitCarColor);
-            }
+        private static void RemoveLegacyCarVisual(Transform exitTransform)
+        {
+            if (exitTransform == null)
+                return;
 
-            TMP_Text label = CreateGoalLabel(exitObject.transform);
-            exit.BindVisuals(gatePiece, carPiece, label);
+            Transform car = exitTransform.Find("Car");
+            if (car == null)
+                return;
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                DestroyImmediate(car.gameObject);
+            else
+#endif
+                Destroy(car.gameObject);
         }
 
         private static GamePiece CreateVisual(
@@ -245,11 +260,6 @@ namespace CarryBlockJam
                 Object.Destroy(collider);
 
             return piece;
-        }
-
-        private static TMP_Text CreateGoalLabel(Transform parent)
-        {
-            return CarryBlockJamExitLabelUtility.CreateLabel(parent);
         }
 
         private static Vector3 GetExitLocalPosition(PuzzleGrid grid, CarryBlockJamExitDefinition settings)
