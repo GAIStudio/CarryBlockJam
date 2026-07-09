@@ -494,6 +494,7 @@ namespace CarryBlockJam
                 sequence.Append(plate.transform.DOMove(targetPosition, exitTravelDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {
+                    CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                     plate.gameObject.SetActive(false);
                     Destroy(plate.gameObject);
                 });
@@ -1018,7 +1019,10 @@ namespace CarryBlockJam
                 return;
 
             for (int i = 0; i < plates.Count; i++)
+            {
                 AddPlateToCarryStack(plates[i]);
+                CarryBlockJamHiddenBox.NotifyPlateCollected(plates[i]);
+            }
         }
 
         private void UpdateCarriedPlateVisuals()

@@ -199,7 +199,10 @@ namespace GAITemplate.Editor
             string hint = _activeTool switch
             {
                 CellTool.None => "Cell'e tıklayınca üzerindeki tüm flag'ler temizlenir. Renk dropdown'la seçilir.",
-                _             => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
+                CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
+                    "Hidden cell + color spawns a hidden CarryBlockJam box at that cell. " +
+                    "Other boxes still auto-fill to match exit count.",
+                _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
         }
@@ -520,6 +523,7 @@ namespace GAITemplate.Editor
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUI.BeginChangeCheck();
+            DrawCarryBlockJamBoxPlacementHelp(carryBlockJamProperty);
             EditorGUILayout.PropertyField(carryBlockJamProperty, true);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
@@ -534,6 +538,18 @@ namespace GAITemplate.Editor
             {
                 _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
             }
+        }
+
+        private static void DrawCarryBlockJamBoxPlacementHelp(SerializedProperty carryBlockJamProperty)
+        {
+            if (carryBlockJamProperty == null)
+                return;
+
+            EditorGUILayout.HelpBox(
+                "Box count follows exit count. Paint Hidden cells on the grid (set color below the cell) " +
+                "or use boxPlacements for manual/hidden boxes. Missing boxes are auto-generated. " +
+                "Hidden boxes stay grey until adjacent plates are collected.",
+                MessageType.Info);
         }
 
         // Return true → caller bu stage'i listeden silmeli.

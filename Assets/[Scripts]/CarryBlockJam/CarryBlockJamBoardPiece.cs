@@ -20,8 +20,12 @@ namespace CarryBlockJam
         [SerializeField] private Vector3 stackedOffset = new Vector3(0f, 0.72f, 0f);
         [SerializeField] private Vector3 gridRotationEuler;
 
+        [SerializeField] private bool isColorHidden;
+
         public CarryBlockJamPieceKind Kind => kind;
-        public PieceColorType Color => color;
+        public PieceColorType Color => isColorHidden ? PieceColorType.None : color;
+        public PieceColorType TrueColor => color;
+        public bool IsColorHidden => isColorHidden;
         public Vector3 GridOffset => gridOffset;
         public Vector3 StackedOffset => stackedOffset;
         public int Row { get; private set; } = -1;
@@ -42,6 +46,10 @@ namespace CarryBlockJam
             carriedOffset = pieceCarriedOffset;
             gridRotationEuler = pieceGridRotationEuler;
         }
+
+        public void SetColorHidden(bool hidden) => isColorHidden = hidden;
+
+        public void RevealHiddenColor() => isColorHidden = false;
 
         public void PlaceOnGrid(PuzzleGrid grid, Transform parent, int row, int column)
         {

@@ -75,14 +75,16 @@ namespace CarryBlockJam
         public int row;
         public int column;
         public PieceColorType color = PieceColorType.Red;
+        public bool isHidden;
 
-        public static BoardBoxPlacement Create(int row, int column, PieceColorType color)
+        public static BoardBoxPlacement Create(int row, int column, PieceColorType color, bool isHidden = false)
         {
             return new BoardBoxPlacement
             {
                 row = row,
                 column = column,
                 color = color,
+                isHidden = isHidden,
             };
         }
 

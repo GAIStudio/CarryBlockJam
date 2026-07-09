@@ -47,6 +47,7 @@ namespace CarryBlockJam
         public PieceColorType color = PieceColorType.Red;
         public int row;
         public int column;
+        public bool isHidden;
     }
 
     [Serializable]

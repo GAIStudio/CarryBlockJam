@@ -15,7 +15,14 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 5
   gridColumns: 5
-  colorCells: []
+  colorCells:
+  - row: 0
+    column: 4
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   carryBlockJam:
     gridCellScale: {x: 0.75, y: 0.1, z: 0.75}
     gridSpacingX: 1.6
