@@ -15,21 +15,7 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 10
   gridColumns: 6
-  colorCells:
-  - row: 0
-    column: 0
-    color: 4
-    flag: 8
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-  - row: 0
-    column: 4
-    color: 1
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
+  colorCells: []
   carryBlockJam:
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
@@ -41,24 +27,40 @@ MonoBehaviour:
       minPlateStacks: 1
       maxPlateStacks: 2
     exits:
-    - side: 2
+    - side: 0
       startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: -180, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       goals:
       - color: 1
         requiredPlateCount: 2
-      - color: 4
+      - color: 2
         requiredPlateCount: 2
-    - side: 3
-      startIndex: 3
+    - side: 0
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: -180, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       goals:
-      - color: 4
+      - color: 3
         requiredPlateCount: 2
+    - side: 1
+      startIndex: 1
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      goals:
+      - color: 6
+        requiredPlateCount: 3
+    - side: 1
+      startIndex: 4
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      goals:
+      - color: 2
+        requiredPlateCount: 3
     boxPlacements: []
     platePlacements: []
     stickmanSpawnMode: 0

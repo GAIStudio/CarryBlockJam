@@ -545,7 +545,16 @@ namespace GAITemplate.Editor
                 "Curtain Box Visual",
                 curtainVisualProperty);
             EditorGUILayout.Space(6f);
-            DrawCarryBlockJamSettingsWithoutFrozenVisual(carryBlockJamProperty, frozenVisualProperty, curtainVisualProperty);
+
+            SerializedProperty exitsProperty = carryBlockJamProperty.FindPropertyRelative("exits");
+            CarryBlockJamFixedExitsEditorUtility.DrawFixedExits(exitsProperty, _columns);
+            EditorGUILayout.Space(6f);
+
+            DrawCarryBlockJamSettingsWithoutFrozenVisual(
+                carryBlockJamProperty,
+                frozenVisualProperty,
+                curtainVisualProperty,
+                exitsProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -577,7 +586,8 @@ namespace GAITemplate.Editor
         private static void DrawCarryBlockJamSettingsWithoutFrozenVisual(
             SerializedProperty carryBlockJamProperty,
             SerializedProperty frozenVisualProperty,
-            SerializedProperty curtainVisualProperty = null)
+            SerializedProperty curtainVisualProperty = null,
+            SerializedProperty exitsProperty = null)
         {
             if (carryBlockJamProperty == null)
                 return;
@@ -591,6 +601,8 @@ namespace GAITemplate.Editor
                 if (frozenVisualProperty != null && iterator.propertyPath == frozenVisualProperty.propertyPath)
                     continue;
                 if (curtainVisualProperty != null && iterator.propertyPath == curtainVisualProperty.propertyPath)
+                    continue;
+                if (exitsProperty != null && iterator.propertyPath == exitsProperty.propertyPath)
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);
@@ -762,6 +774,12 @@ namespace GAITemplate.Editor
             LevelCreatorUtility.ReadFlagValuesIntoGrid(_levelData, _cellFlagValues);
             LevelCreatorUtility.ReadDirectionsIntoGrid(_levelData, _cellDirections);
             LevelCreatorUtility.ReadTunnelPiecesIntoGrid(_levelData, _cellTunnelPieces);
+
+            if (_levelData.carryBlockJam?.exits != null)
+            {
+                CarryBlockJamFixedExitSlots.EnsureFixedExits(_levelData.carryBlockJam.exits, _columns);
+                EditorUtility.SetDirty(_levelData);
+            }
         }
 
         private void EnsureGridSizes()

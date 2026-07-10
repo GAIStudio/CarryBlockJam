@@ -16,7 +16,7 @@ namespace CarryBlockJam
         [SerializeField] private float moveDurationPerCell = 0.14f;
         [SerializeField] private float moveJumpPower = 0.18f;
         [SerializeField] private float exitTravelDuration = 0.18f;
-        [SerializeField] private float highlightHeight = 0.08f;
+        [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 1.0f, 0f);
         [SerializeField] private float carriedPlateStackStep = 0.28f;
@@ -94,6 +94,9 @@ namespace CarryBlockJam
             if (_isAnimating)
                 return;
 
+            if (_cylinder == null)
+                ResolveGameplayReferences();
+
             if (!TryGetNearestGridCell(screenPosition, out int row, out int column))
                 return;
 
@@ -101,6 +104,7 @@ namespace CarryBlockJam
             _swipeStartRow = row;
             _swipeStartColumn = column;
             _trackingSwipe = true;
+            EnsureHighlightRoot();
             ShowHighlights(false);
         }
 
@@ -574,6 +578,9 @@ namespace CarryBlockJam
 
         private void UpdateSwipePreview()
         {
+            if (_cylinder == null)
+                ResolveGameplayReferences();
+
             if (!_trackingSwipe || _isAnimating || _cylinder == null)
             {
                 ShowHighlights(false);
@@ -765,10 +772,10 @@ namespace CarryBlockJam
 
         private CarryBlockJamExit[] GetRuntimeExits()
         {
-            if (board == null || board.ExitsRoot == null)
+            if (board == null)
                 return System.Array.Empty<CarryBlockJamExit>();
 
-            return board.ExitsRoot.GetComponentsInChildren<CarryBlockJamExit>(true);
+            return board.GetComponentsInChildren<CarryBlockJamExit>(true);
         }
 
         private CarryBlockJamExit FindMatchingExit(
@@ -889,20 +896,45 @@ namespace CarryBlockJam
                 return;
             }
 
+            EnsureHighlightRoot();
             EnsureHighlightCount(path.Count);
 
             for (int i = 0; i < _highlightPool.Count; i++)
             {
                 bool active = i < path.Count;
                 Transform highlight = _highlightPool[i];
+                if (highlight == null)
+                    continue;
+
                 highlight.gameObject.SetActive(active);
                 if (!active)
                     continue;
 
                 Vector2Int step = path[i];
-                highlight.position = _grid.GetWorldPosition(step.x, step.y) + Vector3.up * highlightHeight;
+                highlight.position = ResolveHighlightWorldPosition(step.x, step.y);
                 UpdateHighlightVisual(highlight, path, i);
             }
+        }
+
+        private Vector3 ResolveHighlightWorldPosition(int row, int column)
+        {
+            Vector3 cellCenter = _grid.GetWorldPosition(row, column);
+            float topY = cellCenter.y + highlightHeight;
+
+            if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell?.Slot != null)
+            {
+                Renderer[] renderers = cell.Slot.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    Renderer renderer = renderers[i];
+                    if (renderer == null || !renderer.enabled)
+                        continue;
+
+                    topY = Mathf.Max(topY, renderer.bounds.max.y + 0.05f);
+                }
+            }
+
+            return new Vector3(cellCenter.x, topY, cellCenter.z);
         }
 
         private void EnsureHighlightCount(int count)
@@ -914,7 +946,7 @@ namespace CarryBlockJam
                 highlight.transform.SetParent(_highlightRoot, false);
                 highlight.transform.localScale = new Vector3(
                     Mathf.Min(board.CellScaleXYZ.x, _grid.GridSpacingX * 0.85f),
-                    0.05f,
+                    0.08f,
                     Mathf.Min(board.CellScaleXYZ.z, _grid.GridSpacingZ * 0.85f));
 
                 Renderer renderer = highlight.GetComponent<Renderer>();
@@ -926,6 +958,7 @@ namespace CarryBlockJam
 
                     Material material = new Material(shader);
                     material.color = highlightColor;
+                    material.renderQueue = 3000;
                     renderer.sharedMaterial = material;
                     renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                     renderer.receiveShadows = false;
@@ -957,7 +990,7 @@ namespace CarryBlockJam
             float widthZ = Mathf.Min(board.CellScaleXYZ.z, _grid.GridSpacingZ * 0.8f);
             float stretchX = direction.y != 0 ? _grid.GridSpacingX * 1.02f : widthX;
             float stretchZ = direction.x != 0 ? _grid.GridSpacingZ * 1.02f : widthZ;
-            highlight.localScale = new Vector3(stretchX, 0.05f, stretchZ);
+            highlight.localScale = new Vector3(stretchX, 0.08f, stretchZ);
 
             Renderer renderer = highlight.GetComponent<Renderer>();
             if (renderer == null || renderer.sharedMaterial == null)

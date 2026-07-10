@@ -16,6 +16,8 @@ namespace CarryBlockJam
         [SerializeField] private GamePiece gateVisual;
         [SerializeField] private GamePiece carVisual;
         [SerializeField] private TMP_Text goalLabel;
+        [SerializeField] private bool useArtGateMaterials;
+        [SerializeField] private bool artGateIsUp = true;
 
         public BoardBorderSide Side => side;
         public int StartIndex => startIndex;
@@ -47,6 +49,7 @@ namespace CarryBlockJam
             TMP_Text label,
             BoardExitLabelSettings labelSettings = null)
         {
+            useArtGateMaterials = false;
             gateVisual = gatePiece;
             carVisual = carPiece;
             goalLabel = label;
@@ -55,6 +58,31 @@ namespace CarryBlockJam
                 CarryBlockJamExitLabelUtility.ApplyLabelSettings(goalLabel, labelSettings);
             else
                 CarryBlockJamExitLabelUtility.ApplyRuntimeOutline(goalLabel, labelSettings);
+
+            if (goalLabel != null && useArtGateMaterials)
+                CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
+
+            RefreshVisuals();
+        }
+
+        public void BindArtGate(
+            bool isUpGate,
+            TMP_Text label,
+            BoardExitLabelSettings labelSettings = null)
+        {
+            useArtGateMaterials = true;
+            artGateIsUp = isUpGate;
+            gateVisual = null;
+            carVisual = null;
+            goalLabel = label;
+
+            if (goalLabel != null && labelSettings != null)
+                CarryBlockJamExitLabelUtility.ApplyLabelSettings(goalLabel, labelSettings);
+            else
+                CarryBlockJamExitLabelUtility.ApplyRuntimeOutline(goalLabel, labelSettings);
+
+            if (goalLabel != null)
+                CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
 
             RefreshVisuals();
         }
@@ -94,17 +122,63 @@ namespace CarryBlockJam
 
         private void RefreshVisuals()
         {
-            if (gateVisual != null)
-                gateVisual.ApplyColor(PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
+            if (useArtGateMaterials)
+            {
+                CarryBlockJamArtGateUtility.ApplyGateColor(
+                    transform,
+                    artGateIsUp,
+                    PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
+            }
+            else if (gateVisual != null)
+            {
+                gateVisual.ApplyColor(
+                    PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
+            }
 
             if (carVisual != null && PieceColorPalette.IsPaintable(CurrentColor))
                 carVisual.ApplyColor(CurrentColor);
 
             if (goalLabel != null)
             {
-                goalLabel.text = IsCompleted ? string.Empty : remainingPlateCount.ToString();
+                goalLabel.text = IsCompleted ? string.Empty : $"x{remainingPlateCount}";
+                goalLabel.gameObject.SetActive(!IsCompleted);
+
+                PieceColorType labelColor = PieceColorPalette.IsPaintable(CurrentColor)
+                    ? CurrentColor
+                    : PieceColorType.White;
+                goalLabel.color = useArtGateMaterials
+                    ? CarryBlockJamArtGateUtility.GetGateTintColor(artGateIsUp, labelColor)
+                    : PieceColorPalette.GetColor(labelColor);
+
                 goalLabel.ForceMeshUpdate();
             }
+        }
+
+        public void ApplyLabelPresentation(BoardExitLabelSettings labelSettings)
+        {
+            if (goalLabel == null)
+                return;
+
+            if (useArtGateMaterials)
+            {
+                CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(
+                    goalLabel.transform,
+                    side,
+                    labelSettings);
+            }
+            else if (labelSettings != null)
+            {
+                CarryBlockJamExitLabelUtility.ApplyLabelTransform(
+                    goalLabel.transform,
+                    side,
+                    labelSettings);
+            }
+            else
+            {
+                CarryBlockJamExitLabelUtility.ApplyLabelSettings(goalLabel, labelSettings);
+            }
+
+            RefreshVisuals();
         }
     }
 }

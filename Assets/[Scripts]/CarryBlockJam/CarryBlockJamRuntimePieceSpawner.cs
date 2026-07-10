@@ -21,6 +21,7 @@ namespace CarryBlockJam
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
+        [SerializeField] private Material stickmanMaterial;
         [SerializeField] private BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
         [SerializeField] private BoardCurtainBoxVisualSettings curtainBoxVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
@@ -204,12 +205,13 @@ namespace CarryBlockJam
 
             if (!CreateCylinderVisual(cylinderObject.transform))
             {
-                CreatePrimitiveVisual(
+                GameObject fallback = CreatePrimitiveVisual(
                     PrimitiveType.Cylinder,
                     "Visual",
                     cylinderObject.transform,
                     cylinder.localScale,
                     PieceColorType.White);
+                ApplyStickmanMaterial(fallback);
             }
 
             CarryBlockJamBoardPiece piece = cylinderObject.AddComponent<CarryBlockJamBoardPiece>();
@@ -237,12 +239,26 @@ namespace CarryBlockJam
             visual.transform.localRotation = Quaternion.identity;
             visual.transform.localScale = cylinder.localScale;
             GroundVisualToParent(visual.transform);
+            ApplyStickmanMaterial(visual);
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
                 DestroyObject(colliders[i]);
 
             return true;
+        }
+
+        private void ApplyStickmanMaterial(GameObject visualRoot)
+        {
+            if (visualRoot == null || stickmanMaterial == null)
+                return;
+
+            Renderer[] renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                    renderers[i].sharedMaterial = stickmanMaterial;
+            }
         }
 
         private static void GroundVisualToParent(Transform visualRoot)

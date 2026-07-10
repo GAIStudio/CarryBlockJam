@@ -51,6 +51,12 @@ namespace CarryBlockJam
 
         private void EnsureExitGameplay(LevelData levelData)
         {
+            if (CarryBlockJamArtGateUtility.HasArtGates(board))
+            {
+                CarryBlockJamArtGateUtility.BindExitsToArtGates(board, levelData);
+                return;
+            }
+
             Transform exitsRoot = board.ExitsRoot != null ? board.ExitsRoot : exitsVisualRoot;
             if (levelData?.carryBlockJam?.exits == null || exitsRoot == null)
                 return;
@@ -88,6 +94,32 @@ namespace CarryBlockJam
                 return;
 
             BuildRuntimeExits(levelData);
+        }
+
+        private void BuildRuntimeExits(LevelData levelData)
+        {
+            if (CarryBlockJamArtGateUtility.HasArtGates(board))
+            {
+                CarryBlockJamArtGateUtility.BindExitsToArtGates(board, levelData);
+                return;
+            }
+
+            Transform exitsRoot = board.ExitsRoot != null ? board.ExitsRoot : exitsVisualRoot;
+            if (levelData?.carryBlockJam?.exits == null || exitsRoot == null)
+                return;
+
+            for (int i = exitsRoot.childCount - 1; i >= 0; i--)
+                Object.Destroy(exitsRoot.GetChild(i).gameObject);
+
+            PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
+            if (grid == null)
+                return;
+
+            CarryBlockJamPrefabSettings settings = prefabSettings != null ? prefabSettings : board.PrefabSettings;
+            BoardExitLabelSettings exitLabelSettings = board.ExitLabel;
+            List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
+            for (int i = 0; i < definitions.Count; i++)
+                BuildExitVisual(grid, exitsRoot, settings, exitLabelSettings, definitions[i], i);
         }
 
         private static GamePiece FindExitVisual(Transform exitTransform, string childName)
@@ -141,26 +173,6 @@ namespace CarryBlockJam
             }
 
             return current;
-        }
-
-        private void BuildRuntimeExits(LevelData levelData)
-        {
-            Transform exitsRoot = board.ExitsRoot != null ? board.ExitsRoot : exitsVisualRoot;
-            if (levelData?.carryBlockJam?.exits == null || exitsRoot == null)
-                return;
-
-            for (int i = exitsRoot.childCount - 1; i >= 0; i--)
-                Object.Destroy(exitsRoot.GetChild(i).gameObject);
-
-            PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
-            if (grid == null)
-                return;
-
-            CarryBlockJamPrefabSettings settings = prefabSettings != null ? prefabSettings : board.PrefabSettings;
-            BoardExitLabelSettings exitLabelSettings = board.ExitLabel;
-            List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
-            for (int i = 0; i < definitions.Count; i++)
-                BuildExitVisual(grid, exitsRoot, settings, exitLabelSettings, definitions[i], i);
         }
 
         private static void BuildExitVisual(

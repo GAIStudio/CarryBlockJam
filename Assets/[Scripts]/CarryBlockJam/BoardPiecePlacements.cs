@@ -61,12 +61,20 @@ namespace CarryBlockJam
         public Material material;
         public float fontSize = 48f;
         public Vector3 scale = Vector3.one * 0.45f;
-        public Vector3 offset;
+        public Vector3 topOffset;
+        public Vector3 bottomOffset;
         public Color color = Color.white;
         public bool bold = true;
         public bool useOutline = true;
 
         public static BoardExitLabelSettings CreateDefault() => new BoardExitLabelSettings();
+
+        public Vector3 GetOffsetForSide(BoardBorderSide side)
+        {
+            return side == BoardBorderSide.Bottom || side == BoardBorderSide.Right
+                ? bottomOffset
+                : topOffset;
+        }
     }
 
     [Serializable]

@@ -29,7 +29,7 @@ namespace GAITemplate
         {
             get
             {
-                if (_restartButton == null)
+                if (_restartButton == null && restartButtonRect != null)
                     _restartButton = restartButtonRect.GetComponent<Button>();
                 return _restartButton;
             }

@@ -96,22 +96,54 @@ namespace CarryBlockJam
             text.fontStyle = resolvedSettings.bold ? FontStyles.Bold : FontStyles.Normal;
             text.color = resolvedSettings.color;
             text.ForceMeshUpdate();
-            ApplyRuntimeOutline(text, resolvedSettings);
+            ApplyOutline(text, resolvedSettings.useOutline);
+        }
+
+        public static void ApplyArtGateLabelPlacement(
+            Transform labelTransform,
+            BoardBorderSide side,
+            BoardExitLabelSettings settings)
+        {
+            if (labelTransform == null)
+                return;
+
+            BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
+            labelTransform.localPosition = GetArtGateLabelLocalPosition(side) + resolvedSettings.GetOffsetForSide(side);
+            labelTransform.localScale = resolvedSettings.scale;
+            labelTransform.localRotation = Quaternion.identity;
+            EnsureBillboard(labelTransform).Refresh();
+
+            TMP_Text text = labelTransform.GetComponent<TMP_Text>();
+            if (text != null)
+                ApplyLabelSettings(text, resolvedSettings);
         }
 
         public static void ApplyRuntimeOutline(TMP_Text text, BoardExitLabelSettings settings = null)
         {
-            if (text == null || !Application.isPlaying)
+            if (text == null)
                 return;
 
             BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
-            ApplyRuntimeOutline(text, resolvedSettings.useOutline);
+            ApplyOutline(text, resolvedSettings.useOutline);
         }
 
-        public static void ApplyRuntimeOutline(TMP_Text text, bool useOutline)
+        public static void ApplyRuntimeOutline(TMP_Text text, bool useOutline) =>
+            ApplyOutline(text, useOutline);
+
+        private static void ApplyOutline(TMP_Text text, bool useOutline)
         {
-            if (text == null || !Application.isPlaying || !useOutline)
+            if (text == null)
                 return;
+
+            // TMP outline mutates renderer.material and leaks instances in edit mode.
+            if (!Application.isPlaying)
+                return;
+
+            if (!useOutline)
+            {
+                text.outlineWidth = 0f;
+                return;
+            }
 
             text.outlineColor = Color.black;
             text.outlineWidth = 0.2f;
@@ -180,7 +212,20 @@ namespace CarryBlockJam
                 _ => Vector3.zero,
             };
 
-            return sideOffset + settings.offset;
+            return sideOffset + settings.GetOffsetForSide(side);
+        }
+
+        private static Vector3 GetArtGateLabelLocalPosition(BoardBorderSide side)
+        {
+            // Sit the count on the gate face, slightly toward the board center.
+            return side switch
+            {
+                BoardBorderSide.Top => new Vector3(0f, 0.55f, -0.35f),
+                BoardBorderSide.Bottom => new Vector3(0f, 0.55f, 0.35f),
+                BoardBorderSide.Left => new Vector3(0.35f, 0.55f, 0f),
+                BoardBorderSide.Right => new Vector3(-0.35f, 0.55f, 0f),
+                _ => new Vector3(0f, 0.55f, 0f),
+            };
         }
     }
 }

@@ -22,14 +22,10 @@ namespace CarryBlockJam
         [Header("Exits")]
         public List<CarryBlockJamExitDefinition> exits = new List<CarryBlockJamExitDefinition>
         {
-            new CarryBlockJamExitDefinition(),
-            new CarryBlockJamExitDefinition
-            {
-                side = BoardBorderSide.Right,
-                startIndex = 0,
-                length = 1,
-                rotation = new Vector3(0f, 270f, 0f),
-            },
+            CarryBlockJamFixedExitSlots.CreateDefault(0, 6),
+            CarryBlockJamFixedExitSlots.CreateDefault(1, 6),
+            CarryBlockJamFixedExitSlots.CreateDefault(2, 6),
+            CarryBlockJamFixedExitSlots.CreateDefault(3, 6),
         };
 
         [Header("Boxes")]

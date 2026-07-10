@@ -181,19 +181,35 @@ MonoBehaviour:
       minPlateStacks: 1
       maxPlateStacks: 2
     exits:
-    - side: 2
-      startIndex: 0
+    - side: 0
+      startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 90, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       goals:
       - color: 1
         requiredPlateCount: 3
-    - side: 3
-      startIndex: 0
+    - side: 0
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 270, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      goals:
+      - color: 1
+        requiredPlateCount: 3
+    - side: 1
+      startIndex: 1
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      goals:
+      - color: 1
+        requiredPlateCount: 3
+    - side: 1
+      startIndex: 4
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       goals:
       - color: 1
         requiredPlateCount: 3

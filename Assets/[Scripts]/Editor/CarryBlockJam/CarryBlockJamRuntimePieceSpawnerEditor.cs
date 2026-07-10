@@ -9,6 +9,7 @@ namespace CarryBlockJam.Editor
         private SerializedProperty _board;
         private SerializedProperty _cylinder;
         private SerializedProperty _cylinderVisualPrefab;
+        private SerializedProperty _stickmanMaterial;
         private SerializedProperty _frozenBoxVisual;
         private SerializedProperty _curtainBoxVisual;
         private SerializedProperty _boxVisual;
@@ -23,6 +24,7 @@ namespace CarryBlockJam.Editor
             _board = serializedObject.FindProperty("board");
             _cylinder = serializedObject.FindProperty("cylinder");
             _cylinderVisualPrefab = serializedObject.FindProperty("cylinderVisualPrefab");
+            _stickmanMaterial = serializedObject.FindProperty("stickmanMaterial");
             _frozenBoxVisual = serializedObject.FindProperty("frozenBoxVisual");
             _curtainBoxVisual = serializedObject.FindProperty("curtainBoxVisual");
             _boxVisual = serializedObject.FindProperty("boxVisual");
@@ -38,7 +40,13 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.PropertyField(_board);
             EditorGUILayout.PropertyField(_cylinder);
-            EditorGUILayout.PropertyField(_cylinderVisualPrefab);
+
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.LabelField("Stickman Visual", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.PropertyField(_cylinderVisualPrefab, new GUIContent("Model"));
+            EditorGUILayout.PropertyField(_stickmanMaterial, new GUIContent("Material"));
+            EditorGUILayout.EndVertical();
 
             EditorGUILayout.Space(8f);
             DrawVisualSettings("Box Visual (All Levels)", _boxVisual);

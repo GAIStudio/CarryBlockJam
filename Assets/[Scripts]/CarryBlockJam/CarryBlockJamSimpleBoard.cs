@@ -47,6 +47,16 @@ namespace CarryBlockJam
         public Transform ExitsRoot => exitsRoot;
         public IReadOnlyList<BoardExitSettings> Exits => exits;
 
+        public void RefreshExitLabelVisuals()
+        {
+            CarryBlockJamExit[] runtimeExits = GetComponentsInChildren<CarryBlockJamExit>(true);
+            for (int i = 0; i < runtimeExits.Length; i++)
+            {
+                if (runtimeExits[i] != null)
+                    runtimeExits[i].ApplyLabelPresentation(exitLabel);
+            }
+        }
+
         private void Awake()
         {
             EnsureVisualRoots();
@@ -115,6 +125,10 @@ namespace CarryBlockJam
 
             if (levelData.carryBlockJam != null)
             {
+                CarryBlockJamFixedExitSlots.EnsureFixedExits(
+                    levelData.carryBlockJam.exits,
+                    Mathf.Max(1, levelData.gridColumns));
+
                 cellScale = levelData.carryBlockJam.gridCellScale;
                 gridSpacingX = Mathf.Max(0.01f, levelData.carryBlockJam.gridSpacingX);
                 gridSpacingZ = Mathf.Max(0.01f, levelData.carryBlockJam.gridSpacingZ);

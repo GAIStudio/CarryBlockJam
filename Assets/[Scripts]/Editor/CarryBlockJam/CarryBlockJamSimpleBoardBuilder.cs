@@ -17,6 +17,8 @@ namespace CarryBlockJam.Editor
         private const string GridPrefabPath = "Assets/[Models]/M_Grid.fbx";
         private const string GridBottomPrefabPath = "Assets/[Models]/M_GridBottom.fbx";
         private const string GridWallMaterialPath = "Assets/[Materials]/Mat_GridWall.mat";
+        private const string GateUpPrefabPath = "Assets/[Models]/M_GateUp.fbx";
+        private const string GateBottomPrefabPath = "Assets/[Models]/M_GateBottom.fbx";
         private const string LevelConfigPath = "Assets/[LevelDatas]/LevelConfig.asset";
 
         /// <summary>
@@ -66,6 +68,7 @@ namespace CarryBlockJam.Editor
             ApplyLevelPreview(board, levelData);
             AlignBoardToArtGrid(board);
             EnsureBoardGridFrame(board);
+            EnsureBoardGates(board);
 
             GameObject cellPrefab = board.CellPrefab;
             if (cellPrefab == null)
@@ -137,6 +140,103 @@ namespace CarryBlockJam.Editor
                 GridBottomPrefabPath,
                 CellMaterialPath,
                 new Vector3(0f, 0.24f, 4.5f));
+        }
+
+        private static void EnsureBoardGates(CarryBlockJamSimpleBoard board)
+        {
+            if (board == null)
+                return;
+
+            Transform gatesRoot = board.transform.Find("Gates");
+            if (gatesRoot == null)
+                gatesRoot = CreateChild(board.transform, "Gates");
+
+            // Base (uncolored upper) first, then accent color — same for top and bottom gates.
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateUp",
+                GateUpPrefabPath,
+                new Vector3(-1.5f, 0.35f, 4.5f),
+                "Assets/[Materials]/Mat_GateUp.mat",
+                "Assets/[Materials]/Mat_GateUp-Green.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateUp (1)",
+                GateUpPrefabPath,
+                new Vector3(1.5f, 0.35f, 4.5f),
+                "Assets/[Materials]/Mat_GateUp.mat",
+                "Assets/[Materials]/Mat_GateUp-Purple.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateBottom",
+                GateBottomPrefabPath,
+                new Vector3(-1.5f, 0.35f, -4.5f),
+                "Assets/[Materials]/Mat_GateBottom.mat",
+                "Assets/[Materials]/Mat_GateBottom-Blue.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateBottom (1)",
+                GateBottomPrefabPath,
+                new Vector3(1.5f, 0.35f, -4.5f),
+                "Assets/[Materials]/Mat_GateBottom.mat",
+                "Assets/[Materials]/Mat_GateBottom-Red.mat");
+        }
+
+        private static void EnsureGateModel(
+            Transform parent,
+            string name,
+            string prefabPath,
+            Vector3 localPosition,
+            params string[] materialPaths)
+        {
+            if (parent == null)
+                return;
+
+            Transform existing = parent.Find(name);
+            GameObject instance;
+            if (existing != null)
+            {
+                instance = existing.gameObject;
+            }
+            else
+            {
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[CarryBlockJam] Missing art model at {prefabPath}");
+                    return;
+                }
+
+                instance = PrefabUtility.InstantiatePrefab(prefab, parent) as GameObject;
+                if (instance == null)
+                    instance = Object.Instantiate(prefab, parent);
+                instance.name = name;
+
+                instance.transform.localPosition = localPosition;
+                instance.transform.localRotation = Quaternion.identity;
+                instance.transform.localScale = Vector3.one;
+            }
+
+            // Always keep mesh materials on the correct parts (Gate_* vs Gate_*-Color).
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
+            Material baseMaterial = materialPaths.Length > 0
+                ? AssetDatabase.LoadAssetAtPath<Material>(materialPaths[0])
+                : null;
+            Material colorMaterial = materialPaths.Length > 1
+                ? AssetDatabase.LoadAssetAtPath<Material>(materialPaths[1])
+                : null;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                bool isColorMesh = renderer.gameObject.name.IndexOf("-Color", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                Material material = isColorMesh ? colorMaterial : baseMaterial;
+                if (material != null)
+                    renderer.sharedMaterial = material;
+            }
         }
 
         private static void EnsureArtModel(
@@ -323,6 +423,12 @@ namespace CarryBlockJam.Editor
             Transform exitsRoot,
             LevelData levelData)
         {
+            if (CarryBlockJamArtGateUtility.HasArtGates(board))
+            {
+                CarryBlockJamArtGateUtility.BindExitsToArtGates(board, levelData);
+                return;
+            }
+
             ClearChildren(exitsRoot);
 
             if (levelData?.carryBlockJam?.exits == null)

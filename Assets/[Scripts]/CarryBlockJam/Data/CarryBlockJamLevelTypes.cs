@@ -73,11 +73,11 @@ namespace CarryBlockJam
     [Serializable]
     public class CarryBlockJamExitDefinition
     {
-        public BoardBorderSide side = BoardBorderSide.Left;
-        [Min(0)] public int startIndex = 0;
-        [Min(1)] public int length = 1;
-        public Vector3 positionOffset;
-        public Vector3 rotation = new Vector3(0f, 90f, 0f);
+        [HideInInspector] public BoardBorderSide side = BoardBorderSide.Top;
+        [HideInInspector] [Min(0)] public int startIndex = 0;
+        [HideInInspector] [Min(1)] public int length = 1;
+        [HideInInspector] public Vector3 positionOffset;
+        [HideInInspector] public Vector3 rotation;
         public List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>
         {
             new CarryBlockJamExitGoal(),
