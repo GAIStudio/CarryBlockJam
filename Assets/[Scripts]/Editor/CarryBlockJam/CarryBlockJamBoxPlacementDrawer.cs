@@ -60,13 +60,13 @@ namespace CarryBlockJam.Editor
 
             if (hiddenProperty != null)
             {
-                EditorGUI.PropertyField(rowRect, hiddenProperty, new GUIContent("Hidden Box"));
+                EditorGUI.PropertyField(rowRect, hiddenProperty, new GUIContent("Hidden Table"));
                 rowRect.y += lineHeight + spacing;
             }
 
             if (curtainProperty != null)
             {
-                EditorGUI.PropertyField(rowRect, curtainProperty, new GUIContent("Curtain Box"));
+                EditorGUI.PropertyField(rowRect, curtainProperty, new GUIContent("Curtain Table"));
                 rowRect.y += lineHeight + spacing;
             }
 
@@ -80,7 +80,7 @@ namespace CarryBlockJam.Editor
 
             if (frozenProperty != null)
             {
-                EditorGUI.PropertyField(rowRect, frozenProperty, new GUIContent("Frozen Box"));
+                EditorGUI.PropertyField(rowRect, frozenProperty, new GUIContent("Frozen Table"));
                 rowRect.y += lineHeight + spacing;
             }
 

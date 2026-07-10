@@ -16,7 +16,7 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("material"), new GUIContent("Ice Material"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("scale"), new GUIContent("Scale"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("offset"), new GUIContent("Offset"));
-            EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("autoFitToBox"), new GUIContent("Auto Fit To Box"));
+            EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("autoFitToTable"), new GUIContent("Auto Fit To Table"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("coverPadding"), new GUIContent("Cover Padding"));
             EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField("Unlock Text", EditorStyles.miniBoldLabel);

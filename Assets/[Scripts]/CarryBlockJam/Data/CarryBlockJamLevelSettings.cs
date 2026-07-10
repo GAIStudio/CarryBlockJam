@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GAITemplate;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace CarryBlockJam
 {
@@ -28,8 +29,9 @@ namespace CarryBlockJam
             CarryBlockJamFixedExitSlots.CreateDefault(3, 6),
         };
 
-        [Header("Boxes")]
-        public List<CarryBlockJamBoxPlacement> boxPlacements = new List<CarryBlockJamBoxPlacement>();
+        [Header("Tables")]
+        [FormerlySerializedAs("boxPlacements")]
+        public List<CarryBlockJamBoxPlacement> tablePlacements = new List<CarryBlockJamBoxPlacement>();
 
         [Header("Plates")]
         public List<CarryBlockJamPlatePlacement> platePlacements = new List<CarryBlockJamPlatePlacement>();
@@ -38,10 +40,12 @@ namespace CarryBlockJam
         public CarryBlockJamStickmanSpawnMode stickmanSpawnMode = CarryBlockJamStickmanSpawnMode.Center;
         public CarryBlockJamGridCoordinate fixedStickmanCell = new CarryBlockJamGridCoordinate(2, 3);
 
-        [Header("Frozen Box Visual")]
-        public BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
+        [Header("Frozen Table Visual")]
+        [FormerlySerializedAs("frozenBoxVisual")]
+        public BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
 
-        [Header("Curtain Box Visual")]
-        public BoardCurtainBoxVisualSettings curtainBoxVisual = BoardCurtainBoxVisualSettings.CreateDefault();
+        [Header("Curtain Table Visual")]
+        [FormerlySerializedAs("curtainBoxVisual")]
+        public BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
     }
 }

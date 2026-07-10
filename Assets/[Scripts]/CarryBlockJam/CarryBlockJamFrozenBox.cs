@@ -111,7 +111,7 @@ namespace CarryBlockJam
             DisableParticles(_iceOverlay);
             ApplyIceMaterial(_iceOverlay, ResolveMaterial(_visualSettings));
 
-            if (_visualSettings.autoFitToBox)
+            if (_visualSettings.autoFitToTable)
                 FitIceOverlayToBoxVisual();
             else
             {

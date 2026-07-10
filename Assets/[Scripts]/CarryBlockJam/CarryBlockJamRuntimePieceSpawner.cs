@@ -2,6 +2,7 @@ using GAITemplate;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -15,6 +16,7 @@ namespace CarryBlockJam
     public class CarryBlockJamRuntimePieceSpawner : MonoBehaviour
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
+        private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
         private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
 
@@ -22,18 +24,23 @@ namespace CarryBlockJam
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
         [SerializeField] private Material stickmanMaterial;
-        [SerializeField] private BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
-        [SerializeField] private BoardCurtainBoxVisualSettings curtainBoxVisual = BoardCurtainBoxVisualSettings.CreateDefault();
+        [FormerlySerializedAs("frozenBoxVisual")]
+        [SerializeField] private BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
+        [FormerlySerializedAs("curtainBoxVisual")]
+        [SerializeField] private BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
-        [Header("Box Visual (All Levels)")]
-        [SerializeField] private BoardPieceVisualSettings boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
+        [Header("Table Visual (All Levels)")]
+        [FormerlySerializedAs("boxVisual")]
+        [SerializeField] private BoardPieceVisualSettings tableVisual = BoardPieceVisualSettings.CreateTableDefault();
 
         [Header("Plate Visual (All Levels)")]
         [SerializeField] private BoardPieceVisualSettings plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
 
         [Header("Manual Fallback Placements")]
-        [SerializeField] private bool randomizeBoxes = true;
-        [SerializeField] private BoardBoxPlacement[] boxes = BoardBoxPlacement.CreateDefaults();
+        [FormerlySerializedAs("randomizeBoxes")]
+        [SerializeField] private bool randomizeTables = true;
+        [FormerlySerializedAs("boxes")]
+        [SerializeField] private BoardBoxPlacement[] tables = BoardBoxPlacement.CreateDefaults();
         [SerializeField] private BoardPlatePlacement[] plates = BoardPlatePlacement.CreateDefaults();
 
         private Transform _piecesRoot;
@@ -71,8 +78,8 @@ namespace CarryBlockJam
             if (cylinder == null)
                 cylinder = BoardCylinderPlacement.CreateDefault();
 
-            if (boxes == null || boxes.Length == 0)
-                boxes = BoardBoxPlacement.CreateDefaults();
+            if (tables == null || tables.Length == 0)
+                tables = BoardBoxPlacement.CreateDefaults();
 
             if (plates == null || plates.Length == 0)
                 plates = BoardPlatePlacement.CreateDefaults();
@@ -88,16 +95,26 @@ namespace CarryBlockJam
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
 
-            EnsureFrozenBoxVisualDefaults(frozenBoxVisual);
+            EnsureTableVisualDefaults(tableVisual);
+            EnsureFrozenTableVisualDefaults(frozenTableVisual);
 
             LevelData levelData = ResolveLevelData();
-            if (levelData?.carryBlockJam?.frozenBoxVisual != null)
-                EnsureFrozenBoxVisualDefaults(levelData.carryBlockJam.frozenBoxVisual);
+            if (levelData?.carryBlockJam?.frozenTableVisual != null)
+                EnsureFrozenTableVisualDefaults(levelData.carryBlockJam.frozenTableVisual);
 #endif
         }
 
 #if UNITY_EDITOR
-        private static void EnsureFrozenBoxVisualDefaults(BoardFrozenBoxVisualSettings settings)
+        private static void EnsureTableVisualDefaults(BoardPieceVisualSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            if (settings.model == null)
+                settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(TableModelPath);
+        }
+
+        private static void EnsureFrozenTableVisualDefaults(BoardFrozenBoxVisualSettings settings)
         {
             if (settings == null)
                 return;
@@ -116,10 +133,11 @@ namespace CarryBlockJam
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
 
-            EnsureFrozenBoxVisualDefaults(frozenBoxVisual);
+            if (tableVisual == null)
+                tableVisual = BoardPieceVisualSettings.CreateTableDefault();
 
-            if (boxVisual == null)
-                boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
+            EnsureTableVisualDefaults(tableVisual);
+            EnsureFrozenTableVisualDefaults(frozenTableVisual);
 
             if (plateVisual == null)
                 plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
@@ -315,23 +333,22 @@ namespace CarryBlockJam
                 if (placement == null || !IsInsideGrid(grid, placement.row, placement.column))
                     continue;
 
-                var boxObject = new GameObject($"Box_{placement.row}_{placement.column}_{placement.color}");
+                var boxObject = new GameObject($"Table_{placement.row}_{placement.column}_{placement.color}");
                 boxObject.transform.SetParent(_piecesRoot, false);
                 boxObject.transform.localRotation = Quaternion.identity;
                 boxObject.transform.localScale = Vector3.one;
 
                 PieceColorType visualColor = placement.isHidden ? PieceColorType.Grey : placement.color;
-                GameObject visualObject = CreatePieceVisual(
-                    boxVisual,
+                GameObject visualObject = CreateBoxVisual(
+                    tableVisual,
                     "Visual",
                     boxObject.transform,
-                    visualColor,
-                    PrimitiveType.Cube);
+                    visualColor);
                 CarryBlockJamBoardPiece piece = boxObject.AddComponent<CarryBlockJamBoardPiece>();
                 piece.Initialize(
                     CarryBlockJamPieceKind.Box,
                     placement.color,
-                    boxVisual != null ? boxVisual.offset : Vector3.zero,
+                    tableVisual != null ? tableVisual.offset : new Vector3(0f, 0.399f, 0f),
                     new Vector3(0f, 1.55f, 0f));
                 piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
 
@@ -343,7 +360,7 @@ namespace CarryBlockJam
                         visualPiece.ApplyHidden(true);
 
                     CarryBlockJamHiddenBox hiddenBox = boxObject.AddComponent<CarryBlockJamHiddenBox>();
-                    hiddenBox.Bind(piece, visualPiece);
+                    hiddenBox.Bind(piece, visualObject != null ? visualObject.transform : null, visualPiece);
                 }
                 else if (placement.isCurtain)
                 {
@@ -382,21 +399,21 @@ namespace CarryBlockJam
         private BoardFrozenBoxVisualSettings ResolveFrozenBoxVisualSettings()
         {
             LevelData levelData = ResolveLevelData();
-            BoardFrozenBoxVisualSettings levelSettings = levelData?.carryBlockJam?.frozenBoxVisual;
+            BoardFrozenBoxVisualSettings levelSettings = levelData?.carryBlockJam?.frozenTableVisual;
             if (levelSettings != null)
                 return levelSettings;
 
-            return frozenBoxVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
+            return frozenTableVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
         }
 
         private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings()
         {
             LevelData levelData = ResolveLevelData();
-            BoardCurtainBoxVisualSettings levelSettings = levelData?.carryBlockJam?.curtainBoxVisual;
+            BoardCurtainBoxVisualSettings levelSettings = levelData?.carryBlockJam?.curtainTableVisual;
             if (levelSettings != null)
                 return levelSettings;
 
-            return curtainBoxVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
+            return curtainTableVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
         }
 
         private int CountRequiredExitPlatesForColor(PieceColorType color)
@@ -526,7 +543,7 @@ namespace CarryBlockJam
             if (levelPlacements.Length > 0)
                 return levelPlacements;
 
-            if (!randomizeBoxes && boxes != null && boxes.Length > 0)
+            if (!randomizeTables && tables != null && tables.Length > 0)
                 return GetManualBoxPlacements(GetActiveColors());
 
             return GenerateExitDrivenBoxPlacements(grid, occupied);
@@ -612,7 +629,7 @@ namespace CarryBlockJam
             if (levelPlacements.Length > 0)
                 return levelPlacements;
 
-            if (!randomizeBoxes && plates != null && plates.Length > 0)
+            if (!randomizeTables && plates != null && plates.Length > 0)
                 return plates;
 
             return GenerateExitDrivenPlatePlacements(grid, occupied, boxPlacements);
@@ -811,6 +828,9 @@ namespace CarryBlockJam
             var candidates = new List<Vector2Int>();
             for (int row = 0; row < grid.Rows; row++)
             {
+                if (IsAutoSpawnBorderRow(grid, row))
+                    continue;
+
                 for (int column = 0; column < grid.Columns; column++)
                 {
                     var cell = new Vector2Int(row, column);
@@ -834,6 +854,9 @@ namespace CarryBlockJam
 
             for (int row = 0; row < grid.Rows; row++)
             {
+                if (IsAutoSpawnBorderRow(grid, row))
+                    continue;
+
                 for (int column = 0; column < grid.Columns; column++)
                 {
                     var cell = new Vector2Int(row, column);
@@ -848,6 +871,14 @@ namespace CarryBlockJam
             }
 
             return candidates;
+        }
+
+        private static bool IsAutoSpawnBorderRow(PuzzleGrid grid, int row)
+        {
+            if (grid == null || grid.Rows <= 0)
+                return true;
+
+            return row <= 0 || row >= grid.Rows - 1;
         }
 
         private static bool HasHiddenBoxes(BoardBoxPlacement[] boxPlacements)
@@ -1130,6 +1161,59 @@ namespace CarryBlockJam
             };
         }
 
+        private GameObject CreateBoxVisual(
+            BoardPieceVisualSettings visual,
+            string objectName,
+            Transform parent,
+            PieceColorType color)
+        {
+            BoardPieceVisualSettings resolvedVisual = visual ?? BoardPieceVisualSettings.CreateTableDefault();
+            GameObject visualObject;
+
+            if (resolvedVisual.model != null)
+            {
+                visualObject = Instantiate(resolvedVisual.model, parent, false);
+                visualObject.name = objectName;
+            }
+            else
+            {
+                visualObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                visualObject.name = objectName;
+                visualObject.transform.SetParent(parent, false);
+                DestroyObject(visualObject.GetComponent<Collider>());
+            }
+
+            visualObject.transform.localPosition = Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.identity;
+            visualObject.transform.localScale = resolvedVisual.scale == Vector3.zero
+                ? Vector3.one
+                : resolvedVisual.scale;
+
+            if (visualObject.GetComponent<GamePiece>() == null)
+                visualObject.AddComponent<GamePiece>();
+
+            if (resolvedVisual.model != null)
+                CarryBlockJamArtTableUtility.ApplyTableColor(visualObject.transform, color);
+            else if (resolvedVisual.material != null)
+            {
+                Renderer renderer = visualObject.GetComponentInChildren<Renderer>();
+                if (renderer != null)
+                    renderer.sharedMaterial = resolvedVisual.material;
+            }
+            else
+            {
+                GamePiece piece = visualObject.GetComponent<GamePiece>();
+                if (piece != null)
+                    piece.ApplyColor(color);
+            }
+
+            Collider[] colliders = visualObject.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                DestroyObject(colliders[i]);
+
+            return visualObject;
+        }
+
         private GameObject CreatePieceVisual(
             BoardPieceVisualSettings visual,
             string objectName,
@@ -1289,7 +1373,7 @@ namespace CarryBlockJam
 
         private bool OverlapsManualBoxPlacement(LevelData levelData)
         {
-            List<CarryBlockJamBoxPlacement> placements = levelData?.carryBlockJam?.boxPlacements;
+            List<CarryBlockJamBoxPlacement> placements = levelData?.carryBlockJam?.tablePlacements;
             if (placements == null || placements.Count == 0)
                 return false;
 
@@ -1337,17 +1421,17 @@ namespace CarryBlockJam
 
         private BoardBoxPlacement[] GetManualBoxPlacements(List<PieceColorType> activeColors)
         {
-            if (boxes == null || boxes.Length == 0)
+            if (tables == null || tables.Length == 0)
                 return Array.Empty<BoardBoxPlacement>();
 
             if (activeColors == null || activeColors.Count == 0)
-                return boxes;
+                return tables;
 
             var placements = new List<BoardBoxPlacement>();
             var seen = new HashSet<PieceColorType>();
-            for (int i = 0; i < boxes.Length; i++)
+            for (int i = 0; i < tables.Length; i++)
             {
-                BoardBoxPlacement placement = boxes[i];
+                BoardBoxPlacement placement = tables[i];
                 if (placement == null || !seen.Add(placement.color) || !activeColors.Contains(placement.color))
                     continue;
 
@@ -1366,11 +1450,11 @@ namespace CarryBlockJam
             var placements = new List<BoardBoxPlacement>();
             var usedCells = new HashSet<Vector2Int>();
 
-            if (levelData.carryBlockJam?.boxPlacements != null)
+            if (levelData.carryBlockJam?.tablePlacements != null)
             {
-                for (int i = 0; i < levelData.carryBlockJam.boxPlacements.Count; i++)
+                for (int i = 0; i < levelData.carryBlockJam.tablePlacements.Count; i++)
                 {
-                    CarryBlockJamBoxPlacement placement = levelData.carryBlockJam.boxPlacements[i];
+                    CarryBlockJamBoxPlacement placement = levelData.carryBlockJam.tablePlacements[i];
                     if (placement == null)
                         continue;
 

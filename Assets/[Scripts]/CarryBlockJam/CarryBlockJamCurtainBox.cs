@@ -106,7 +106,7 @@ namespace CarryBlockJam
 
             ApplyCurtainMaterial(_curtainOverlay);
 
-            if (_visualSettings.autoFitToBox)
+            if (_visualSettings.autoFitToTable)
                 FitCurtainOverlayToBoxVisual();
             else
             {

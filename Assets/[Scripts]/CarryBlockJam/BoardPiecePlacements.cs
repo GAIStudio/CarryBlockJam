@@ -2,6 +2,7 @@ using System;
 using GAITemplate;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace CarryBlockJam
 {
@@ -35,14 +36,16 @@ namespace CarryBlockJam
         public Vector3 scale = Vector3.one;
         public Vector3 offset;
 
-        public static BoardPieceVisualSettings CreateBoxDefault()
+        public static BoardPieceVisualSettings CreateTableDefault()
         {
             return new BoardPieceVisualSettings
             {
-                scale = Vector3.one * 1.1f,
-                offset = new Vector3(0f, 0.75f, 0f),
+                scale = Vector3.one,
+                offset = new Vector3(0f, 0.399f, 0f),
             };
         }
+
+        public static BoardPieceVisualSettings CreateBoxDefault() => CreateTableDefault();
 
         public static BoardPieceVisualSettings CreatePlateDefault()
         {
@@ -84,7 +87,8 @@ namespace CarryBlockJam
         public Material material;
         public Vector3 scale = Vector3.one;
         public Vector3 offset;
-        public bool autoFitToBox = true;
+        [FormerlySerializedAs("autoFitToBox")]
+        public bool autoFitToTable = true;
         [Min(0.1f)] public float coverPadding = 1.1f;
         public TMP_FontAsset font;
         public float fontSize = 48f;
@@ -108,7 +112,8 @@ namespace CarryBlockJam
         public Sprite colorSprite;
         public Vector3 curtainScale = Vector3.one;
         public Vector3 curtainOffset;
-        public bool autoFitToBox = true;
+        [FormerlySerializedAs("autoFitToBox")]
+        public bool autoFitToTable = true;
         [Min(0.1f)] public float coverPadding = 1.05f;
         [Header("Curtain Badge")]
         public Vector3 badgeOffset;

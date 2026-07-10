@@ -16,16 +16,23 @@ namespace CarryBlockJam
         };
 
         private CarryBlockJamBoardPiece _boxPiece;
+        private Transform _visualRoot;
         private GamePiece _visualPiece;
         private readonly HashSet<CarryBlockJamBoardPiece> _surroundingPlates = new HashSet<CarryBlockJamBoardPiece>();
         private bool _isRevealed;
 
         public bool IsRevealed => _isRevealed;
 
-        public void Bind(CarryBlockJamBoardPiece boxPiece, GamePiece visualPiece)
+        public void Bind(CarryBlockJamBoardPiece boxPiece, Transform visualRoot, GamePiece visualPiece)
         {
             _boxPiece = boxPiece;
+            _visualRoot = visualRoot;
             _visualPiece = visualPiece;
+        }
+
+        public void Bind(CarryBlockJamBoardPiece boxPiece, GamePiece visualPiece)
+        {
+            Bind(boxPiece, visualPiece != null ? visualPiece.transform : null, visualPiece);
         }
 
         public void RegisterSurroundingPlates(PuzzleGrid grid)
@@ -68,11 +75,13 @@ namespace CarryBlockJam
             _isRevealed = true;
             _boxPiece.RevealHiddenColor();
 
-            if (_visualPiece != null)
-            {
+            if (_visualRoot != null)
+                CarryBlockJamArtTableUtility.ApplyTableColor(_visualRoot, _boxPiece.TrueColor);
+            else if (_visualPiece != null)
                 _visualPiece.ApplyColor(_boxPiece.TrueColor);
+
+            if (_visualPiece != null)
                 _visualPiece.ApplyHidden(false);
-            }
 
             enabled = false;
         }

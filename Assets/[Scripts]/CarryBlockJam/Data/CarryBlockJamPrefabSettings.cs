@@ -1,5 +1,6 @@
 using GAITemplate;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace CarryBlockJam
 {
@@ -29,7 +30,8 @@ namespace CarryBlockJam
             tintWithPieceColor = false,
         };
 
-        public CarryBlockJamPrimitiveVisualSettings boxVisual = new CarryBlockJamPrimitiveVisualSettings
+        [FormerlySerializedAs("boxVisual")]
+        public CarryBlockJamPrimitiveVisualSettings tableVisual = new CarryBlockJamPrimitiveVisualSettings
         {
             primitiveType = PrimitiveType.Cube,
             localScale = Vector3.one,

@@ -18,7 +18,7 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("colorSprite"), new GUIContent("Color Sprite (optional)"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("curtainScale"), new GUIContent("Curtain Scale"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("curtainOffset"), new GUIContent("Curtain Offset"));
-            EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("autoFitToBox"), new GUIContent("Auto Fit To Box"));
+            EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("autoFitToTable"), new GUIContent("Auto Fit To Table"));
             EditorGUILayout.PropertyField(visualProperty.FindPropertyRelative("coverPadding"), new GUIContent("Cover Padding"));
 
             EditorGUILayout.Space(6f);

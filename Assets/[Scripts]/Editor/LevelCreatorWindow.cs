@@ -198,14 +198,14 @@ namespace GAITemplate.Editor
             {
                 CellTool.None => "Cell'e tıklayınca üzerindeki tüm flag'ler temizlenir. Renk dropdown'la seçilir.",
                 CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Hidden cell + color spawns a hidden CarryBlockJam box at that cell. " +
-                    "Other boxes still auto-fill to match exit count.",
+                    "Hidden cell + color spawns a hidden CarryBlockJam table at that cell. " +
+                    "Other tables still auto-fill to match exit count.",
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Ice cell + color spawns a frozen CarryBlockJam box. Set unlock moves below the cell. " +
-                    "Each collected plate counts down until the box unlocks.",
+                    "Ice cell + color spawns a frozen CarryBlockJam table. Set unlock moves below the cell. " +
+                    "Each collected plate counts down until the table unlocks.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Curtain cell + color spawns a curtained box. Choose the cell color for the curtain sprite; " +
-                    "the box opens when all plates of that color are delivered to the matching exit.",
+                    "Curtain cell + color spawns a curtained table. Choose the cell color for the curtain sprite; " +
+                    "the table opens when all plates of that color are delivered to the matching exit.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -310,7 +310,7 @@ namespace GAITemplate.Editor
                     GUILayout.Width(70f));
             }
 
-            // Ice cell: unlock moves for frozen CarryBlockJam boxes.
+            // Ice cell: unlock moves for frozen CarryBlockJam tables.
             if ((flags & LevelCellFlag.Ice) == LevelCellFlag.Ice)
             {
                 bool isCarryBlockJamGrid = _levelData != null &&
@@ -534,15 +534,15 @@ namespace GAITemplate.Editor
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUI.BeginChangeCheck();
-            DrawCarryBlockJamBoxPlacementHelp(carryBlockJamProperty);
-            SerializedProperty frozenVisualProperty = carryBlockJamProperty.FindPropertyRelative("frozenBoxVisual");
+            DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
+            SerializedProperty frozenVisualProperty = carryBlockJamProperty.FindPropertyRelative("frozenTableVisual");
             CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
-                "Frozen Box Visual",
+                "Frozen Table Visual",
                 frozenVisualProperty);
             EditorGUILayout.Space(6f);
-            SerializedProperty curtainVisualProperty = carryBlockJamProperty.FindPropertyRelative("curtainBoxVisual");
+            SerializedProperty curtainVisualProperty = carryBlockJamProperty.FindPropertyRelative("curtainTableVisual");
             CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
-                "Curtain Box Visual",
+                "Curtain Table Visual",
                 curtainVisualProperty);
             EditorGUILayout.Space(6f);
 
@@ -570,16 +570,16 @@ namespace GAITemplate.Editor
             }
         }
 
-        private static void DrawCarryBlockJamBoxPlacementHelp(SerializedProperty carryBlockJamProperty)
+        private static void DrawCarryBlockJamTablePlacementHelp(SerializedProperty carryBlockJamProperty)
         {
             if (carryBlockJamProperty == null)
                 return;
 
             EditorGUILayout.HelpBox(
-                "Box count follows exit count. Paint Hidden/Ice/Curtain cells on the grid (set color; unlock moves for ice) " +
-                "or use boxPlacements. Missing boxes are auto-generated. " +
-                "Hidden boxes reveal when adjacent plates are collected. Frozen boxes unlock after N collected plates. " +
-                "Curtain boxes open when all plates of the curtain color are delivered to the matching exit.",
+                "Table count follows exit count. Paint Hidden/Ice/Curtain cells on the grid (set color; unlock moves for ice) " +
+                "or use tablePlacements. Missing tables are auto-generated. " +
+                "Hidden tables reveal when adjacent plates are collected. Frozen tables unlock after N collected plates. " +
+                "Curtain tables open when all plates of the curtain color are delivered to the matching exit.",
                 MessageType.Info);
         }
 

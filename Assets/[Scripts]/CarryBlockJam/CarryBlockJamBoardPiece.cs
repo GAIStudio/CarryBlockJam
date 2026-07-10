@@ -32,6 +32,7 @@ namespace CarryBlockJam
         public bool IsCurtained => isCurtained;
         public Vector3 GridOffset => gridOffset;
         public Vector3 StackedOffset => stackedOffset;
+        public Vector3 CarriedOffset => carriedOffset;
         public int Row { get; private set; } = -1;
         public int Column { get; private set; } = -1;
         public CarryBlockJamBoardPiece StackedBelow { get; private set; }
@@ -42,13 +43,30 @@ namespace CarryBlockJam
             PieceColorType pieceColor,
             Vector3 pieceGridOffset,
             Vector3 pieceCarriedOffset,
-            Vector3 pieceGridRotationEuler = default)
+            Vector3 pieceGridRotationEuler = default,
+            Vector3 pieceStackedOffset = default)
         {
             kind = pieceKind;
             color = pieceColor;
             gridOffset = pieceGridOffset;
             carriedOffset = pieceCarriedOffset;
             gridRotationEuler = pieceGridRotationEuler;
+            if (pieceStackedOffset != default)
+                stackedOffset = pieceStackedOffset;
+        }
+
+        public void SetStackedOffset(Vector3 offset) => stackedOffset = offset;
+
+        /// <summary>
+        /// Local position where the next plate should sit on this piece.
+        /// Tables use the mesh top; plates keep their configured stack step.
+        /// </summary>
+        public Vector3 GetStackAttachLocalPosition()
+        {
+            if (kind == CarryBlockJamPieceKind.Box && TryGetLocalRendererTopY(out float topY))
+                return new Vector3(0f, topY + 0.02f, 0f);
+
+            return stackedOffset;
         }
 
         public void SetColorHidden(bool hidden) => isColorHidden = hidden;
@@ -94,7 +112,7 @@ namespace CarryBlockJam
 
             ClearStackLinks();
             transform.SetParent(basePiece.transform, false);
-            transform.localPosition = stackedOffset;
+            transform.localPosition = basePiece.GetStackAttachLocalPosition();
             transform.localRotation = Quaternion.Euler(gridRotationEuler);
             Row = basePiece.Row;
             Column = basePiece.Column;
@@ -112,6 +130,37 @@ namespace CarryBlockJam
 
             StackedBelow = null;
             StackedAbove = null;
+        }
+
+        private bool TryGetLocalRendererTopY(out float topY)
+        {
+            topY = 0f;
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            bool found = false;
+            float maxY = float.MinValue;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || !renderer.enabled)
+                    continue;
+
+                Bounds worldBounds = renderer.bounds;
+                Vector3 localMin = transform.InverseTransformPoint(worldBounds.min);
+                Vector3 localMax = transform.InverseTransformPoint(worldBounds.max);
+                float rendererTop = Mathf.Max(localMin.y, localMax.y);
+                if (!found || rendererTop > maxY)
+                {
+                    maxY = rendererTop;
+                    found = true;
+                }
+            }
+
+            if (!found)
+                return false;
+
+            topY = maxY;
+            return true;
         }
     }
 }
