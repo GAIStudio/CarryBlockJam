@@ -11,7 +11,7 @@ namespace CarryBlockJam
         public const int DefaultRows = 6;
         public const int DefaultColumns = 6;
         public const float DefaultSpacing = 1.1f;
-        public static readonly Vector3 DefaultCellScale = Vector3.one * 1.5f;
+        public static readonly Vector3 DefaultCellScale = Vector3.one;
 
         [SerializeField] private int rows = DefaultRows;
         [SerializeField] private int columns = DefaultColumns;
@@ -20,6 +20,7 @@ namespace CarryBlockJam
         [SerializeField] private Vector3 cellScale = DefaultCellScale;
         [SerializeField] private PieceColorType cellColor = PieceColorType.Grey;
         [SerializeField] private GameObject cellPrefab;
+        [SerializeField] private Material cellMaterial;
         [SerializeField] private CarryBlockJamPrefabSettings prefabSettings;
         [SerializeField] private Transform cellsRoot;
         [SerializeField] private Transform exitsRoot;
@@ -39,6 +40,7 @@ namespace CarryBlockJam
         public Vector3 CellScaleXYZ => cellScale;
         public PieceColorType CellColor => cellColor;
         public GameObject CellPrefab => cellPrefab;
+        public Material CellMaterial => cellMaterial;
         public CarryBlockJamPrefabSettings PrefabSettings => prefabSettings;
         public BoardExitLabelSettings ExitLabel => exitLabel;
         public Transform CellsRoot => cellsRoot;
@@ -230,14 +232,34 @@ namespace CarryBlockJam
             visual.transform.localRotation = Quaternion.identity;
             visual.transform.localScale = cellScale;
 
-            GamePiece piece = visual.GetComponent<GamePiece>();
-            if (piece == null)
-                piece = visual.AddComponent<GamePiece>();
-            piece.ApplyColor(cellColor);
+            if (cellMaterial != null)
+            {
+                ApplyCellMaterial(visual, cellMaterial);
+            }
+            else if (cellPrefab == null)
+            {
+                GamePiece piece = visual.GetComponent<GamePiece>();
+                if (piece == null)
+                    piece = visual.AddComponent<GamePiece>();
+                piece.ApplyColor(cellColor);
+            }
 
             Collider collider = visual.GetComponent<Collider>();
             if (collider != null)
                 Destroy(collider);
+        }
+
+        private static void ApplyCellMaterial(GameObject visual, Material material)
+        {
+            if (visual == null || material == null)
+                return;
+
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                    renderers[i].sharedMaterial = material;
+            }
         }
 
         private static List<BoardExitSettings> BuildExitSettings(List<CarryBlockJamExitDefinition> definitions)

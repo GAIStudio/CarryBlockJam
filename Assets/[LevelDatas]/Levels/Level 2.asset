@@ -171,7 +171,7 @@ MonoBehaviour:
     direction: 0
     tunnelPieces: 
   carryBlockJam:
-    gridCellScale: {x: 1.5, y: 1.5, z: 1.5}
+    gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1.1
     gridSpacingZ: 1.1
     colorSetups:

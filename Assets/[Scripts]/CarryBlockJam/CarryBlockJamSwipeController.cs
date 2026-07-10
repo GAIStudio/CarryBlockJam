@@ -480,6 +480,8 @@ namespace CarryBlockJam
                 return;
             }
 
+            CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(CarriedColor, consumedCount);
+
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(consumedCount);
 
             Sequence sequence = DOTween.Sequence();

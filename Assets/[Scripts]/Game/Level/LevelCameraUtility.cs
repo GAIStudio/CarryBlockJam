@@ -20,37 +20,18 @@ namespace GAITemplate
             return null;
         }
 
+        /// <summary>
+        /// LevelData camera fields are ignored. Gameplay uses the scene hierarchy camera as authored.
+        /// </summary>
         public static void ApplyToMainCamera(LevelData levelData)
         {
-            if (levelData == null)
-                return;
-
-            Camera camera = ResolveGameplayCamera();
-            if (camera == null)
-            {
-                Debug.LogWarning("[GAITemplate] No active camera found. Level camera settings were not applied.");
-                return;
-            }
-
-            ApplyToCamera(camera, levelData);
         }
 
+        /// <summary>
+        /// LevelData camera fields are ignored. Gameplay uses the scene hierarchy camera as authored.
+        /// </summary>
         public static void ApplyToCamera(Camera camera, LevelData levelData)
         {
-            if (camera == null || levelData == null)
-                return;
-
-            Transform cameraTransform = camera.transform;
-            cameraTransform.SetPositionAndRotation(
-                levelData.cameraPosition,
-                Quaternion.Euler(levelData.cameraRotation));
-
-            camera.orthographic = levelData.cameraOrthographic;
-
-            if (levelData.cameraOrthographic)
-                camera.orthographicSize = levelData.cameraOrthographicSize;
-            else
-                camera.fieldOfView = levelData.cameraFieldOfView;
         }
     }
 }

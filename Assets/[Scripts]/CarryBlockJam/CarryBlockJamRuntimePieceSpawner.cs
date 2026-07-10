@@ -22,6 +22,7 @@ namespace CarryBlockJam
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
         [SerializeField] private BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
+        [SerializeField] private BoardCurtainBoxVisualSettings curtainBoxVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
         [Header("Box Visual (All Levels)")]
         [SerializeField] private BoardPieceVisualSettings boxVisual = BoardPieceVisualSettings.CreateBoxDefault();
@@ -328,6 +329,20 @@ namespace CarryBlockJam
                     CarryBlockJamHiddenBox hiddenBox = boxObject.AddComponent<CarryBlockJamHiddenBox>();
                     hiddenBox.Bind(piece, visualPiece);
                 }
+                else if (placement.isCurtain)
+                {
+                    PieceColorType curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
+                        ? placement.curtainColor
+                        : placement.color;
+                    piece.SetCurtained(true);
+                    CarryBlockJamCurtainBox curtainBox = boxObject.AddComponent<CarryBlockJamCurtainBox>();
+                    curtainBox.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        curtainColor,
+                        CountRequiredExitPlatesForColor(curtainColor),
+                        ResolveCurtainBoxVisualSettings());
+                }
                 else if (placement.isFrozen)
                 {
                     piece.SetFrozen(true);
@@ -356,6 +371,46 @@ namespace CarryBlockJam
                 return levelSettings;
 
             return frozenBoxVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
+        }
+
+        private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings()
+        {
+            LevelData levelData = ResolveLevelData();
+            BoardCurtainBoxVisualSettings levelSettings = levelData?.carryBlockJam?.curtainBoxVisual;
+            if (levelSettings != null)
+                return levelSettings;
+
+            return curtainBoxVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
+        }
+
+        private int CountRequiredExitPlatesForColor(PieceColorType color)
+        {
+            if (!PieceColorPalette.IsPaintable(color))
+                return 0;
+
+            LevelData levelData = ResolveLevelData();
+            List<CarryBlockJamExitDefinition> exits = levelData?.carryBlockJam?.exits;
+            if (exits == null || exits.Count == 0)
+                return 0;
+
+            int total = 0;
+            for (int i = 0; i < exits.Count; i++)
+            {
+                CarryBlockJamExitDefinition exit = exits[i];
+                if (exit?.goals == null)
+                    continue;
+
+                for (int goalIndex = 0; goalIndex < exit.goals.Count; goalIndex++)
+                {
+                    CarryBlockJamExitGoal goal = exit.goals[goalIndex];
+                    if (goal == null || goal.color != color)
+                        continue;
+
+                    total += Mathf.Max(0, goal.requiredPlateCount);
+                }
+            }
+
+            return total;
         }
 
         private int SpawnPlates(PuzzleGrid grid, BoardPlatePlacement[] placements)
@@ -1314,12 +1369,17 @@ namespace CarryBlockJam
                         color = placement.color,
                         isHidden = placement.isHidden,
                         isFrozen = placement.isFrozen,
+                        isCurtain = placement.isCurtain,
+                        curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
+                            ? placement.curtainColor
+                            : placement.color,
                         unlockMoves = Mathf.Max(1, placement.unlockMoves),
                     });
                 }
             }
 
             AppendHiddenBoxPlacementsFromGrid(levelData, placements, usedCells);
+            AppendCurtainBoxPlacementsFromGrid(levelData, placements, usedCells);
             AppendFrozenBoxPlacementsFromGrid(levelData, placements, usedCells);
             return placements.ToArray();
         }
@@ -1351,6 +1411,40 @@ namespace CarryBlockJam
                 }
 
                 placements.Add(BoardBoxPlacement.Create(cell.row, cell.column, cell.color, isHidden: true));
+            }
+        }
+
+        private static void AppendCurtainBoxPlacementsFromGrid(
+            LevelData levelData,
+            List<BoardBoxPlacement> placements,
+            HashSet<Vector2Int> usedCells)
+        {
+            if (levelData?.colorCells == null || placements == null || usedCells == null)
+                return;
+
+            for (int i = 0; i < levelData.colorCells.Length; i++)
+            {
+                LevelColorCell cell = levelData.colorCells[i];
+                if ((cell.flag & LevelCellFlag.Curtain) == 0)
+                    continue;
+
+                var gridCell = new Vector2Int(cell.row, cell.column);
+                if (!usedCells.Add(gridCell))
+                    continue;
+
+                if (!PieceColorPalette.IsPaintable(cell.color))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a color for the curtain sprite / unlock.");
+                    usedCells.Remove(gridCell);
+                    continue;
+                }
+
+                placements.Add(BoardBoxPlacement.CreateCurtain(
+                    cell.row,
+                    cell.column,
+                    cell.color,
+                    cell.color));
             }
         }
 

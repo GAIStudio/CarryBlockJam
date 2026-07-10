@@ -11,8 +11,19 @@ namespace CarryBlockJam.Editor
     public static class CarryBlockJamSimpleBoardBuilder
     {
         private const string ScenePath = "Assets/[Scenes]/SampleScene.unity";
-        private const string CellPrefabPath = "Assets/[Prefabs]/GamePiece.prefab";
+        private const string CellPrefabPath = "Assets/[Models]/M_GridCell.fbx";
+        private const string CellMaterialPath = "Assets/[Materials]/Mat_Gridcell.mat";
+        private const string GridWallPrefabPath = "Assets/[Models]/M_Gridwall.fbx";
+        private const string GridPrefabPath = "Assets/[Models]/M_Grid.fbx";
+        private const string GridBottomPrefabPath = "Assets/[Models]/M_GridBottom.fbx";
+        private const string GridWallMaterialPath = "Assets/[Materials]/Mat_GridWall.mat";
         private const string LevelConfigPath = "Assets/[LevelDatas]/LevelConfig.asset";
+
+        /// <summary>
+        /// World position that centers the board on ArtScene's dark BG pit
+        /// (Art-Environment at (-2.5, 0.15, -9) + grid center local (2.5, 0, 4.5)).
+        /// </summary>
+        private static readonly Vector3 ArtGridBoardPosition = new Vector3(0f, 0.15f, -4.5f);
 
         [MenuItem("CarryBlockJam/Build 6x6 Board In SampleScene")]
         public static void BuildInSampleSceneMenu()
@@ -53,6 +64,8 @@ namespace CarryBlockJam.Editor
             if (!Application.isPlaying)
                 Undo.RegisterFullObjectHierarchyUndo(board.gameObject, "Build CarryBlockJam Board");
             ApplyLevelPreview(board, levelData);
+            AlignBoardToArtGrid(board);
+            EnsureBoardGridFrame(board);
 
             GameObject cellPrefab = board.CellPrefab;
             if (cellPrefab == null)
@@ -64,6 +77,10 @@ namespace CarryBlockJam.Editor
                 return;
             }
 
+            Material cellMaterial = board.CellMaterial;
+            if (cellMaterial == null)
+                cellMaterial = AssetDatabase.LoadAssetAtPath<Material>(CellMaterialPath);
+
             EnsureRoots(board);
 
             PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
@@ -71,13 +88,93 @@ namespace CarryBlockJam.Editor
                 grid = board.gameObject.AddComponent<PuzzleGrid>();
 
             grid.BeginLayout(board.Rows, board.Columns, board.GridSpacingX, board.GridSpacingZ);
-            BuildCells(board, grid, board.CellsRoot, cellPrefab, board.CellScaleXYZ, board.CellColor);
+            BuildCells(board, grid, board.CellsRoot, cellPrefab, board.CellScaleXYZ, cellMaterial);
             BuildExits(board, grid, board.ExitsRoot, levelData);
             grid.EndLayout();
 
             EditorUtility.SetDirty(board);
             if (!Application.isPlaying && board.gameObject.scene.IsValid())
                 EditorSceneManager.MarkSceneDirty(board.gameObject.scene);
+        }
+
+        private static void AlignBoardToArtGrid(CarryBlockJamSimpleBoard board)
+        {
+            if (board == null)
+                return;
+
+            board.transform.position = ArtGridBoardPosition;
+            board.transform.rotation = Quaternion.identity;
+            board.transform.localScale = Vector3.one;
+            EditorUtility.SetDirty(board);
+        }
+
+        private static void EnsureBoardGridFrame(CarryBlockJamSimpleBoard board)
+        {
+            if (board == null)
+                return;
+
+            Transform gridRoot = board.transform.Find("Grid");
+            if (gridRoot == null)
+                gridRoot = CreateChild(board.transform, "Grid");
+
+            // Local positions keep the same world placement as ArtScene's dark pit
+            // when the board is at ArtGridBoardPosition.
+            EnsureArtModel(
+                gridRoot,
+                "M_Gridwall",
+                GridWallPrefabPath,
+                GridWallMaterialPath,
+                new Vector3(-0.5f, -0.15f, 4.5f));
+            EnsureArtModel(
+                gridRoot,
+                "M_Grid",
+                GridPrefabPath,
+                GridWallMaterialPath,
+                new Vector3(2.5f, -0.15f, 4.5f));
+            EnsureArtModel(
+                gridRoot,
+                "M_GridBottom",
+                GridBottomPrefabPath,
+                CellMaterialPath,
+                new Vector3(0f, 0.24f, 4.5f));
+        }
+
+        private static void EnsureArtModel(
+            Transform parent,
+            string name,
+            string prefabPath,
+            string materialPath,
+            Vector3 localPosition)
+        {
+            if (parent == null)
+                return;
+
+            Transform existing = parent.Find(name);
+            if (existing != null)
+            {
+                existing.localPosition = localPosition;
+                existing.localRotation = Quaternion.identity;
+                existing.localScale = Vector3.one;
+                ApplySharedMaterial(existing.gameObject, AssetDatabase.LoadAssetAtPath<Material>(materialPath));
+                return;
+            }
+
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[CarryBlockJam] Missing art model at {prefabPath}");
+                return;
+            }
+
+            GameObject instance = PrefabUtility.InstantiatePrefab(prefab, parent) as GameObject;
+            if (instance == null)
+                instance = Object.Instantiate(prefab, parent);
+
+            instance.name = name;
+            instance.transform.localPosition = localPosition;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+            ApplySharedMaterial(instance, AssetDatabase.LoadAssetAtPath<Material>(materialPath));
         }
 
         public static void ClearBoard(CarryBlockJamSimpleBoard board)
@@ -125,6 +222,12 @@ namespace CarryBlockJam.Editor
                     AssetDatabase.LoadAssetAtPath<GameObject>(CellPrefabPath);
             }
 
+            if (serializedBoard.FindProperty("cellMaterial").objectReferenceValue == null)
+            {
+                serializedBoard.FindProperty("cellMaterial").objectReferenceValue =
+                    AssetDatabase.LoadAssetAtPath<Material>(CellMaterialPath);
+            }
+
             serializedBoard.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -165,7 +268,7 @@ namespace CarryBlockJam.Editor
             Transform cellsRoot,
             GameObject cellPrefab,
             Vector3 cellScale,
-            PieceColorType cellColor)
+            Material cellMaterial)
         {
             ClearChildren(cellsRoot);
 
@@ -191,15 +294,27 @@ namespace CarryBlockJam.Editor
                     visualTransform.localRotation = Quaternion.identity;
                     visualTransform.localScale = cellScale;
 
-                    GamePiece piece = visual.GetComponent<GamePiece>();
-                    if (piece != null)
-                        piece.ApplyColor(cellColor);
+                    if (cellMaterial != null)
+                        ApplySharedMaterial(visual, cellMaterial);
 
                     grid.RegisterCell(row, col, slot.transform, false);
                 }
             }
 
             EditorUtility.SetDirty(board);
+        }
+
+        private static void ApplySharedMaterial(GameObject visual, Material material)
+        {
+            if (visual == null || material == null)
+                return;
+
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                    renderers[i].sharedMaterial = material;
+            }
         }
 
         private static void BuildExits(
@@ -325,20 +440,13 @@ namespace CarryBlockJam.Editor
 
         private static void EnsureMainCamera()
         {
-            Camera camera = Camera.main;
-            if (camera == null)
-            {
-                var cameraObject = new GameObject("Main Camera");
-                cameraObject.tag = "MainCamera";
-                camera = cameraObject.AddComponent<Camera>();
-                cameraObject.AddComponent<AudioListener>();
-            }
+            if (Camera.main != null)
+                return;
 
-            camera.transform.SetPositionAndRotation(
-                new Vector3(0f, 16f, -8f),
-                Quaternion.Euler(52f, 0f, 0f));
-            camera.orthographic = true;
-            camera.orthographicSize = 8.5f;
+            var cameraObject = new GameObject("Main Camera");
+            cameraObject.tag = "MainCamera";
+            cameraObject.AddComponent<Camera>();
+            cameraObject.AddComponent<AudioListener>();
         }
 
         private static void DisableRuntimeLevelSpawn()

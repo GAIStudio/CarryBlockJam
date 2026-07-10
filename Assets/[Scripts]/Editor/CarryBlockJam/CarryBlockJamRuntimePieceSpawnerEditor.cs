@@ -10,6 +10,7 @@ namespace CarryBlockJam.Editor
         private SerializedProperty _cylinder;
         private SerializedProperty _cylinderVisualPrefab;
         private SerializedProperty _frozenBoxVisual;
+        private SerializedProperty _curtainBoxVisual;
         private SerializedProperty _boxVisual;
         private SerializedProperty _plateVisual;
         private SerializedProperty _randomizeBoxes;
@@ -23,6 +24,7 @@ namespace CarryBlockJam.Editor
             _cylinder = serializedObject.FindProperty("cylinder");
             _cylinderVisualPrefab = serializedObject.FindProperty("cylinderVisualPrefab");
             _frozenBoxVisual = serializedObject.FindProperty("frozenBoxVisual");
+            _curtainBoxVisual = serializedObject.FindProperty("curtainBoxVisual");
             _boxVisual = serializedObject.FindProperty("boxVisual");
             _plateVisual = serializedObject.FindProperty("plateVisual");
             _randomizeBoxes = serializedObject.FindProperty("randomizeBoxes");
@@ -48,6 +50,11 @@ namespace CarryBlockJam.Editor
             CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
                 "Frozen Box Visual (Fallback)",
                 _frozenBoxVisual);
+
+            EditorGUILayout.Space(8f);
+            CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
+                "Curtain Box Visual (Fallback)",
+                _curtainBoxVisual);
 
             EditorGUILayout.Space(8f);
             _showManualFallback = EditorGUILayout.Foldout(_showManualFallback, "Manual Fallback Placements", true);

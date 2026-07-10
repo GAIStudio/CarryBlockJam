@@ -22,12 +22,14 @@ namespace CarryBlockJam
 
         [SerializeField] private bool isColorHidden;
         [SerializeField] private bool isFrozen;
+        [SerializeField] private bool isCurtained;
 
         public CarryBlockJamPieceKind Kind => kind;
-        public PieceColorType Color => isColorHidden || isFrozen ? PieceColorType.None : color;
+        public PieceColorType Color => isColorHidden || isFrozen || isCurtained ? PieceColorType.None : color;
         public PieceColorType TrueColor => color;
         public bool IsColorHidden => isColorHidden;
         public bool IsFrozen => isFrozen;
+        public bool IsCurtained => isCurtained;
         public Vector3 GridOffset => gridOffset;
         public Vector3 StackedOffset => stackedOffset;
         public int Row { get; private set; } = -1;
@@ -56,6 +58,10 @@ namespace CarryBlockJam
         public void SetFrozen(bool frozen) => isFrozen = frozen;
 
         public void Unfreeze() => isFrozen = false;
+
+        public void SetCurtained(bool curtained) => isCurtained = curtained;
+
+        public void OpenCurtain() => isCurtained = false;
 
         public void PlaceOnGrid(PuzzleGrid grid, Transform parent, int row, int column)
         {

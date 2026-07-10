@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace CarryBlockJam.Editor
 {
-    [CustomPropertyDrawer(typeof(CarryBlockJamBoxPlacement))]
-    public class CarryBlockJamBoxPlacementDrawer : PropertyDrawer
+    [CustomPropertyDrawer(typeof(BoardBoxPlacement))]
+    public class BoardBoxPlacementDrawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
@@ -34,7 +34,6 @@ namespace CarryBlockJam.Editor
                 suffix = " (Frozen)";
 
             EditorGUI.LabelField(rowRect, label.text + suffix, EditorStyles.boldLabel);
-
             EditorGUI.indentLevel++;
             rowRect.y += lineHeight + spacing;
 

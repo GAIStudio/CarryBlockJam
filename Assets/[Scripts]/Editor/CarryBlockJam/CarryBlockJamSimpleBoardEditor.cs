@@ -10,6 +10,7 @@ namespace CarryBlockJam.Editor
     {
         private SerializedProperty _cellColor;
         private SerializedProperty _cellPrefab;
+        private SerializedProperty _cellMaterial;
         private SerializedProperty _cellsRoot;
         private SerializedProperty _exitsRoot;
         private SerializedProperty _prefabSettings;
@@ -19,6 +20,7 @@ namespace CarryBlockJam.Editor
         {
             _cellColor = serializedObject.FindProperty("cellColor");
             _cellPrefab = serializedObject.FindProperty("cellPrefab");
+            _cellMaterial = serializedObject.FindProperty("cellMaterial");
             _cellsRoot = serializedObject.FindProperty("cellsRoot");
             _exitsRoot = serializedObject.FindProperty("exitsRoot");
             _prefabSettings = serializedObject.FindProperty("prefabSettings");
@@ -38,6 +40,7 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.PropertyField(_prefabSettings);
             EditorGUILayout.PropertyField(_cellPrefab);
+            EditorGUILayout.PropertyField(_cellMaterial);
             EditorGUILayout.PropertyField(_cellsRoot);
             EditorGUILayout.PropertyField(_exitsRoot);
 

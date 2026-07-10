@@ -10,7 +10,7 @@ namespace GAITemplate.Editor
         private const string LastLevelDataKey = "GAITemplate.LevelCreator.LastLevelData";
         private const string PinLoadKey = "GAITemplate.LevelCreator.PinLoadAtTop";
 
-        private enum CellTool { None, Hidden, Ice, Tunnel }
+        private enum CellTool { None, Hidden, Ice, Curtain, Tunnel }
 
         private const int IceDefaultCount = 3;
 
@@ -30,7 +30,6 @@ namespace GAITemplate.Editor
 
         private Vector2 _scroll;
         private bool _pinLoadAtTop;
-        private bool _cameraFoldout = true;
         private bool _tutorialFoldout = true;
         private bool _carryBlockJamFoldout = true;
         private Vector2 _tutorialStagesScroll;
@@ -92,8 +91,6 @@ namespace GAITemplate.Editor
             DrawTunnelPiecesSection();
             GUILayout.Space(8f);
             DrawCarryBlockJamSection();
-            GUILayout.Space(8f);
-            DrawCameraSection();
             GUILayout.Space(8f);
             DrawTutorialSection();
 
@@ -192,6 +189,7 @@ namespace GAITemplate.Editor
             DrawToolButton(CellTool.None,   "None");
             DrawToolButton(CellTool.Hidden, "Hidden");
             DrawToolButton(CellTool.Ice,    "Ice");
+            DrawToolButton(CellTool.Curtain, "Curtain");
             if (!isSlide)
                 DrawToolButton(CellTool.Tunnel, "Tunnel");
             GUILayout.EndHorizontal();
@@ -205,6 +203,9 @@ namespace GAITemplate.Editor
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Ice cell + color spawns a frozen CarryBlockJam box. Set unlock moves below the cell. " +
                     "Each collected plate counts down until the box unlocks.",
+                CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
+                    "Curtain cell + color spawns a curtained box. Choose the cell color for the curtain sprite; " +
+                    "the box opens when all plates of that color are delivered to the matching exit.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -409,6 +410,7 @@ namespace GAITemplate.Editor
             {
                 CellTool.Hidden => LevelCellFlag.Hidden,
                 CellTool.Ice    => LevelCellFlag.Ice,
+                CellTool.Curtain => LevelCellFlag.Curtain,
                 CellTool.Tunnel => LevelCellFlag.Tunnel,
                 _               => LevelCellFlag.None,
             };
@@ -454,6 +456,7 @@ namespace GAITemplate.Editor
             var sb = new System.Text.StringBuilder(3);
             if ((flags & LevelCellFlag.Hidden) != 0) sb.Append('H');
             if ((flags & LevelCellFlag.Ice)    != 0) sb.Append('I');
+            if ((flags & LevelCellFlag.Curtain) != 0) sb.Append('C');
             if ((flags & LevelCellFlag.Tunnel) != 0) sb.Append('T');
             return sb.ToString();
         }
@@ -537,7 +540,12 @@ namespace GAITemplate.Editor
                 "Frozen Box Visual",
                 frozenVisualProperty);
             EditorGUILayout.Space(6f);
-            DrawCarryBlockJamSettingsWithoutFrozenVisual(carryBlockJamProperty, frozenVisualProperty);
+            SerializedProperty curtainVisualProperty = carryBlockJamProperty.FindPropertyRelative("curtainBoxVisual");
+            CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
+                "Curtain Box Visual",
+                curtainVisualProperty);
+            EditorGUILayout.Space(6f);
+            DrawCarryBlockJamSettingsWithoutFrozenVisual(carryBlockJamProperty, frozenVisualProperty, curtainVisualProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -559,15 +567,17 @@ namespace GAITemplate.Editor
                 return;
 
             EditorGUILayout.HelpBox(
-                "Box count follows exit count. Paint Hidden/Ice cells on the grid (set color + unlock moves for ice) " +
+                "Box count follows exit count. Paint Hidden/Ice/Curtain cells on the grid (set color; unlock moves for ice) " +
                 "or use boxPlacements. Missing boxes are auto-generated. " +
-                "Hidden boxes reveal when adjacent plates are collected. Frozen boxes unlock after N collected plates.",
+                "Hidden boxes reveal when adjacent plates are collected. Frozen boxes unlock after N collected plates. " +
+                "Curtain boxes open when all plates of the curtain color are delivered to the matching exit.",
                 MessageType.Info);
         }
 
         private static void DrawCarryBlockJamSettingsWithoutFrozenVisual(
             SerializedProperty carryBlockJamProperty,
-            SerializedProperty frozenVisualProperty)
+            SerializedProperty frozenVisualProperty,
+            SerializedProperty curtainVisualProperty = null)
         {
             if (carryBlockJamProperty == null)
                 return;
@@ -579,6 +589,8 @@ namespace GAITemplate.Editor
             {
                 enterChildren = false;
                 if (frozenVisualProperty != null && iterator.propertyPath == frozenVisualProperty.propertyPath)
+                    continue;
+                if (curtainVisualProperty != null && iterator.propertyPath == curtainVisualProperty.propertyPath)
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);
@@ -647,35 +659,6 @@ namespace GAITemplate.Editor
             if (GUILayout.Button("Back Mid", GUILayout.Width(80f)))
                 cells.Add(new Vector2Int(0, _columns / 2));
             EditorGUILayout.EndHorizontal();
-        }
-
-        // ── Camera ───────────────────────────────────────────────────────────────────
-
-        private void DrawCameraSection()
-        {
-            if (_levelDataSo == null || _levelDataSo.targetObject != _levelData)
-                _levelDataSo = new SerializedObject(_levelData);
-
-            _cameraFoldout = EditorGUILayout.Foldout(_cameraFoldout, "Camera", true, EditorStyles.foldoutHeader);
-            if (!_cameraFoldout)
-                return;
-
-            _levelDataSo.Update();
-            EditorGUILayout.PropertyField(_levelDataSo.FindProperty("cameraPosition"));
-            EditorGUILayout.PropertyField(_levelDataSo.FindProperty("cameraRotation"));
-            EditorGUILayout.PropertyField(_levelDataSo.FindProperty("cameraOrthographic"), new GUIContent("Orthographic"));
-            if (_levelData.cameraOrthographic)
-            {
-                EditorGUILayout.PropertyField(_levelDataSo.FindProperty("cameraOrthographicSize"),
-                    new GUIContent("Orthographic Size"));
-            }
-            else
-            {
-                EditorGUILayout.PropertyField(_levelDataSo.FindProperty("cameraFieldOfView"),
-                    new GUIContent("Field Of View"));
-            }
-
-            _levelDataSo.ApplyModifiedProperties();
         }
 
         // ── Load / Save ──────────────────────────────────────────────────────────────

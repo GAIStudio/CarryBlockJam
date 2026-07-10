@@ -93,6 +93,39 @@ namespace CarryBlockJam
     }
 
     [Serializable]
+    public class BoardCurtainBoxVisualSettings
+    {
+        public Material curtainMaterial;
+        public Color curtainTint = Color.white;
+        public Sprite colorSprite;
+        public Vector3 curtainScale = Vector3.one;
+        public Vector3 curtainOffset;
+        public bool autoFitToBox = true;
+        [Min(0.1f)] public float coverPadding = 1.05f;
+        [Header("Curtain Badge")]
+        public Vector3 badgeOffset;
+        public Vector3 badgeScale = new Vector3(0.85f, 0.85f, 0.85f);
+        public Vector3 badgeRotation = new Vector3(90f, 180f, 0f);
+
+        public static BoardCurtainBoxVisualSettings CreateDefault()
+        {
+            return new BoardCurtainBoxVisualSettings();
+        }
+
+        public Vector3 GetResolvedBadgeScale()
+        {
+            Vector3 scale = badgeScale;
+            if (Mathf.Abs(scale.x) < 0.001f && Mathf.Abs(scale.y) < 0.001f && Mathf.Abs(scale.z) < 0.001f)
+                return new Vector3(0.85f, 0.85f, 0.85f);
+
+            if (Mathf.Abs(scale.x) < 0.001f) scale.x = 0.85f;
+            if (Mathf.Abs(scale.y) < 0.001f) scale.y = 0.85f;
+            if (Mathf.Abs(scale.z) < 0.001f) scale.z = 0.85f;
+            return scale;
+        }
+    }
+
+    [Serializable]
     public class BoardBoxPlacement
     {
         public int row;
@@ -100,6 +133,8 @@ namespace CarryBlockJam
         public PieceColorType color = PieceColorType.Red;
         public bool isHidden;
         public bool isFrozen;
+        public bool isCurtain;
+        public PieceColorType curtainColor = PieceColorType.Purple;
         [Min(1)] public int unlockMoves = 3;
 
         public static BoardBoxPlacement Create(int row, int column, PieceColorType color, bool isHidden = false)
@@ -126,6 +161,22 @@ namespace CarryBlockJam
                 color = color,
                 isFrozen = true,
                 unlockMoves = Mathf.Max(1, unlockMoves),
+            };
+        }
+
+        public static BoardBoxPlacement CreateCurtain(
+            int row,
+            int column,
+            PieceColorType boxColor,
+            PieceColorType curtainColor)
+        {
+            return new BoardBoxPlacement
+            {
+                row = row,
+                column = column,
+                color = boxColor,
+                isCurtain = true,
+                curtainColor = curtainColor,
             };
         }
 

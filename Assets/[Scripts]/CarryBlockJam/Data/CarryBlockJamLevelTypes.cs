@@ -49,6 +49,8 @@ namespace CarryBlockJam
         public int column;
         public bool isHidden;
         public bool isFrozen;
+        public bool isCurtain;
+        public PieceColorType curtainColor = PieceColorType.Purple;
         [Min(1)] public int unlockMoves = 3;
     }
 

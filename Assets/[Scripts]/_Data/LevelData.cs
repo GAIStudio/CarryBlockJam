@@ -57,6 +57,7 @@ namespace GAITemplate
         Hidden  = 1 << 0,
         Ice     = 1 << 1,
         Tunnel  = 1 << 2,
+        Curtain = 1 << 3,
     }
 
     [CreateAssetMenu(fileName = "LevelData", menuName = "GAITemplate/Level Data")]
@@ -89,12 +90,12 @@ namespace GAITemplate
         public System.Collections.Generic.List<TutorialStage> tutorialStages =
             new System.Collections.Generic.List<TutorialStage>();
 
-        [Header("Camera")]
-        public Vector3 cameraPosition = new Vector3(0f, 10f, -8f);
-        public Vector3 cameraRotation = new Vector3(45f, 0f, 0f);
-        public bool cameraOrthographic = true;
-        public float cameraOrthographicSize = 6f;
-        public float cameraFieldOfView = 60f;
+        // Legacy serialized camera fields are kept for asset compatibility but are no longer applied.
+        [HideInInspector] public Vector3 cameraPosition = new Vector3(0f, 10f, -8f);
+        [HideInInspector] public Vector3 cameraRotation = new Vector3(45f, 0f, 0f);
+        [HideInInspector] public bool cameraOrthographic = true;
+        [HideInInspector] public float cameraOrthographicSize = 6f;
+        [HideInInspector] public float cameraFieldOfView = 60f;
 
         [Header("Deprecated")]
         [FormerlySerializedAs("levelPrefab")]

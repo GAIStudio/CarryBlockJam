@@ -1,4 +1,3 @@
-using System.Collections;
 using CarryBlockJam;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -24,9 +23,8 @@ namespace GAITemplate
         [Tooltip("SlideLane mekaniği için layout komponenti. Yoksa runtime'da eklenir.")]
         public SlideLaneBoard slideLaneBoard;
 
-        [Header("Camera")]
-        [Tooltip("Optional. Falls back to Camera.main when empty.")]
-        public Camera levelCamera;
+        /// <summary>Optional gameplay camera reference. Scene hierarchy camera is used as-is.</summary>
+        [HideInInspector] public Camera levelCamera;
 
         public static LevelBase Instance { get; private set; }
 
@@ -74,9 +72,9 @@ namespace GAITemplate
             if (carryBlockJamController != null)
                 carryBlockJamController.ApplyLevel(levelData);
 
-            SetupCamera(levelData);
+            // Camera stays as authored in the scene hierarchy.
 
-            // Tutorial'ı build + camera setup sonrası başlat (positions hazır olmalı).
+            // Tutorial'ı build sonrası başlat (positions hazır olmalı).
             if (TutorialManager.Instance != null)
                 TutorialManager.Instance.StartTutorial(levelData);
         }
@@ -109,39 +107,7 @@ namespace GAITemplate
             slideLaneBoard.RebuildLayout();
         }
 
-        // ── Camera ────────────────────────────────────────────────────────────────────
-
-        public void SetupCamera(LevelData levelData)
-        {
-            if (levelData == null)
-                return;
-
-            if (levelCamera == null)
-                levelCamera = LevelCameraUtility.ResolveGameplayCamera();
-
-            if (levelCamera == null)
-            {
-                Debug.LogWarning("[LevelBase] No camera found for level setup.", this);
-                return;
-            }
-
-            LevelCameraUtility.ApplyToCamera(levelCamera, levelData);
-            StartCoroutine(ForceCameraSettingsAfterFrame(levelData));
-        }
-
-        private IEnumerator ForceCameraSettingsAfterFrame(LevelData levelData)
-        {
-            yield return new WaitForEndOfFrame();
-
-            if (levelData == null)
-                yield break;
-
-            if (levelCamera == null)
-                levelCamera = LevelCameraUtility.ResolveGameplayCamera();
-
-            if (levelCamera != null)
-                LevelCameraUtility.ApplyToCamera(levelCamera, levelData);
-        }
+        // Camera is authored in the scene hierarchy and is not overridden from LevelData.
 
         // ── Helpers ───────────────────────────────────────────────────────────────────
 

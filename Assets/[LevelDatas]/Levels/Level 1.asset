@@ -13,9 +13,16 @@ MonoBehaviour:
   m_Name: Level 1
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 5
-  gridColumns: 5
+  gridRows: 10
+  gridColumns: 6
   colorCells:
+  - row: 0
+    column: 0
+    color: 4
+    flag: 8
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
   - row: 0
     column: 4
     color: 1
@@ -23,17 +30,10 @@ MonoBehaviour:
     flagValue: 0
     direction: 0
     tunnelPieces: 
-  - row: 3
-    column: 0
-    color: 4
-    flag: 2
-    flagValue: 3
-    direction: 0
-    tunnelPieces: 
   carryBlockJam:
-    gridCellScale: {x: 0.75, y: 0.1, z: 0.75}
-    gridSpacingX: 1.6
-    gridSpacingZ: 1.6
+    gridCellScale: {x: 1, y: 1, z: 1}
+    gridSpacingX: 1
+    gridSpacingZ: 1
     colorSetups:
     - color: 1
       minPlateCount: 1
@@ -80,14 +80,25 @@ MonoBehaviour:
       textColor: {r: 0.57872015, g: 0.77744794, b: 0.8018868, a: 1}
       bold: 1
       useOutline: 1
+    curtainBoxVisual:
+      curtainMaterial: {fileID: 0}
+      curtainTint: {r: 1, g: 1, b: 1, a: 1}
+      colorSprite: {fileID: 0}
+      curtainScale: {x: 1, y: 1, z: 1}
+      curtainOffset: {x: 0, y: 0, z: 0}
+      autoFitToBox: 1
+      coverPadding: 1.05
+      badgeOffset: {x: 0, y: 0, z: 0}
+      badgeScale: {x: 0.85, y: 0.85, z: 0.85}
+      badgeRotation: {x: 90, y: 180, z: 0}
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []
-  cameraPosition: {x: 0, y: 13.5, z: -9}
-  cameraRotation: {x: 50, y: 0, z: 0}
-  cameraOrthographic: 1
+  cameraPosition: {x: 0, y: 15.6, z: -20.89}
+  cameraRotation: {x: 60, y: 0, z: 0}
+  cameraOrthographic: 0
   cameraOrthographicSize: 11
-  cameraFieldOfView: 60
+  cameraFieldOfView: 30
   levelPrefab: {fileID: 0}
   gridKey: 
   defaultCellPrefab: {fileID: 0}

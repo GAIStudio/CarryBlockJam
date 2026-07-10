@@ -1,4 +1,3 @@
-using System.Collections;
 using CarryBlockJam;
 using UnityEngine;
 using UnityEngine.Events;
@@ -44,35 +43,12 @@ namespace GAITemplate
             else if (currentLevelData != null)
                 CarryBlockJamSceneLevelRuntime.EnsureGameplayOnSceneBoards(currentLevelData);
 
-            ApplyLevelCamera(currentLevelData);
-            if (currentLevelData != null)
-                StartCoroutine(ApplyLevelCameraAfterFrames(currentLevelData));
-
             if (!PlayerPrefs.HasKey("Elephant"))
             {
                 PlayerPrefs.SetInt("Elephant", elephant);
             }
 
             startEvent.Invoke();
-        }
-
-        private static void ApplyLevelCamera(LevelData levelData)
-        {
-            if (levelData == null)
-                return;
-
-            if (instance != null && instance.ActiveLevelBase != null)
-                instance.ActiveLevelBase.SetupCamera(levelData);
-            else
-                LevelCameraUtility.ApplyToMainCamera(levelData);
-        }
-
-        private static IEnumerator ApplyLevelCameraAfterFrames(LevelData levelData)
-        {
-            yield return null;
-            ApplyLevelCamera(levelData);
-            yield return new WaitForEndOfFrame();
-            ApplyLevelCamera(levelData);
         }
 
         private static void SpawnLevelBase(LevelData levelData)

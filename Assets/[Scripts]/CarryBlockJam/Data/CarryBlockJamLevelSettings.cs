@@ -44,5 +44,8 @@ namespace CarryBlockJam
 
         [Header("Frozen Box Visual")]
         public BoardFrozenBoxVisualSettings frozenBoxVisual = BoardFrozenBoxVisualSettings.CreateDefault();
+
+        [Header("Curtain Box Visual")]
+        public BoardCurtainBoxVisualSettings curtainBoxVisual = BoardCurtainBoxVisualSettings.CreateDefault();
     }
 }
