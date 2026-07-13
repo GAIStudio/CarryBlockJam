@@ -16,6 +16,8 @@ namespace CarryBlockJam
     public class CarryBlockJamRuntimePieceSpawner : MonoBehaviour
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
+        private const string StickmanMaterialPath = "Assets/[Materials]/Mat_Stickman.mat";
+        private const string StickmanControllerPath = "Assets/[Animations]/Stickman.controller";
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
         private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
@@ -25,6 +27,9 @@ namespace CarryBlockJam
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
         [SerializeField] private Material stickmanMaterial;
+        [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
+
+        public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
         [FormerlySerializedAs("frozenBoxVisual")]
         [SerializeField] private BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
         [FormerlySerializedAs("curtainBoxVisual")]
@@ -95,6 +100,13 @@ namespace CarryBlockJam
 #if UNITY_EDITOR
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
+
+            if (stickmanMaterial == null)
+                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+
+            if (stickmanAnimatorController == null)
+                stickmanAnimatorController =
+                    AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(StickmanControllerPath);
 
             EnsureTableVisualDefaults(tableVisual);
             EnsurePlateVisualDefaults(plateVisual);
@@ -246,10 +258,12 @@ namespace CarryBlockJam
             }
 
             CarryBlockJamBoardPiece piece = cylinderObject.AddComponent<CarryBlockJamBoardPiece>();
+            Vector3 spawnOffset = ResolveStickmanOffset();
+            cylinder.positionOffset = spawnOffset;
             piece.Initialize(
                 CarryBlockJamPieceKind.Cylinder,
                 PieceColorType.White,
-                cylinder.positionOffset,
+                spawnOffset,
                 new Vector3(0f, 0.3f, 0f),
                 cylinder.rotation);
             piece.PlaceOnGrid(grid, _piecesRoot, cylinder.row, cylinder.column);
@@ -257,6 +271,27 @@ namespace CarryBlockJam
             if (grid.TryGetCell(cylinder.row, cylinder.column, out PuzzleCell cell) && cell != null)
                 cell.Occupant = cylinderObject;
             return true;
+        }
+
+        private Vector3 ResolveStickmanOffset()
+        {
+            CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
+            if (settings != null)
+                return settings.stickmanOffset;
+
+            if (cylinder != null)
+                return cylinder.positionOffset;
+
+            return BoardCylinderPlacement.CreateDefault().positionOffset;
+        }
+
+        private Vector3 ResolveStickmanRotation()
+        {
+            CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
+            if (settings != null)
+                return settings.stickmanRotation;
+
+            return new Vector3(0f, 180f, 0f);
         }
 
         private bool CreateCylinderVisual(Transform parent)
@@ -267,10 +302,14 @@ namespace CarryBlockJam
             GameObject visual = Instantiate(cylinderVisualPrefab, parent, false);
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            visual.transform.localScale = cylinder.localScale;
-            GroundVisualToParent(visual.transform);
+            visual.transform.localRotation = Quaternion.Euler(ResolveStickmanRotation());
+            visual.transform.localScale = cylinder.localScale == Vector3.zero
+                ? Vector3.one
+                : cylinder.localScale;
+            // Do not GroundVisualToParent here: SkinnedMeshRenderer.bounds are unreliable at
+            // instantiate. Height comes from Prefab Settings → Stickman Offset.
             ApplyStickmanMaterial(visual);
+            SetupStickmanAnimator(visual);
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
@@ -279,16 +318,48 @@ namespace CarryBlockJam
             return true;
         }
 
+        private void SetupStickmanAnimator(GameObject visualRoot)
+        {
+            if (visualRoot == null)
+                return;
+
+#if UNITY_EDITOR
+            if (stickmanAnimatorController == null)
+                stickmanAnimatorController =
+                    AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(StickmanControllerPath);
+#endif
+            CarryBlockJamStickmanAnimator.EnsureOnCylinder(visualRoot.transform.parent, stickmanAnimatorController);
+        }
+
         private void ApplyStickmanMaterial(GameObject visualRoot)
         {
-            if (visualRoot == null || stickmanMaterial == null)
+            if (visualRoot == null)
+                return;
+
+#if UNITY_EDITOR
+            if (stickmanMaterial == null)
+                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+#endif
+            if (stickmanMaterial == null)
                 return;
 
             Renderer[] renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
             for (int i = 0; i < renderers.Length; i++)
             {
-                if (renderers[i] != null)
-                    renderers[i].sharedMaterial = stickmanMaterial;
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0)
+                {
+                    renderer.sharedMaterial = stickmanMaterial;
+                    continue;
+                }
+
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                    materials[materialIndex] = stickmanMaterial;
+                renderer.sharedMaterials = materials;
             }
         }
 

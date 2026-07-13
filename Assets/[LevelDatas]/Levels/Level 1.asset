@@ -32,6 +32,7 @@ MonoBehaviour:
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 1
         requiredPlateCount: 2
@@ -42,6 +43,7 @@ MonoBehaviour:
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 3
         requiredPlateCount: 2
@@ -50,6 +52,7 @@ MonoBehaviour:
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 6
         requiredPlateCount: 3
@@ -58,6 +61,7 @@ MonoBehaviour:
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 2
         requiredPlateCount: 3

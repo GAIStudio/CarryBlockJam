@@ -157,29 +157,29 @@ namespace CarryBlockJam.Editor
                 "M_GateUp",
                 GateUpPrefabPath,
                 new Vector3(-1.5f, 0.35f, 4.5f),
-                "Assets/[Materials]/Mat_GateUp.mat",
-                "Assets/[Materials]/Mat_GateUp-Green.mat");
+                "Assets/[Materials]/-GateUp Materials/Mat_GateUp.mat",
+                "Assets/[Materials]/-GateUp Materials/Mat_GateUp-Green.mat");
             EnsureGateModel(
                 gatesRoot,
                 "M_GateUp (1)",
                 GateUpPrefabPath,
                 new Vector3(1.5f, 0.35f, 4.5f),
-                "Assets/[Materials]/Mat_GateUp.mat",
-                "Assets/[Materials]/Mat_GateUp-Purple.mat");
+                "Assets/[Materials]/-GateUp Materials/Mat_GateUp.mat",
+                "Assets/[Materials]/-GateUp Materials/Mat_GateUp-Purple.mat");
             EnsureGateModel(
                 gatesRoot,
                 "M_GateBottom",
                 GateBottomPrefabPath,
                 new Vector3(-1.5f, 0.35f, -4.5f),
-                "Assets/[Materials]/Mat_GateBottom.mat",
-                "Assets/[Materials]/Mat_GateBottom-Blue.mat");
+                "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom.mat",
+                "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom-Blue.mat");
             EnsureGateModel(
                 gatesRoot,
                 "M_GateBottom (1)",
                 GateBottomPrefabPath,
                 new Vector3(1.5f, 0.35f, -4.5f),
-                "Assets/[Materials]/Mat_GateBottom.mat",
-                "Assets/[Materials]/Mat_GateBottom-Red.mat");
+                "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom.mat",
+                "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom-Red.mat");
         }
 
         private static void EnsureGateModel(
@@ -459,7 +459,9 @@ namespace CarryBlockJam.Editor
             exitObject.transform.SetParent(exitsRoot, false);
             exitObject.transform.localPosition = localPos;
             exitObject.transform.localRotation = localRot;
-            exitObject.transform.localScale = Vector3.one;
+            exitObject.transform.localScale = definition.modelScale == Vector3.zero
+                ? Vector3.one
+                : definition.modelScale;
 
             GameObject gate = GameObject.CreatePrimitive(PrimitiveType.Cube);
             gate.name = "Gate";

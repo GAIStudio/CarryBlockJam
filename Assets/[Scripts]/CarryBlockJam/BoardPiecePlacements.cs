@@ -11,8 +11,9 @@ namespace CarryBlockJam
     {
         public int row = 2;
         public int column = 3;
-        public Vector3 localScale = new Vector3(0.75f, 1.2f, 0.75f);
-        public Vector3 positionOffset = new Vector3(0f, 0.15f, 0f);
+        public Vector3 localScale = Vector3.one;
+        // Mixamo root is near the hips; Y=1.75 keeps the body above M_GridCell.
+        public Vector3 positionOffset = new Vector3(0f, 1.75f, 0f);
         public Vector3 rotation;
 
         public static BoardCylinderPlacement CreateDefault()
@@ -21,8 +22,8 @@ namespace CarryBlockJam
             {
                 row = 2,
                 column = 3,
-                localScale = new Vector3(0.75f, 1.2f, 0.75f),
-                positionOffset = new Vector3(0f, 0.25f, 0f),
+                localScale = Vector3.one,
+                positionOffset = new Vector3(0f, 1.75f, 0f),
                 rotation = Vector3.zero,
             };
         }

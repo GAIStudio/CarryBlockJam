@@ -43,11 +43,26 @@ namespace CarryBlockJam
                 return null;
 
             BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
+            TMP_FontAsset font = ResolveFont(resolvedSettings.font);
+            if (font == null)
+            {
+                Debug.LogWarning(
+                    "[CarryBlockJam] Skipping exit label create: no TMP font available (check TMP Settings / LiberationSans SDF).");
+                return null;
+            }
+
+            // Prefetch TMP Settings so Awake → LoadFontAsset does not NRE on a null settings instance.
+            if (TMP_Settings.LoadDefaultSettings() == null)
+            {
+                Debug.LogWarning("[CarryBlockJam] Skipping exit label create: TMP Settings asset was not found.");
+                return null;
+            }
 
             var labelObject = new GameObject(LabelObjectName);
             labelObject.transform.SetParent(parent, false);
 
             TextMeshPro text = labelObject.AddComponent<TextMeshPro>();
+            text.font = font;
             text.alignment = TextAlignmentOptions.Center;
             text.verticalAlignment = VerticalAlignmentOptions.Middle;
             text.enableWordWrapping = false;
@@ -84,10 +99,9 @@ namespace CarryBlockJam
 
             BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
 
-            if (resolvedSettings.font != null)
-                text.font = resolvedSettings.font;
-            else if (TMP_Settings.defaultFontAsset != null)
-                text.font = TMP_Settings.defaultFontAsset;
+            TMP_FontAsset font = ResolveFont(resolvedSettings.font);
+            if (font != null && text.font != font)
+                text.font = font;
 
             if (resolvedSettings.material != null)
                 text.fontSharedMaterial = resolvedSettings.material;
@@ -95,9 +109,47 @@ namespace CarryBlockJam
             text.fontSize = resolvedSettings.fontSize;
             text.fontStyle = resolvedSettings.bold ? FontStyles.Bold : FontStyles.Normal;
             text.color = resolvedSettings.color;
-            text.ForceMeshUpdate();
+
+            if (text.font != null && text.font.material != null)
+                text.ForceMeshUpdate(true);
+
             ApplyOutline(text, resolvedSettings.useOutline);
         }
+
+        public static TMP_FontAsset ResolveFont(TMP_FontAsset preferred)
+        {
+            if (IsUsableFont(preferred))
+                return preferred;
+
+            TMP_FontAsset fromSettings = null;
+            try
+            {
+                if (TMP_Settings.LoadDefaultSettings() != null)
+                    fromSettings = TMP_Settings.defaultFontAsset;
+            }
+            catch (System.Exception)
+            {
+                // TMP Settings resource may be missing during domain reload / early init.
+            }
+
+            if (IsUsableFont(fromSettings))
+                return fromSettings;
+
+            TMP_FontAsset fromResources = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (IsUsableFont(fromResources))
+                return fromResources;
+
+#if UNITY_EDITOR
+            TMP_FontAsset fromProject = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                "Assets/Packages/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            if (IsUsableFont(fromProject))
+                return fromProject;
+#endif
+            return null;
+        }
+
+        private static bool IsUsableFont(TMP_FontAsset font) =>
+            font != null && font.material != null;
 
         public static void ApplyArtGateLabelPlacement(
             Transform labelTransform,

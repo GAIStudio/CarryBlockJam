@@ -16,7 +16,7 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.LabelField("Exits (Fixed Gates)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
                 "Four gates are fixed on the board (2 top, 2 bottom). " +
-                "Positions cannot change — only goal colors and plate counts.",
+                "Positions cannot change — edit goals and Model Scale per gate.",
                 MessageType.Info);
 
             for (int i = 0; i < CarryBlockJamFixedExitSlots.Count; i++)
@@ -26,6 +26,14 @@ namespace CarryBlockJam.Editor
 
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorGUILayout.LabelField(CarryBlockJamFixedExitSlots.Labels[i], EditorStyles.boldLabel);
+
+                SerializedProperty scaleProperty = exitProperty.FindPropertyRelative("modelScale");
+                if (scaleProperty != null)
+                {
+                    if (scaleProperty.vector3Value == Vector3.zero)
+                        scaleProperty.vector3Value = Vector3.one;
+                    EditorGUILayout.PropertyField(scaleProperty, new GUIContent("Model Scale"));
+                }
 
                 SerializedProperty goalsProperty = exitProperty.FindPropertyRelative("goals");
                 if (goalsProperty != null)
@@ -100,6 +108,10 @@ namespace CarryBlockJam.Editor
             lengthProperty.intValue = 1;
             offsetProperty.vector3Value = Vector3.zero;
             rotationProperty.vector3Value = Vector3.zero;
+
+            SerializedProperty scaleProperty = exitProperty.FindPropertyRelative("modelScale");
+            if (scaleProperty != null && scaleProperty.vector3Value == Vector3.zero)
+                scaleProperty.vector3Value = Vector3.one;
         }
 
         private static void DrawGoals(SerializedProperty goalsProperty)

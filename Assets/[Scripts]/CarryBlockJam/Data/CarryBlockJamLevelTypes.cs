@@ -78,6 +78,8 @@ namespace CarryBlockJam
         [HideInInspector] [Min(1)] public int length = 1;
         [HideInInspector] public Vector3 positionOffset;
         [HideInInspector] public Vector3 rotation;
+        [Tooltip("Local scale multiplier for this exit gate model.")]
+        public Vector3 modelScale = Vector3.one;
         public List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>
         {
             new CarryBlockJamExitGoal(),

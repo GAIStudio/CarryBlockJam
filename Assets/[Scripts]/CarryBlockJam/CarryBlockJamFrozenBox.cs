@@ -128,6 +128,21 @@ namespace CarryBlockJam
 
         private void CreateUnlockLabel()
         {
+            TMP_FontAsset font = CarryBlockJamExitLabelUtility.ResolveFont(_visualSettings.font);
+            if (font == null)
+            {
+                Debug.LogWarning(
+                    "[CarryBlockJam] Skipping frozen unlock label: no TMP font available.",
+                    this);
+                return;
+            }
+
+            if (TMP_Settings.LoadDefaultSettings() == null)
+            {
+                Debug.LogWarning("[CarryBlockJam] Skipping frozen unlock label: TMP Settings missing.", this);
+                return;
+            }
+
             var labelObject = new GameObject("UnlockMoves");
             labelObject.transform.SetParent(transform, false);
             labelObject.transform.localPosition = GetUnlockLabelLocalPosition();
@@ -135,6 +150,7 @@ namespace CarryBlockJam
             labelObject.transform.localScale = _visualSettings.textScale;
 
             _unlockLabel = labelObject.AddComponent<TextMeshPro>();
+            _unlockLabel.font = font;
             _unlockLabel.alignment = TextAlignmentOptions.Center;
             _unlockLabel.verticalAlignment = VerticalAlignmentOptions.Middle;
             _unlockLabel.fontSize = _visualSettings.fontSize;
@@ -143,16 +159,12 @@ namespace CarryBlockJam
             _unlockLabel.enableWordWrapping = false;
             _unlockLabel.isTextObjectScaleStatic = true;
 
-            if (_visualSettings.font != null)
-                _unlockLabel.font = _visualSettings.font;
-            else if (TMP_Settings.defaultFontAsset != null)
-                _unlockLabel.font = TMP_Settings.defaultFontAsset;
-
             ApplyUnlockLabelOutline();
             EnsureUnlockLabelRenderOrder();
 
             _unlockLabel.text = _remainingUnlockMoves.ToString();
-            _unlockLabel.ForceMeshUpdate();
+            if (_unlockLabel.font != null && _unlockLabel.font.material != null)
+                _unlockLabel.ForceMeshUpdate(true);
 
             labelObject.AddComponent<CarryBlockJamExitLabelBillboard>();
         }
@@ -366,7 +378,8 @@ namespace CarryBlockJam
                 return;
 
             _unlockLabel.text = _remainingUnlockMoves.ToString();
-            _unlockLabel.ForceMeshUpdate();
+            if (_unlockLabel.font != null && _unlockLabel.font.material != null)
+                _unlockLabel.ForceMeshUpdate(true);
         }
 
         private static GameObject ResolveModelPrefab(BoardFrozenBoxVisualSettings settings)

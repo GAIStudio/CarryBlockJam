@@ -39,6 +39,28 @@ namespace CarryBlockJam.Editor
             _cellColor.enumValueIndex = (int)PieceColorTypeEditorUtility.DrawPopup("Cell Color", cellColor);
 
             EditorGUILayout.PropertyField(_prefabSettings);
+            if (_prefabSettings.objectReferenceValue == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Assign a CarryBlockJam Prefab Settings asset to edit Stickman Offset and Exit Model offsets.",
+                    MessageType.None);
+            }
+            else
+            {
+                EditorGUI.BeginChangeCheck();
+                DrawStickmanOffset(_prefabSettings.objectReferenceValue as CarryBlockJamPrefabSettings);
+                DrawGateModelOffsets(_prefabSettings.objectReferenceValue as CarryBlockJamPrefabSettings);
+                if (EditorGUI.EndChangeCheck() && target is CarryBlockJamSimpleBoard boardForGates)
+                {
+                    CarryBlockJamArtGateUtility.ApplyGateModelOffsets(boardForGates);
+                    EditorUtility.SetDirty(boardForGates);
+                    if (_prefabSettings.objectReferenceValue != null)
+                        EditorUtility.SetDirty(_prefabSettings.objectReferenceValue);
+                    if (!Application.isPlaying && boardForGates.gameObject.scene.IsValid())
+                        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(boardForGates.gameObject.scene);
+                }
+            }
+
             EditorGUILayout.PropertyField(_cellPrefab);
             EditorGUILayout.PropertyField(_cellMaterial);
             EditorGUILayout.PropertyField(_cellsRoot);
@@ -71,13 +93,50 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("font"), new GUIContent("Font"));
-            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("material"), new GUIContent("Material"));
+            EditorGUILayout.PropertyField(
+                labelProperty.FindPropertyRelative("material"),
+                new GUIContent("TMP Material", "Optional TMP font material. Label color comes from Gate Up materials."));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("fontSize"), new GUIContent("Font Size"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("scale"), new GUIContent("Scale"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("topOffset"), new GUIContent("Top Gate Offset"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("bottomOffset"), new GUIContent("Bottom Gate Offset"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("bold"), new GUIContent("Bold"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("useOutline"), new GUIContent("Use Outline"));
+            EditorGUILayout.HelpBox(
+                "Exit label tint uses Mat_GateUp-{Color} from Assets/[Materials]/-GateUp Materials.",
+                MessageType.Info);
+            EditorGUILayout.EndVertical();
+        }
+
+        private static void DrawStickmanOffset(CarryBlockJamPrefabSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField("Stickman", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            Undo.RecordObject(settings, "Stickman Offset");
+            settings.stickmanOffset = EditorGUILayout.Vector3Field("Offset", settings.stickmanOffset);
+            settings.stickmanCarryOffset = EditorGUILayout.Vector3Field("Walk Anim Offset", settings.stickmanCarryOffset);
+            settings.stickmanRotation = EditorGUILayout.Vector3Field("Rotation", settings.stickmanRotation);
+            EditorGUILayout.EndVertical();
+        }
+
+        private static void DrawGateModelOffsets(CarryBlockJamPrefabSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField("Exit Model Offset", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            Undo.RecordObject(settings, "Exit Model Offset");
+            settings.topExitModelOffset = EditorGUILayout.Vector3Field("Top", settings.topExitModelOffset);
+            settings.bottomExitModelOffset = EditorGUILayout.Vector3Field("Bottom", settings.bottomExitModelOffset);
+            EditorGUILayout.HelpBox(
+                "Offsets apply to M_GateUp (Top) and M_GateBottom (Bottom) exit models.",
+                MessageType.None);
             EditorGUILayout.EndVertical();
         }
     }

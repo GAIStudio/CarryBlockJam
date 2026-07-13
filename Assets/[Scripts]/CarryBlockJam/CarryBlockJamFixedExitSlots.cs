@@ -63,6 +63,8 @@ namespace CarryBlockJam
             definition.length = 1;
             definition.positionOffset = Vector3.zero;
             definition.rotation = Vector3.zero;
+            if (definition.modelScale == Vector3.zero)
+                definition.modelScale = Vector3.one;
 
             if (definition.goals == null)
                 definition.goals = new List<CarryBlockJamExitGoal>();
@@ -75,6 +77,7 @@ namespace CarryBlockJam
         {
             var definition = new CarryBlockJamExitDefinition
             {
+                modelScale = Vector3.one,
                 goals = new List<CarryBlockJamExitGoal>
                 {
                     new CarryBlockJamExitGoal(),
@@ -90,16 +93,26 @@ namespace CarryBlockJam
                 return;
 
             var preservedGoals = new List<List<CarryBlockJamExitGoal>>(Count);
+            var preservedScales = new Vector3[Count];
             for (int i = 0; i < Count; i++)
             {
-                if (i < exits.Count && exits[i]?.goals != null && exits[i].goals.Count > 0)
-                    preservedGoals.Add(CloneGoals(exits[i].goals));
+                preservedScales[i] = Vector3.one;
+                if (i < exits.Count && exits[i] != null)
+                {
+                    if (exits[i].goals != null && exits[i].goals.Count > 0)
+                        preservedGoals.Add(CloneGoals(exits[i].goals));
+                    else
+                        preservedGoals.Add(null);
+
+                    if (exits[i].modelScale != Vector3.zero)
+                        preservedScales[i] = exits[i].modelScale;
+                }
                 else
                     preservedGoals.Add(null);
             }
 
             // Prefer matching existing exits to slots by side + left/right half.
-            MatchGoalsByLayout(exits, preservedGoals, columns);
+            MatchGoalsByLayout(exits, preservedGoals, preservedScales, columns);
 
             exits.Clear();
             for (int i = 0; i < Count; i++)
@@ -107,6 +120,7 @@ namespace CarryBlockJam
                 CarryBlockJamExitDefinition definition = CreateDefault(i, columns);
                 if (preservedGoals[i] != null)
                     definition.goals = preservedGoals[i];
+                definition.modelScale = preservedScales[i] == Vector3.zero ? Vector3.one : preservedScales[i];
                 exits.Add(definition);
             }
         }
@@ -114,6 +128,7 @@ namespace CarryBlockJam
         private static void MatchGoalsByLayout(
             List<CarryBlockJamExitDefinition> exits,
             List<List<CarryBlockJamExitGoal>> preservedGoals,
+            Vector3[] preservedScales,
             int columns)
         {
             if (exits == null)
@@ -140,6 +155,8 @@ namespace CarryBlockJam
                     continue;
 
                 preservedGoals[slot] = CloneGoals(definition.goals);
+                if (definition.modelScale != Vector3.zero)
+                    preservedScales[slot] = definition.modelScale;
                 filled[slot] = true;
             }
         }

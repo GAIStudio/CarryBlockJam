@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using CarryBlockJam;
 using GAITemplate;
 using UnityEditor;
 using UnityEngine;
@@ -9,11 +10,16 @@ using UnityEngine;
 namespace CarryBlockJam.Editor
 {
     /// <summary>
-    /// Exit color options come from Mat_Gate* tint materials under Resources/Materials/Gates.
+    /// Exit color options come from Mat_Gate* tint materials under Assets/[Materials]/-Gate* folders.
     /// </summary>
     internal static class GateColorEditorUtility
     {
-        private const string MaterialsFolder = "Assets/Resources/Materials/Gates";
+        private static readonly string[] MaterialsFolders =
+        {
+            CarryBlockJamArtMaterialUtility.GateUpMaterialsFolder,
+            CarryBlockJamArtMaterialUtility.GateBottomMaterialsFolder,
+        };
+
         private static readonly Regex ColorSuffixRegex = new Regex(
             @"^Mat_Gate(?:Up|Bottom)-(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -83,7 +89,7 @@ namespace CarryBlockJam.Editor
 
             _cacheBuilt = true;
             var foundColors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-            string[] guids = AssetDatabase.FindAssets("t:Material", new[] { MaterialsFolder });
+            string[] guids = AssetDatabase.FindAssets("t:Material", MaterialsFolders);
             for (int i = 0; i < guids.Length; i++)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guids[i]);
@@ -96,22 +102,16 @@ namespace CarryBlockJam.Editor
             }
 
             var available = new List<PieceColorType>();
-            var display = new List<string>();
             foreach (string colorName in foundColors)
             {
-                if (!Enum.TryParse(colorName, true, out PieceColorType colorType))
-                    continue;
-
-                if (colorType == PieceColorType.None)
+                if (!CarryBlockJamArtMaterialUtility.TryParseMaterialSuffix(colorName, out PieceColorType colorType))
                     continue;
 
                 available.Add(colorType);
-                display.Add(colorType.ToString());
             }
 
-            // Stable gameplay order if present.
             available.Sort(CompareGateColors);
-            display.Clear();
+            var display = new List<string>(available.Count);
             for (int i = 0; i < available.Count; i++)
                 display.Add(available[i].ToString());
 
@@ -129,9 +129,15 @@ namespace CarryBlockJam.Editor
             return color switch
             {
                 PieceColorType.Red => 0,
-                PieceColorType.Green => 1,
-                PieceColorType.Blue => 2,
-                PieceColorType.Purple => 3,
+                PieceColorType.Orange => 1,
+                PieceColorType.Yellow => 2,
+                PieceColorType.Green => 3,
+                PieceColorType.GreenDark => 4,
+                PieceColorType.Blue => 5,
+                PieceColorType.Lightblue => 6,
+                PieceColorType.Purple => 7,
+                PieceColorType.Pink => 8,
+                PieceColorType.Cherry => 9,
                 _ => 100 + (int)color,
             };
         }

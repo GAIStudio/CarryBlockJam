@@ -18,8 +18,9 @@ namespace CarryBlockJam
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
-        [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 1.0f, 0f);
-        [SerializeField] private float carriedPlateStackStep = 0.28f;
+        [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.52f);
+        [SerializeField] private float carriedPlateStackStep = 0.18f;
+        [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.75f, 0f);
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -30,6 +31,8 @@ namespace CarryBlockJam
         private bool _isAnimating;
         private bool _successTriggered;
         private CarryBlockJamBoardPiece _cylinder;
+        private CarryBlockJamStickmanAnimator _stickmanAnimator;
+        private bool _stickmanMoving;
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
@@ -380,6 +383,7 @@ namespace CarryBlockJam
             }
 
             _isAnimating = true;
+            RefreshStickmanAnimation(moving: true);
 
             if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
                 _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
@@ -394,6 +398,7 @@ namespace CarryBlockJam
                     break;
 
                 Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
+                sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
                 sequence.Append(_cylinder.transform.DOLocalJump(
                     targetPosition,
                     moveJumpPower,
@@ -402,7 +407,10 @@ namespace CarryBlockJam
                 sequence.AppendCallback(() =>
                 {
                     if (!IsBoxOwnedCell(targetRow, targetColumn))
+                    {
                         _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), targetRow, targetColumn);
+                        ApplyStickmanWalkHeight();
+                    }
                 });
             }
 
@@ -420,6 +428,7 @@ namespace CarryBlockJam
                 }
 
                 _isAnimating = false;
+                RefreshStickmanAnimation(moving: false);
                 onComplete?.Invoke();
             });
         }
@@ -487,6 +496,7 @@ namespace CarryBlockJam
             CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(CarriedColor, consumedCount);
 
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(consumedCount);
+            RefreshStickmanAnimation(moving: false);
 
             Sequence sequence = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
@@ -525,6 +535,7 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            RefreshStickmanAnimation(moving: false);
             CarryBlockJamBoardPiece currentTop = GetTopStackPiece(targetBox);
             Sequence sequence = DOTween.Sequence();
 
@@ -554,7 +565,10 @@ namespace CarryBlockJam
 
         private Vector3 GetPieceLocalPosition(CarryBlockJamBoardPiece piece, int row, int column)
         {
-            return _grid.GetLocalPosition(row, column) + piece.GridOffset;
+            Vector3 position = _grid.GetLocalPosition(row, column) + piece.GridOffset;
+            if (piece == _cylinder && ShouldApplyStickmanWalkOffset)
+                position += ResolveStickmanWalkOffset();
+            return position;
         }
 
         private void ResolveGameplayReferences()
@@ -575,6 +589,79 @@ namespace CarryBlockJam
                 if (piece.Kind == CarryBlockJamPieceKind.Cylinder)
                     _cylinder = piece;
             }
+
+            EnsureStickmanAnimator();
+        }
+
+        private void EnsureStickmanAnimator()
+        {
+            if (_cylinder == null)
+            {
+                _stickmanAnimator = null;
+                return;
+            }
+
+            if (_stickmanAnimator != null && _stickmanAnimator.transform.IsChildOf(_cylinder.transform))
+                return;
+
+            RuntimeAnimatorController controller = null;
+            CarryBlockJamRuntimePieceSpawner spawner = GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner != null)
+                controller = spawner.StickmanAnimatorController;
+
+            _stickmanAnimator = CarryBlockJamStickmanAnimator.EnsureOnCylinder(_cylinder.transform, controller);
+            RefreshStickmanAnimation(moving: false);
+        }
+
+        private void RefreshStickmanAnimation(bool moving)
+        {
+            if (_stickmanAnimator == null)
+                EnsureStickmanAnimator();
+
+            _stickmanMoving = moving;
+            _stickmanAnimator?.SetState(moving, HasCarriedPlates);
+            ApplyStickmanWalkHeight();
+        }
+
+        // StandartWalk, CarryWalking, and CarryingIdle only — never the empty start idle.
+        private bool ShouldApplyStickmanWalkOffset => _stickmanMoving || HasCarriedPlates;
+
+        private Vector3 ResolveStickmanWalkOffset()
+        {
+            if (board != null && board.PrefabSettings != null)
+                return board.PrefabSettings.stickmanCarryOffset;
+
+            return stickmanCarryOffset;
+        }
+
+        private void ApplyStickmanWalkHeight()
+        {
+            if (_cylinder == null || _grid == null)
+                return;
+
+            if (_cylinder.Row < 0 || _cylinder.Column < 0)
+                return;
+
+            Transform visual = _cylinder.transform.Find("Visual");
+            if (visual != null)
+                visual.localPosition = Vector3.zero;
+
+            _cylinder.transform.localPosition = GetPieceLocalPosition(_cylinder, _cylinder.Row, _cylinder.Column);
+        }
+
+        private void FaceStickmanToward(Vector3 localTarget)
+        {
+            if (_cylinder == null)
+                return;
+
+            Vector3 flatDelta = localTarget - _cylinder.transform.localPosition;
+            flatDelta.y = 0f;
+            if (flatDelta.sqrMagnitude < 0.0001f)
+                return;
+
+            Transform visual = _cylinder.transform.Find("Visual");
+            Transform faceRoot = visual != null ? visual : _cylinder.transform;
+            faceRoot.localRotation = Quaternion.LookRotation(flatDelta.normalized, Vector3.up);
         }
 
         private void UpdateSwipePreview()
@@ -1044,7 +1131,7 @@ namespace CarryBlockJam
                 return;
 
             plate.ClearStackLinks();
-            plate.transform.SetParent(_cylinder.transform, false);
+            plate.transform.SetParent(GetCarryAttachRoot(), false);
             if (!_carriedPlates.Contains(plate))
                 _carriedPlates.Add(plate);
             UpdateCarriedPlateVisuals();
@@ -1061,20 +1148,36 @@ namespace CarryBlockJam
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plates[i]);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plates[i]);
             }
+
+            RefreshStickmanAnimation(moving: false);
         }
 
         private void UpdateCarriedPlateVisuals()
         {
+            Transform attachRoot = GetCarryAttachRoot();
             for (int i = 0; i < _carriedPlates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = _carriedPlates[i];
                 if (plate == null)
                     continue;
 
-                plate.transform.SetParent(_cylinder.transform, false);
-                plate.transform.localPosition = carriedPlateBaseOffset + Vector3.up * (carriedPlateStackStep * i);
+                plate.transform.SetParent(attachRoot, false);
+                // Hold plates in front of the torso; stack upward without clipping the head.
+                Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * i);
+                // Slight forward bias on higher plates only.
+                stackOffset += Vector3.forward * (0.02f * i);
+                plate.transform.localPosition = carriedPlateBaseOffset + stackOffset;
                 plate.transform.localRotation = Quaternion.identity;
             }
+        }
+
+        private Transform GetCarryAttachRoot()
+        {
+            if (_cylinder == null)
+                return transform;
+
+            Transform visual = _cylinder.transform.Find("Visual");
+            return visual != null ? visual : _cylinder.transform;
         }
 
         private List<CarryBlockJamBoardPiece> DetachCarriedPlates()

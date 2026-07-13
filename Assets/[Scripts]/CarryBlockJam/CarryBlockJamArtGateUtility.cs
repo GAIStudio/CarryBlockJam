@@ -2,25 +2,22 @@ using System.Collections.Generic;
 using GAITemplate;
 using TMPro;
 using UnityEngine;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace CarryBlockJam
 {
     /// <summary>
     /// Binds level exit settings onto the fixed art gate models under the board.
-    /// Gate transforms stay put; only materials and goal labels change.
+    /// Gate base poses come from the scene; Prefab Settings can add a model offset.
     /// </summary>
     public static class CarryBlockJamArtGateUtility
     {
         private const string GatesRootName = "Gates";
-        private const string MaterialsFolder = "Assets/[Materials]";
 
         private static readonly string[] TopGateNames = { "M_GateUp", "M_GateUp (1)" };
         private static readonly string[] BottomGateNames = { "M_GateBottom", "M_GateBottom (1)" };
 
-        private static readonly Dictionary<string, Material> MaterialCache = new();
+        private static readonly Dictionary<int, Vector3> GateBaseLocalPositions = new();
+        private static readonly Dictionary<int, Vector3> GateBaseLocalScales = new();
 
         public static Transform FindGatesRoot(CarryBlockJamSimpleBoard board)
         {
@@ -48,6 +45,7 @@ namespace CarryBlockJam
 
             ClearLegacyCubeExits(board.ExitsRoot);
             ClearExitComponents(gatesRoot);
+            ApplyGateModelOffsets(board, gatesRoot);
 
             PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
             int columns = grid != null ? grid.Columns : board.Columns;
@@ -90,6 +88,62 @@ namespace CarryBlockJam
             }
         }
 
+        public static void ApplyGateModelOffsets(CarryBlockJamSimpleBoard board, Transform gatesRoot = null)
+        {
+            if (board == null)
+                return;
+
+            gatesRoot ??= FindGatesRoot(board);
+            if (gatesRoot == null)
+                return;
+
+            CarryBlockJamPrefabSettings settings = board.PrefabSettings;
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform gate = gatesRoot.GetChild(i);
+                if (gate == null)
+                    continue;
+
+                ApplyGateModelOffset(gate, settings);
+            }
+        }
+
+        public static void ApplyGateModelOffset(Transform gate, CarryBlockJamPrefabSettings settings)
+        {
+            if (gate == null)
+                return;
+
+            int id = gate.GetInstanceID();
+            if (!GateBaseLocalPositions.TryGetValue(id, out Vector3 baseLocalPosition))
+            {
+                baseLocalPosition = gate.localPosition;
+                GateBaseLocalPositions[id] = baseLocalPosition;
+            }
+
+            Vector3 offset = settings != null
+                ? settings.GetGateModelOffset(IsUpGate(gate))
+                : Vector3.zero;
+            gate.localPosition = baseLocalPosition + offset;
+        }
+
+        public static void ApplyGateModelScale(Transform gate, Vector3 modelScale)
+        {
+            if (gate == null)
+                return;
+
+            int id = gate.GetInstanceID();
+            if (!GateBaseLocalScales.TryGetValue(id, out Vector3 baseLocalScale))
+            {
+                baseLocalScale = gate.localScale;
+                if (baseLocalScale == Vector3.zero)
+                    baseLocalScale = Vector3.one;
+                GateBaseLocalScales[id] = baseLocalScale;
+            }
+
+            Vector3 scale = modelScale == Vector3.zero ? Vector3.one : modelScale;
+            gate.localScale = Vector3.Scale(baseLocalScale, scale);
+        }
+
         public static void BindExitToGate(
             Transform gate,
             CarryBlockJamExitDefinition definition,
@@ -105,6 +159,7 @@ namespace CarryBlockJam
             // Apply gate color before creating the goal label so TMP renderers
             // are not mixed into mesh material assignment.
             bool isUpGate = IsUpGate(gate);
+            ApplyGateModelScale(gate, definition.modelScale);
             exit.Configure(definition);
             exit.BindArtGate(isUpGate, null, labelSettings);
 
@@ -146,12 +201,30 @@ namespace CarryBlockJam
         public static Color GetGateTintColor(bool isUpGate, PieceColorType color)
         {
             Material material = LoadColorMaterial(isUpGate, color);
+            return ExtractMaterialTint(material, color);
+        }
+
+        /// <summary>
+        /// Exit goal labels always tint from Mat_GateUp-{Color} in -GateUp Materials.
+        /// </summary>
+        public static Color GetGateUpLabelTintColor(PieceColorType color)
+        {
+            Material material = LoadColorMaterial(isUpGate: true, color);
+            return ExtractMaterialTint(material, color);
+        }
+
+        private static Color ExtractMaterialTint(Material material, PieceColorType color)
+        {
             if (material != null)
             {
                 if (material.HasProperty("_BaseColor"))
                     return material.GetColor("_BaseColor");
                 if (material.HasProperty("_Color"))
-                    return material.GetColor("_Color");
+                {
+                    Color tint = material.GetColor("_Color");
+                    if (tint.maxColorComponent > 0.01f && tint != Color.white)
+                        return tint;
+                }
             }
 
             return PieceColorPalette.GetColor(
@@ -353,56 +426,28 @@ namespace CarryBlockJam
 
         private static Material LoadColorMaterial(bool isUpGate, PieceColorType color)
         {
-            if (!PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey)
-                return null;
-
             string prefix = isUpGate ? "Mat_GateUp" : "Mat_GateBottom";
-            Material material = LoadMaterial($"{prefix}-{color}");
-            if (material != null)
-                return material;
+            string folder = isUpGate
+                ? CarryBlockJamArtMaterialUtility.GateUpMaterialsFolder
+                : CarryBlockJamArtMaterialUtility.GateBottomMaterialsFolder;
 
-            // Map colors without dedicated gate mats onto the closest art gate tint.
-            string fallbackSuffix = color switch
-            {
-                PieceColorType.Yellow or PieceColorType.Orange or PieceColorType.Amber
-                    or PieceColorType.Apricot or PieceColorType.Cherry => "Red",
-                PieceColorType.Lime or PieceColorType.GreenDark or PieceColorType.GreenOlive
-                    or PieceColorType.SeaGreen => "Green",
-                PieceColorType.Lightblue or PieceColorType.Navy or PieceColorType.White => "Blue",
-                PieceColorType.Pink or PieceColorType.Lilac or PieceColorType.Plum
-                    or PieceColorType.Brown or PieceColorType.Hidden => "Purple",
-                _ => null,
-            };
+            if (!PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey)
+                return CarryBlockJamArtMaterialUtility.LoadMaterial(folder, prefix, "Materials/Gates");
 
-            if (!string.IsNullOrEmpty(fallbackSuffix))
-            {
-                material = LoadMaterial($"{prefix}-{fallbackSuffix}");
-                if (material != null)
-                    return material;
-            }
-
-            return PieceColorPalette.GetMaterial(color);
+            return CarryBlockJamArtMaterialUtility.LoadColoredMaterial(
+                folder,
+                prefix,
+                color,
+                "Materials/Gates");
         }
 
         private static Material LoadMaterial(string materialName)
         {
-            if (string.IsNullOrEmpty(materialName))
-                return null;
-
-            if (MaterialCache.TryGetValue(materialName, out Material cached) && cached != null)
-                return cached;
-
-            Material material = null;
-#if UNITY_EDITOR
-            material = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialsFolder}/{materialName}.mat");
-#endif
-            if (material == null)
-                material = Resources.Load<Material>($"Materials/Gates/{materialName}");
-
-            if (material != null)
-                MaterialCache[materialName] = material;
-
-            return material;
+            bool isUpGate = materialName != null && materialName.StartsWith("Mat_GateUp");
+            string folder = isUpGate
+                ? CarryBlockJamArtMaterialUtility.GateUpMaterialsFolder
+                : CarryBlockJamArtMaterialUtility.GateBottomMaterialsFolder;
+            return CarryBlockJamArtMaterialUtility.LoadMaterial(folder, materialName, "Materials/Gates");
         }
     }
 }

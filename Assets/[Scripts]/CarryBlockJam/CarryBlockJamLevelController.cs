@@ -190,7 +190,9 @@ namespace CarryBlockJam
             exitObject.transform.SetParent(exitsRoot, false);
             exitObject.transform.localPosition = GetExitLocalPosition(grid, definition) + definition.positionOffset;
             exitObject.transform.localRotation = Quaternion.Euler(definition.rotation);
-            exitObject.transform.localScale = Vector3.one;
+            exitObject.transform.localScale = definition.modelScale == Vector3.zero
+                ? Vector3.one
+                : definition.modelScale;
 
             CarryBlockJamExit exit = exitObject.AddComponent<CarryBlockJamExit>();
             exit.Configure(definition);
