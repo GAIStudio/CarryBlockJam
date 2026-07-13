@@ -40,8 +40,7 @@ namespace CarryBlockJam
         public CarryBlockJamPrimitiveVisualSettings plateVisual = new CarryBlockJamPrimitiveVisualSettings
         {
             primitiveType = PrimitiveType.Cylinder,
-            localScale = new Vector3(0.9f, 0.15f, 0.9f),
-            localRotation = new Vector3(90f, 0f, 0f),
+            localScale = Vector3.one,
         };
 
         [Header("Exits")]

@@ -13,11 +13,14 @@ namespace CarryBlockJam
     [DisallowMultipleComponent]
     public class CarryBlockJamBoardPiece : MonoBehaviour
     {
+        private const float TableToPlateClearance = 0.02f;
+        private const float PlateToPlateClearance = 0.02f;
+
         [SerializeField] private CarryBlockJamPieceKind kind;
         [SerializeField] private PieceColorType color = PieceColorType.None;
         [SerializeField] private Vector3 gridOffset;
         [SerializeField] private Vector3 carriedOffset = new Vector3(0f, 1.55f, 0f);
-        [SerializeField] private Vector3 stackedOffset = new Vector3(0f, 0.72f, 0f);
+        [SerializeField] private Vector3 stackedOffset = new Vector3(0f, 0.3f, 0f);
         [SerializeField] private Vector3 gridRotationEuler;
 
         [SerializeField] private bool isColorHidden;
@@ -53,20 +56,32 @@ namespace CarryBlockJam
             gridRotationEuler = pieceGridRotationEuler;
             if (pieceStackedOffset != default)
                 stackedOffset = pieceStackedOffset;
+            else if (pieceKind == CarryBlockJamPieceKind.Box)
+                stackedOffset = new Vector3(0f, 0.55f, 0f);
+            else if (pieceKind == CarryBlockJamPieceKind.Plate)
+                stackedOffset = new Vector3(0f, 0.25f, 0f);
         }
 
         public void SetStackedOffset(Vector3 offset) => stackedOffset = offset;
 
         /// <summary>
-        /// Local position where the next plate should sit on this piece.
-        /// Tables use the mesh top; plates keep their configured stack step.
+        /// Local position for <paramref name="incomingPlate"/> so it rests above this piece with a gap.
         /// </summary>
-        public Vector3 GetStackAttachLocalPosition()
+        public Vector3 GetStackAttachLocalPosition(CarryBlockJamBoardPiece incomingPlate = null)
         {
-            if (kind == CarryBlockJamPieceKind.Box && TryGetLocalRendererTopY(out float topY))
-                return new Vector3(0f, topY + 0.02f, 0f);
+            float clearance = kind == CarryBlockJamPieceKind.Box
+                ? TableToPlateClearance
+                : PlateToPlateClearance;
 
-            return stackedOffset;
+            if (!TryGetVisualLocalTopY(out float baseTop))
+                return stackedOffset;
+
+            float incomingBottom = 0f;
+            if (incomingPlate != null)
+                incomingPlate.TryGetVisualLocalBottomY(out incomingBottom);
+
+            // Sit the incoming plate's mesh bottom just above this piece's mesh top.
+            return new Vector3(0f, baseTop + clearance - incomingBottom, 0f);
         }
 
         public void SetColorHidden(bool hidden) => isColorHidden = hidden;
@@ -112,7 +127,7 @@ namespace CarryBlockJam
 
             ClearStackLinks();
             transform.SetParent(basePiece.transform, false);
-            transform.localPosition = basePiece.GetStackAttachLocalPosition();
+            transform.localPosition = basePiece.GetStackAttachLocalPosition(this);
             transform.localRotation = Quaternion.Euler(gridRotationEuler);
             Row = basePiece.Row;
             Column = basePiece.Column;
@@ -132,33 +147,65 @@ namespace CarryBlockJam
             StackedAbove = null;
         }
 
-        private bool TryGetLocalRendererTopY(out float topY)
+        private bool TryGetVisualLocalTopY(out float topY)
         {
+            return TryGetVisualLocalExtents(out _, out topY);
+        }
+
+        private bool TryGetVisualLocalBottomY(out float bottomY)
+        {
+            return TryGetVisualLocalExtents(out bottomY, out _);
+        }
+
+        private bool TryGetVisualLocalExtents(out float bottomY, out float topY)
+        {
+            bottomY = 0f;
             topY = 0f;
-            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+
+            Transform visual = transform.Find("Visual");
+            if (visual == null)
+                return false;
+
+            MeshFilter meshFilter = visual.GetComponentInChildren<MeshFilter>(true);
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+                return false;
+
+            Bounds meshBounds = meshFilter.sharedMesh.bounds;
+            Transform meshTransform = meshFilter.transform;
             bool found = false;
+            float minY = float.MaxValue;
             float maxY = float.MinValue;
 
-            for (int i = 0; i < renderers.Length; i++)
+            Vector3 center = meshBounds.center;
+            Vector3 extents = meshBounds.extents;
+            for (int x = -1; x <= 1; x += 2)
             {
-                Renderer renderer = renderers[i];
-                if (renderer == null || !renderer.enabled)
-                    continue;
-
-                Bounds worldBounds = renderer.bounds;
-                Vector3 localMin = transform.InverseTransformPoint(worldBounds.min);
-                Vector3 localMax = transform.InverseTransformPoint(worldBounds.max);
-                float rendererTop = Mathf.Max(localMin.y, localMax.y);
-                if (!found || rendererTop > maxY)
+                for (int y = -1; y <= 1; y += 2)
                 {
-                    maxY = rendererTop;
-                    found = true;
+                    for (int z = -1; z <= 1; z += 2)
+                    {
+                        Vector3 corner = center + Vector3.Scale(extents, new Vector3(x, y, z));
+                        Vector3 world = meshTransform.TransformPoint(corner);
+                        Vector3 local = transform.InverseTransformPoint(world);
+                        if (!found)
+                        {
+                            minY = local.y;
+                            maxY = local.y;
+                            found = true;
+                        }
+                        else
+                        {
+                            minY = Mathf.Min(minY, local.y);
+                            maxY = Mathf.Max(maxY, local.y);
+                        }
+                    }
                 }
             }
 
             if (!found)
                 return false;
 
+            bottomY = minY;
             topY = maxY;
             return true;
         }

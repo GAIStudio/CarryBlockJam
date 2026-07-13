@@ -537,7 +537,8 @@ namespace CarryBlockJam
 
                 plate.ClearStackLinks();
                 plate.transform.SetParent(GetPiecesRoot(), true);
-                Vector3 stackWorldTarget = basePiece.transform.TransformPoint(basePiece.GetStackAttachLocalPosition());
+                Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
+                    basePiece.GetStackAttachLocalPosition(plate));
                 sequence.Append(plate.transform.DOMove(stackWorldTarget, exitTravelDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {

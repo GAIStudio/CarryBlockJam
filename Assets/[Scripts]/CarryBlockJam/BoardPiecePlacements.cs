@@ -51,8 +51,8 @@ namespace CarryBlockJam
         {
             return new BoardPieceVisualSettings
             {
-                scale = new Vector3(0.9f, 0.16f, 0.9f),
-                offset = new Vector3(0f, 0.18f, 0f),
+                scale = Vector3.one,
+                offset = new Vector3(0f, 0.75f, 0f),
             };
         }
     }

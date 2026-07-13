@@ -17,6 +17,7 @@ namespace CarryBlockJam
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
+        private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
         private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
         private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
 
@@ -96,6 +97,7 @@ namespace CarryBlockJam
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
 
             EnsureTableVisualDefaults(tableVisual);
+            EnsurePlateVisualDefaults(plateVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
 
             LevelData levelData = ResolveLevelData();
@@ -112,6 +114,15 @@ namespace CarryBlockJam
 
             if (settings.model == null)
                 settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(TableModelPath);
+        }
+
+        private static void EnsurePlateVisualDefaults(BoardPieceVisualSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            if (settings.model == null)
+                settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(PlateModelPath);
         }
 
         private static void EnsureFrozenTableVisualDefaults(BoardFrozenBoxVisualSettings settings)
@@ -141,6 +152,8 @@ namespace CarryBlockJam
 
             if (plateVisual == null)
                 plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
+
+            EnsurePlateVisualDefaults(plateVisual);
         }
 #endif
 
@@ -471,12 +484,12 @@ namespace CarryBlockJam
                 plateObject.transform.localRotation = Quaternion.identity;
                 plateObject.transform.localScale = Vector3.one;
 
-                CreatePieceVisual(plateVisual, "Visual", plateObject.transform, placement.color, PrimitiveType.Cylinder);
+                CreatePlateVisual(plateVisual, "Visual", plateObject.transform, placement.color);
                 CarryBlockJamBoardPiece piece = plateObject.AddComponent<CarryBlockJamBoardPiece>();
                 piece.Initialize(
                     CarryBlockJamPieceKind.Plate,
                     placement.color,
-                    plateVisual != null ? plateVisual.offset : Vector3.zero,
+                    plateVisual != null ? plateVisual.offset : new Vector3(0f, 0.75f, 0f),
                     new Vector3(0f, 1.15f, 0f));
 
                 piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
@@ -1194,6 +1207,59 @@ namespace CarryBlockJam
 
             if (resolvedVisual.model != null)
                 CarryBlockJamArtTableUtility.ApplyTableColor(visualObject.transform, color);
+            else if (resolvedVisual.material != null)
+            {
+                Renderer renderer = visualObject.GetComponentInChildren<Renderer>();
+                if (renderer != null)
+                    renderer.sharedMaterial = resolvedVisual.material;
+            }
+            else
+            {
+                GamePiece piece = visualObject.GetComponent<GamePiece>();
+                if (piece != null)
+                    piece.ApplyColor(color);
+            }
+
+            Collider[] colliders = visualObject.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                DestroyObject(colliders[i]);
+
+            return visualObject;
+        }
+
+        private GameObject CreatePlateVisual(
+            BoardPieceVisualSettings visual,
+            string objectName,
+            Transform parent,
+            PieceColorType color)
+        {
+            BoardPieceVisualSettings resolvedVisual = visual ?? BoardPieceVisualSettings.CreatePlateDefault();
+            GameObject visualObject;
+
+            if (resolvedVisual.model != null)
+            {
+                visualObject = Instantiate(resolvedVisual.model, parent, false);
+                visualObject.name = objectName;
+            }
+            else
+            {
+                visualObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                visualObject.name = objectName;
+                visualObject.transform.SetParent(parent, false);
+                DestroyObject(visualObject.GetComponent<Collider>());
+            }
+
+            visualObject.transform.localPosition = Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.identity;
+            visualObject.transform.localScale = resolvedVisual.scale == Vector3.zero
+                ? Vector3.one
+                : resolvedVisual.scale;
+
+            if (visualObject.GetComponent<GamePiece>() == null)
+                visualObject.AddComponent<GamePiece>();
+
+            if (resolvedVisual.model != null)
+                CarryBlockJamArtPlateUtility.ApplyPlateColor(visualObject.transform, color);
             else if (resolvedVisual.material != null)
             {
                 Renderer renderer = visualObject.GetComponentInChildren<Renderer>();
