@@ -321,6 +321,8 @@ namespace CarryBlockJam
             if (piece == null)
                 return null;
 
+            // Capture the table before stack links are cleared.
+            CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
             var pickupPieces = new List<CarryBlockJamBoardPiece>();
             CarryBlockJamBoardPiece current = GetPickupBasePiece(piece);
             CarryBlockJamBoardPiece firstRemaining = null;
@@ -347,6 +349,9 @@ namespace CarryBlockJam
 
                 current = nextAbove;
             }
+
+            if (firstRemaining == null)
+                firstRemaining = storageBox;
 
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
                 cell.Occupant = firstRemaining != null ? firstRemaining.gameObject : null;
@@ -1248,8 +1253,10 @@ namespace CarryBlockJam
             if (piece == null)
                 return null;
 
+            // Always start at the bottom of the stack so a table under plates stays
+            // registered as the cell occupant after plates are picked up.
             CarryBlockJamBoardPiece current = piece;
-            while (current.StackedBelow != null && current.StackedBelow.Kind == CarryBlockJamPieceKind.Plate)
+            while (current.StackedBelow != null)
                 current = current.StackedBelow;
 
             return current;
