@@ -31,10 +31,10 @@ namespace CarryBlockJam
         };
 
         [Tooltip("Grid offset applied when spawning the stickman. Y lifts the model above the cell.")]
-        public Vector3 stickmanOffset = new Vector3(0f, 1.75f, 0f);
+        public Vector3 stickmanOffset = new Vector3(0f, 1.3f, 0f);
 
-        [Tooltip("Y offset for StandartWalk, CarryWalking, and CarryingIdle only. Empty start idle is unchanged.")]
-        public Vector3 stickmanCarryOffset = new Vector3(0f, -0.75f, 0f);
+        [Tooltip("Visual height compensation for walk/carry clips vs EmptyIdle bind pose. Blended with animator transitions.")]
+        public Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
 
         [Tooltip("Local euler rotation applied to the stickman visual. Y=180 faces the camera.")]
         public Vector3 stickmanRotation = new Vector3(0f, 180f, 0f);

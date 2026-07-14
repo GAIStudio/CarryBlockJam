@@ -19,7 +19,7 @@ namespace CarryBlockJam
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.40f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
-        [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.75f, 0f);
+        [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -418,7 +418,6 @@ namespace CarryBlockJam
                     if (!IsBoxOwnedCell(targetRow, targetColumn))
                     {
                         _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), targetRow, targetColumn);
-                        ApplyStickmanWalkHeight();
                     }
                 });
             }
@@ -574,10 +573,9 @@ namespace CarryBlockJam
 
         private Vector3 GetPieceLocalPosition(CarryBlockJamBoardPiece piece, int row, int column)
         {
-            Vector3 position = _grid.GetLocalPosition(row, column) + piece.GridOffset;
-            if (piece == _cylinder && ShouldApplyStickmanWalkOffset)
-                position += ResolveStickmanWalkOffset();
-            return position;
+            // Stickman root stays on a single grid height. Walk/carry pose height
+            // is compensated on the Visual child, not by hopping the root.
+            return _grid.GetLocalPosition(row, column) + piece.GridOffset;
         }
 
         private void ResolveGameplayReferences()
@@ -611,7 +609,10 @@ namespace CarryBlockJam
             }
 
             if (_stickmanAnimator != null && _stickmanAnimator.transform.IsChildOf(_cylinder.transform))
+            {
+                SyncStickmanWalkHeightOffset();
                 return;
+            }
 
             RuntimeAnimatorController controller = null;
             CarryBlockJamRuntimePieceSpawner spawner = GetComponent<CarryBlockJamRuntimePieceSpawner>();
@@ -619,6 +620,7 @@ namespace CarryBlockJam
                 controller = spawner.StickmanAnimatorController;
 
             _stickmanAnimator = CarryBlockJamStickmanAnimator.EnsureOnCylinder(_cylinder.transform, controller);
+            SyncStickmanWalkHeightOffset();
             RefreshStickmanAnimation(moving: false);
         }
 
@@ -628,12 +630,17 @@ namespace CarryBlockJam
                 EnsureStickmanAnimator();
 
             _stickmanMoving = moving;
+            SyncStickmanWalkHeightOffset();
             _stickmanAnimator?.SetState(moving, HasCarriedPlates);
-            ApplyStickmanWalkHeight();
         }
 
-        // StandartWalk, CarryWalking, and CarryingIdle only — never the empty start idle.
-        private bool ShouldApplyStickmanWalkOffset => _stickmanMoving || HasCarriedPlates;
+        private void SyncStickmanWalkHeightOffset()
+        {
+            if (_stickmanAnimator == null)
+                return;
+
+            _stickmanAnimator.SetAnimatedHeightOffset(ResolveStickmanWalkOffset());
+        }
 
         private Vector3 ResolveStickmanWalkOffset()
         {
@@ -643,19 +650,12 @@ namespace CarryBlockJam
             return stickmanCarryOffset;
         }
 
-        private void ApplyStickmanWalkHeight()
+        private Transform GetStickmanVisual()
         {
-            if (_cylinder == null || _grid == null)
-                return;
+            if (_cylinder == null)
+                return null;
 
-            if (_cylinder.Row < 0 || _cylinder.Column < 0)
-                return;
-
-            Transform visual = _cylinder.transform.Find("Visual");
-            if (visual != null)
-                visual.localPosition = Vector3.zero;
-
-            _cylinder.transform.localPosition = GetPieceLocalPosition(_cylinder, _cylinder.Row, _cylinder.Column);
+            return _cylinder.transform.Find("Visual");
         }
 
         private void FaceStickmanToward(Vector3 localTarget)
@@ -668,8 +668,9 @@ namespace CarryBlockJam
             if (flatDelta.sqrMagnitude < 0.0001f)
                 return;
 
-            Transform visual = _cylinder.transform.Find("Visual");
+            Transform visual = GetStickmanVisual();
             Transform faceRoot = visual != null ? visual : _cylinder.transform;
+            // LateUpdate on the animator driver owns Visual localPosition (height blend).
             faceRoot.localRotation = Quaternion.LookRotation(flatDelta.normalized, Vector3.up);
         }
 
@@ -1185,7 +1186,7 @@ namespace CarryBlockJam
             if (_cylinder == null)
                 return transform;
 
-            Transform visual = _cylinder.transform.Find("Visual");
+            Transform visual = GetStickmanVisual();
             return visual != null ? visual : _cylinder.transform;
         }
 

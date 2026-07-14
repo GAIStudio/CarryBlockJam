@@ -34,7 +34,7 @@ MonoBehaviour:
     localRotation: {x: 0, y: 0, z: 0}
     tintWithPieceColor: 0
   stickmanOffset: {x: 0, y: 1.3, z: 0}
-  stickmanCarryOffset: {x: 0, y: -0.75, z: 0}
+  stickmanCarryOffset: {x: 0, y: -0.7, z: 0}
   stickmanRotation: {x: 0, y: 180, z: 0}
   tableVisual:
     prefab: {fileID: 0}
@@ -65,7 +65,7 @@ MonoBehaviour:
     localRotation: {x: 0, y: 0, z: 0}
     tintWithPieceColor: 0
   topExitModelOffset: {x: 0, y: 0, z: 0.035}
-  bottomExitModelOffset: {x: 0, y: 0, z: -0.3}
+  bottomExitModelOffset: {x: 0, y: 0, z: -0.2}
   boardCellColor: 7
   wallColor: 7
   exitCarColor: 21

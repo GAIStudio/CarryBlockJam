@@ -35,6 +35,13 @@ namespace CarryBlockJam.Editor
         [MenuItem("CarryBlockJam/Setup Stickman Animator Controller")]
         public static void Setup()
         {
+            BakeFeetHeightOnClip(WalkPath, loop: true);
+            BakeFeetHeightOnClip(CarryIdlePath, loop: true);
+            BakeFeetHeightOnClip(CarryWalkPath, loop: true);
+            AssetDatabase.ImportAsset(WalkPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(CarryIdlePath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(CarryWalkPath, ImportAssetOptions.ForceUpdate);
+
             AnimationClip walk = LoadFirstClip(WalkPath);
             AnimationClip carryIdle = LoadFirstClip(CarryIdlePath);
             AnimationClip carryWalk = LoadFirstClip(CarryWalkPath);
@@ -47,9 +54,9 @@ namespace CarryBlockJam.Editor
                 return;
             }
 
-            EnsureLoop(walk);
-            EnsureLoop(carryIdle);
-            EnsureLoop(carryWalk);
+            EnsureLoopAndFeetBake(walk);
+            EnsureLoopAndFeetBake(carryIdle);
+            EnsureLoopAndFeetBake(carryWalk);
 
             string folder = Path.GetDirectoryName(ControllerPath)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(folder) && !AssetDatabase.IsValidFolder(folder))
@@ -81,6 +88,10 @@ namespace CarryBlockJam.Editor
             AnimatorState carryIdleState = stateMachine.AddState("CarryingIdle", new Vector3(450f, 80f, 0f));
             AnimatorState carryWalkState = stateMachine.AddState("CarryWalking", new Vector3(700f, 0f, 0f));
 
+            // EmptyIdle keeps null motion (avatar bind). Clips bake Root Y from feet so
+            // walk/carry hip height matches bind; StickmanAnimator still blends any leftover
+            // Walk Anim Offset against transition weights so stop does not hop.
+            emptyIdle.motion = null;
             walkState.motion = walk;
             carryIdleState.motion = carryIdle;
             carryWalkState.motion = carryWalk;
@@ -125,6 +136,27 @@ namespace CarryBlockJam.Editor
             Setup();
         }
 
+        [MenuItem("CarryBlockJam/Bake Stickman Clip Feet Height")]
+        public static void BakeFeetHeightMenu()
+        {
+            BakeFeetHeightOnClip(WalkPath, loop: true);
+            BakeFeetHeightOnClip(CarryIdlePath, loop: true);
+            BakeFeetHeightOnClip(CarryWalkPath, loop: true);
+            AssetDatabase.ImportAsset(WalkPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(CarryIdlePath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(CarryWalkPath, ImportAssetOptions.ForceUpdate);
+            EnsureLoopAndFeetBake(LoadFirstClip(WalkPath));
+            EnsureLoopAndFeetBake(LoadFirstClip(CarryIdlePath));
+            EnsureLoopAndFeetBake(LoadFirstClip(CarryWalkPath));
+            AssetDatabase.SaveAssets();
+            Debug.Log("[CarryBlockJam] Baked Root Transform Position Y (Feet) on Stickman clips.");
+        }
+
+        public static void BakeFeetHeightBatch()
+        {
+            BakeFeetHeightMenu();
+        }
+
         private static void AddBoolTransition(
             AnimatorState from,
             AnimatorState to,
@@ -134,7 +166,7 @@ namespace CarryBlockJam.Editor
             AnimatorStateTransition transition = from.AddTransition(to);
             transition.hasExitTime = false;
             transition.hasFixedDuration = true;
-            transition.duration = 0.12f;
+            transition.duration = 0.25f;
             transition.offset = 0f;
             transition.AddCondition(
                 moving ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot,
@@ -161,18 +193,57 @@ namespace CarryBlockJam.Editor
             return null;
         }
 
-        private static void EnsureLoop(AnimationClip clip)
+        private static void EnsureLoopAndFeetBake(AnimationClip clip)
         {
             if (clip == null)
                 return;
 
             AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
-            if (settings.loopTime)
-                return;
-
             settings.loopTime = true;
+            // Match avatar foot height across clips (prevents stand↔walk hop).
+            settings.keepOriginalPositionY = false;
+            settings.heightFromFeet = true;
+            settings.keepOriginalPositionXZ = true;
             AnimationUtility.SetAnimationClipSettings(clip, settings);
             EditorUtility.SetDirty(clip);
+        }
+
+        private static void BakeFeetHeightOnClip(string assetPath, bool loop)
+        {
+            ModelImporter importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            if (importer == null)
+            {
+                Debug.LogWarning("[CarryBlockJam] Missing ModelImporter for " + assetPath);
+                return;
+            }
+
+            // Prefer defaultClipAnimations so Unity fills take/frame data correctly.
+            // Hand-written clipAnimations in .meta break the ModelImporter inspector
+            // (MaskFromClip / array out of bounds).
+            ModelImporterClipAnimation[] defaults = importer.defaultClipAnimations;
+            if (defaults == null || defaults.Length == 0)
+            {
+                Debug.LogWarning("[CarryBlockJam] No default clip animations on " + assetPath);
+                return;
+            }
+
+            ModelImporterClipAnimation[] clips = new ModelImporterClipAnimation[defaults.Length];
+            for (int i = 0; i < defaults.Length; i++)
+            {
+                clips[i] = defaults[i];
+                clips[i].loopTime = loop;
+                clips[i].lockRootHeightY = true;
+                clips[i].keepOriginalPositionY = false;
+                clips[i].heightFromFeet = true;
+                clips[i].keepOriginalPositionXZ = true;
+                clips[i].lockRootPositionXZ = false;
+                clips[i].lockRootRotation = true;
+                clips[i].keepOriginalOrientation = false;
+            }
+
+            importer.clipAnimations = clips;
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
         }
     }
 }

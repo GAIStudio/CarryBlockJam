@@ -120,6 +120,9 @@ namespace CarryBlockJam.Editor
             settings.stickmanOffset = EditorGUILayout.Vector3Field("Offset", settings.stickmanOffset);
             settings.stickmanCarryOffset = EditorGUILayout.Vector3Field("Walk Anim Offset", settings.stickmanCarryOffset);
             settings.stickmanRotation = EditorGUILayout.Vector3Field("Rotation", settings.stickmanRotation);
+            EditorGUILayout.HelpBox(
+                "Offset is root grid height. Walk Anim Offset compensates Mixamo walk/carry vs EmptyIdle bind pose; it blends with animator transitions.",
+                MessageType.None);
             EditorGUILayout.EndVertical();
         }
 
