@@ -534,6 +534,8 @@ namespace GAITemplate.Editor
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUI.BeginChangeCheck();
+            DrawCarryBlockJamTimerSettings(carryBlockJamProperty);
+            EditorGUILayout.Space(6f);
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
             SerializedProperty frozenVisualProperty = carryBlockJamProperty.FindPropertyRelative("frozenTableVisual");
             CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
@@ -550,11 +552,15 @@ namespace GAITemplate.Editor
             CarryBlockJamFixedExitsEditorUtility.DrawFixedExits(exitsProperty, _columns);
             EditorGUILayout.Space(6f);
 
+            SerializedProperty hasTimerProperty = carryBlockJamProperty.FindPropertyRelative("hasTimer");
+            SerializedProperty timeLimitProperty = carryBlockJamProperty.FindPropertyRelative("timeLimitSeconds");
             DrawCarryBlockJamSettingsWithoutFrozenVisual(
                 carryBlockJamProperty,
                 frozenVisualProperty,
                 curtainVisualProperty,
-                exitsProperty);
+                exitsProperty,
+                hasTimerProperty,
+                timeLimitProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -568,6 +574,30 @@ namespace GAITemplate.Editor
             {
                 _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
             }
+        }
+
+        private static void DrawCarryBlockJamTimerSettings(SerializedProperty carryBlockJamProperty)
+        {
+            if (carryBlockJamProperty == null)
+                return;
+
+            SerializedProperty hasTimerProperty = carryBlockJamProperty.FindPropertyRelative("hasTimer");
+            SerializedProperty timeLimitProperty = carryBlockJamProperty.FindPropertyRelative("timeLimitSeconds");
+            if (hasTimerProperty == null || timeLimitProperty == null)
+                return;
+
+            EditorGUILayout.LabelField("Timer", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.PropertyField(hasTimerProperty, new GUIContent("Has Timer"));
+            using (new EditorGUI.DisabledScope(!hasTimerProperty.boolValue))
+            {
+                EditorGUILayout.PropertyField(timeLimitProperty, new GUIContent("Time Limit (Seconds)"));
+            }
+
+            EditorGUILayout.HelpBox(
+                "When enabled, a countdown is shown under the level UI. Time reaching zero fails the level.",
+                MessageType.None);
+            EditorGUILayout.EndVertical();
         }
 
         private static void DrawCarryBlockJamTablePlacementHelp(SerializedProperty carryBlockJamProperty)
@@ -587,7 +617,9 @@ namespace GAITemplate.Editor
             SerializedProperty carryBlockJamProperty,
             SerializedProperty frozenVisualProperty,
             SerializedProperty curtainVisualProperty = null,
-            SerializedProperty exitsProperty = null)
+            SerializedProperty exitsProperty = null,
+            SerializedProperty hasTimerProperty = null,
+            SerializedProperty timeLimitProperty = null)
         {
             if (carryBlockJamProperty == null)
                 return;
@@ -603,6 +635,10 @@ namespace GAITemplate.Editor
                 if (curtainVisualProperty != null && iterator.propertyPath == curtainVisualProperty.propertyPath)
                     continue;
                 if (exitsProperty != null && iterator.propertyPath == exitsProperty.propertyPath)
+                    continue;
+                if (hasTimerProperty != null && iterator.propertyPath == hasTimerProperty.propertyPath)
+                    continue;
+                if (timeLimitProperty != null && iterator.propertyPath == timeLimitProperty.propertyPath)
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);

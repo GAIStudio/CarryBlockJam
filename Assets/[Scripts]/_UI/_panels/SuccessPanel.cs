@@ -98,10 +98,11 @@ namespace GAITemplate
             featureProgression?.Refresh();
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
             StopEmojiLoop();
             RemoveCameraFromStack();
+            base.OnDisable();
         }
 
         /// <summary>Continue button tıklanınca çağrılır → coin spawn + uçma → restart.</summary>

@@ -48,6 +48,12 @@ namespace GAITemplate
             BuildSequence().Play();
         }
 
+        protected virtual void OnDisable()
+        {
+            _shown = false;
+            DOTween.Kill(this);
+        }
+
         public virtual void OnPressRestart()
         {
             if (GameManager.instance != null)

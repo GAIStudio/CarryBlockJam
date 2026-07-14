@@ -13,12 +13,11 @@ namespace CarryBlockJam
     {
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private float swipeThresholdPixels = 40f;
-        [SerializeField] private float moveDurationPerCell = 0.14f;
-        [SerializeField] private float moveJumpPower = 0.18f;
+        [SerializeField] private float moveDurationPerCell = 0.09f;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
-        [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.52f);
+        [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.40f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.75f, 0f);
 
@@ -100,12 +99,19 @@ namespace CarryBlockJam
             if (_cylinder == null)
                 ResolveGameplayReferences();
 
-            if (!TryGetNearestGridCell(screenPosition, out int row, out int column))
+            if (_cylinder == null)
+                return;
+
+            // Confirm the gesture is over the board, but movement always originates
+            // from the stickman's cell. Raycasting the finger onto the floor near a
+            // tall stickman (especially on the top rows) often hits the cell behind
+            // him, which made "swipe up into row 0" look like a zero-length move.
+            if (!TryGetNearestGridCell(screenPosition, out _, out _))
                 return;
 
             _swipeStartScreen = screenPosition;
-            _swipeStartRow = row;
-            _swipeStartColumn = column;
+            _swipeStartRow = _cylinder.Row;
+            _swipeStartColumn = _cylinder.Column;
             _trackingSwipe = true;
             EnsureHighlightRoot();
             ShowHighlights(false);
@@ -404,11 +410,9 @@ namespace CarryBlockJam
 
                 Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
                 sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
-                sequence.Append(_cylinder.transform.DOLocalJump(
+                sequence.Append(_cylinder.transform.DOLocalMove(
                     targetPosition,
-                    moveJumpPower,
-                    1,
-                    moveDurationPerCell).SetEase(Ease.OutQuad));
+                    moveDurationPerCell).SetEase(Ease.Linear));
                 sequence.AppendCallback(() =>
                 {
                     if (!IsBoxOwnedCell(targetRow, targetColumn))

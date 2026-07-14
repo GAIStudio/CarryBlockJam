@@ -9,6 +9,12 @@ namespace CarryBlockJam
     [Serializable]
     public class CarryBlockJamLevelSettings
     {
+        [Header("Timer")]
+        [Tooltip("When enabled, a countdown timer is shown under the level UI.")]
+        public bool hasTimer = false;
+        [Tooltip("Level time limit in seconds. When it reaches zero the level fails.")]
+        [Min(1f)] public float timeLimitSeconds = 60f;
+
         [Header("Board")]
         public Vector3 gridCellScale = CarryBlockJamSimpleBoard.DefaultCellScale;
         [Min(0.1f)] public float gridSpacingX = 1.1f;

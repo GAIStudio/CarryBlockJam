@@ -29,23 +29,49 @@ namespace GAITemplate
 
         private void Start()
         {
+            if (LevelManager.instance == null)
+            {
+                Debug.LogWarning("[UIManager] LevelManager is missing. End/fail UI will not bind.");
+                return;
+            }
+
             LevelManager.instance.startEvent.AddListener(StartGame);
             LevelManager.instance.endGameEvent.AddListener(EndGame);
         }
 
         public void StartGame()
         {
-            gamePanel.ActiveSmooth(true);
-            mainPanel.ActiveSmooth(false);
+            if (gamePanel != null)
+                gamePanel.ActiveSmooth(true);
+            if (mainPanel != null)
+                mainPanel.ActiveSmooth(false);
         }
 
         public void EndGame(bool success)
         {
-            endPanel.ActiveSmooth(true);
-            gamePanel.ActiveSmooth(false);
+            if (endPanel == null)
+            {
+                Debug.LogWarning("[UIManager] EndPanel is not assigned. Cannot show success/fail UI.");
+                return;
+            }
 
-            if (success) endPanel.Success();
-            else endPanel.Fail();
+            if (success)
+            {
+                if (endPanel.fail != null)
+                    endPanel.fail.gameObject.SetActive(false);
+                endPanel.ActiveSmooth(true);
+                endPanel.Success();
+            }
+            else
+            {
+                if (endPanel.success != null)
+                    endPanel.success.gameObject.SetActive(false);
+                endPanel.ActiveSmooth(true);
+                endPanel.Fail();
+            }
+
+            if (gamePanel != null)
+                gamePanel.ActiveSmooth(false);
         }
     }
 }

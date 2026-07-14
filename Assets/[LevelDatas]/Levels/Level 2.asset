@@ -171,6 +171,8 @@ MonoBehaviour:
     direction: 0
     tunnelPieces: 
   carryBlockJam:
+    hasTimer: 0
+    timeLimitSeconds: 60
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1.1
     gridSpacingZ: 1.1

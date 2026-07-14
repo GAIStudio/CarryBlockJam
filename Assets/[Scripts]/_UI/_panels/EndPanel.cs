@@ -16,12 +16,20 @@ namespace GAITemplate
 
         public void Success()
         {
-            if (success != null) success.Show();
+            if (fail != null)
+                fail.gameObject.SetActive(false);
+
+            if (success != null)
+                success.Show();
         }
 
         public void Fail()
         {
-            if (fail != null) fail.Show();
+            if (success != null)
+                success.gameObject.SetActive(false);
+
+            if (fail != null)
+                fail.Show();
         }
     }
 }
