@@ -125,8 +125,9 @@ namespace CarryBlockJam
 
             if (levelData.carryBlockJam != null)
             {
-                CarryBlockJamFixedExitSlots.EnsureFixedExits(
+                CarryBlockJamExitLayout.NormalizeExits(
                     levelData.carryBlockJam.exits,
+                    Mathf.Max(1, levelData.gridRows),
                     Mathf.Max(1, levelData.gridColumns));
 
                 cellScale = levelData.carryBlockJam.gridCellScale;

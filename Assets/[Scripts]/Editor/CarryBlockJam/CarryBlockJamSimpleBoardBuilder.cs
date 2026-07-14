@@ -434,6 +434,11 @@ namespace CarryBlockJam.Editor
             if (levelData?.carryBlockJam?.exits == null)
                 return;
 
+            CarryBlockJamExitLayout.NormalizeExits(
+                levelData.carryBlockJam.exits,
+                grid != null ? grid.Rows : board.Rows,
+                grid != null ? grid.Columns : board.Columns);
+
             for (int i = 0; i < levelData.carryBlockJam.exits.Count; i++)
                 BuildExit(board, grid, exitsRoot, levelData.carryBlockJam.exits[i], i);
         }

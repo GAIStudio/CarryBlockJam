@@ -10,6 +10,8 @@ namespace CarryBlockJam
         [SerializeField] private BoardBorderSide side;
         [SerializeField] private int startIndex;
         [SerializeField] private int length = 1;
+        [SerializeField] private int row = -1;
+        [SerializeField] private int column = -1;
         [SerializeField] private List<CarryBlockJamExitGoal> goals = new List<CarryBlockJamExitGoal>();
         [SerializeField] private int currentGoalIndex;
         [SerializeField] private int remainingPlateCount;
@@ -22,6 +24,8 @@ namespace CarryBlockJam
         public BoardBorderSide Side => side;
         public int StartIndex => startIndex;
         public int Length => length;
+        public int Row => row;
+        public int Column => column;
         public PieceColorType CurrentColor =>
             currentGoalIndex >= 0 && currentGoalIndex < goals.Count
                 ? goals[currentGoalIndex].color
@@ -37,6 +41,8 @@ namespace CarryBlockJam
             side = definition.side;
             startIndex = definition.startIndex;
             length = Mathf.Max(1, definition.length);
+            row = definition.row;
+            column = definition.column;
             goals = new List<CarryBlockJamExitGoal>(definition.goals ?? new List<CarryBlockJamExitGoal>());
             currentGoalIndex = 0;
             remainingPlateCount = goals.Count > 0 ? Mathf.Max(0, goals[0].requiredPlateCount) : 0;
@@ -90,20 +96,49 @@ namespace CarryBlockJam
         public bool CanAccept(PieceColorType color) =>
             !IsCompleted && color != PieceColorType.None && color == CurrentColor;
 
+        public int GetAcceptablePlateCount(PieceColorType color)
+        {
+            if (!CanAccept(color))
+                return 0;
+
+            return Mathf.Max(0, remainingPlateCount);
+        }
+
+        /// <summary>
+        /// Consumes up to <paramref name="plateCount"/> plates at once (updates label once).
+        /// Prefer <see cref="ConsumeOne"/> when animating deliveries one-by-one.
+        /// </summary>
         public int Consume(PieceColorType color, int plateCount)
         {
             if (!CanAccept(color) || plateCount <= 0)
                 return 0;
 
-            int consumed = Mathf.Min(remainingPlateCount, plateCount);
-            remainingPlateCount -= consumed;
+            int consumed = 0;
+            while (consumed < plateCount && CanAccept(color))
+            {
+                if (ConsumeOne(color) <= 0)
+                    break;
+                consumed++;
+            }
 
+            return consumed;
+        }
+
+        /// <summary>
+        /// Consumes a single matching plate and refreshes the goal label (x3 → x2 → x1 → hide).
+        /// </summary>
+        public int ConsumeOne(PieceColorType color)
+        {
+            if (!CanAccept(color) || remainingPlateCount <= 0)
+                return 0;
+
+            remainingPlateCount--;
             if (remainingPlateCount == 0)
                 AdvanceGoal();
             else
                 RefreshVisuals();
 
-            return consumed;
+            return 1;
         }
 
         private void AdvanceGoal()

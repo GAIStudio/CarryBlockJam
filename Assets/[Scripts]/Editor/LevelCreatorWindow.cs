@@ -199,7 +199,7 @@ namespace GAITemplate.Editor
                 CellTool.None => "Cell'e tıklayınca üzerindeki tüm flag'ler temizlenir. Renk dropdown'la seçilir.",
                 CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Hidden cell + color spawns a hidden CarryBlockJam table at that cell. " +
-                    "Other tables still auto-fill to match exit count.",
+                    "With No Auto Tables off, other tables may still auto-fill to match exits.",
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Ice cell + color spawns a frozen CarryBlockJam table. Set unlock moves below the cell. " +
                     "Each collected plate counts down until the table unlocks.",
@@ -479,6 +479,22 @@ namespace GAITemplate.Editor
 
             if (_levelData.hasTutorial)
             {
+                if (_levelData.tutorialStages == null)
+                    _levelData.tutorialStages = new System.Collections.Generic.List<TutorialStage>();
+
+                if (_levelData.tutorialStages.Count == 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Has Tutorial is on — add at least one stage so the hand can appear.",
+                        MessageType.Warning);
+                }
+
+                if (GUILayout.Button("Clear Tutorial Completed Pref (force show again)", GUILayout.Height(20f)))
+                {
+                    TutorialManager.ResetCompletion(_levelData);
+                    Debug.Log($"[Level Creator] Cleared tutorial completion for '{_levelData.name}'.");
+                }
+
                 GUILayout.Space(6f);
                 _levelData.tutorialTextWorldPosition = EditorGUILayout.Vector3Field(
                     "Text Position", _levelData.tutorialTextWorldPosition);
@@ -498,7 +514,15 @@ namespace GAITemplate.Editor
                 }
 
                 if (GUILayout.Button("+ Add Tutorial Stage", GUILayout.Height(22f)))
-                    _levelData.tutorialStages.Add(new TutorialStage());
+                {
+                    _levelData.tutorialStages.Add(new TutorialStage
+                    {
+                        stageName = $"Stage {_levelData.tutorialStages.Count + 1}",
+                        useGridHandPath = true,
+                        startCell = new Vector2Int(Mathf.Max(0, _rows / 2), Mathf.Max(0, _columns / 2 - 1)),
+                        targetCell = new Vector2Int(Mathf.Max(0, _rows / 2), Mathf.Min(_columns - 1, _columns / 2 + 1)),
+                    });
+                }
             }
 
             if (GUI.changed)
@@ -549,18 +573,31 @@ namespace GAITemplate.Editor
             EditorGUILayout.Space(6f);
 
             SerializedProperty exitsProperty = carryBlockJamProperty.FindPropertyRelative("exits");
-            CarryBlockJamFixedExitsEditorUtility.DrawFixedExits(exitsProperty, _columns);
+            CarryBlockJamFixedExitsEditorUtility.DrawExits(exitsProperty, _rows, _columns);
             EditorGUILayout.Space(6f);
 
             SerializedProperty hasTimerProperty = carryBlockJamProperty.FindPropertyRelative("hasTimer");
             SerializedProperty timeLimitProperty = carryBlockJamProperty.FindPropertyRelative("timeLimitSeconds");
+            SerializedProperty disableAutoTablesProperty =
+                carryBlockJamProperty.FindPropertyRelative("disableAutoTables");
+            SerializedProperty stickmanSpawnModeProperty =
+                carryBlockJamProperty.FindPropertyRelative("stickmanSpawnMode");
+            SerializedProperty fixedStickmanCellProperty =
+                carryBlockJamProperty.FindPropertyRelative("fixedStickmanCell");
+
+            DrawStickmanSpawnSettings(stickmanSpawnModeProperty, fixedStickmanCellProperty);
+            EditorGUILayout.Space(6f);
+
             DrawCarryBlockJamSettingsWithoutFrozenVisual(
                 carryBlockJamProperty,
                 frozenVisualProperty,
                 curtainVisualProperty,
                 exitsProperty,
                 hasTimerProperty,
-                timeLimitProperty);
+                timeLimitProperty,
+                disableAutoTablesProperty,
+                stickmanSpawnModeProperty,
+                fixedStickmanCellProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -605,12 +642,73 @@ namespace GAITemplate.Editor
             if (carryBlockJamProperty == null)
                 return;
 
+            EditorGUILayout.LabelField("Tables", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            SerializedProperty disableAutoTablesProperty =
+                carryBlockJamProperty.FindPropertyRelative("disableAutoTables");
+            if (disableAutoTablesProperty != null)
+            {
+                EditorGUILayout.PropertyField(
+                    disableAutoTablesProperty,
+                    new GUIContent(
+                        "No Auto Tables",
+                        "When ticked, tables are not auto-generated from exits. " +
+                        "Only manual / painted tables (Hidden, Ice, Curtain, tablePlacements) appear — or none."));
+            }
+
+            bool noAuto = disableAutoTablesProperty != null && disableAutoTablesProperty.boolValue;
             EditorGUILayout.HelpBox(
-                "Table count follows exit count. Paint Hidden/Ice/Curtain cells on the grid (set color; unlock moves for ice) " +
-                "or use tablePlacements. Missing tables are auto-generated. " +
-                "Hidden tables reveal when adjacent plates are collected. Frozen tables unlock after N collected plates. " +
-                "Curtain tables open when all plates of the curtain color are delivered to the matching exit.",
+                noAuto
+                    ? "Auto table generation is off. Paint Hidden/Ice/Curtain cells (with color) or leave the grid empty for no tables."
+                    : "By default, missing tables are auto-generated to match exits. Paint Hidden/Ice/Curtain cells or use tablePlacements for manual tables. " +
+                      "Hidden tables reveal when adjacent plates are collected. Frozen tables unlock after N collected plates. " +
+                      "Curtain tables open when all plates of the curtain color are delivered to the matching exit.",
                 MessageType.Info);
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawStickmanSpawnSettings(
+            SerializedProperty stickmanSpawnModeProperty,
+            SerializedProperty fixedStickmanCellProperty)
+        {
+            EditorGUILayout.LabelField("Stickman Spawn", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "Row / Col are 0-based (0 = first cell).",
+                MessageType.None);
+
+            if (stickmanSpawnModeProperty != null)
+                EditorGUILayout.PropertyField(stickmanSpawnModeProperty, new GUIContent("Spawn Mode"));
+
+            if (fixedStickmanCellProperty == null)
+                return;
+
+            bool showFixed =
+                stickmanSpawnModeProperty == null ||
+                stickmanSpawnModeProperty.enumValueIndex == (int)CarryBlockJamStickmanSpawnMode.FixedCell;
+
+            EditorGUI.BeginDisabledGroup(!showFixed);
+            SerializedProperty rowProperty = fixedStickmanCellProperty.FindPropertyRelative("row");
+            SerializedProperty columnProperty = fixedStickmanCellProperty.FindPropertyRelative("column");
+            if (rowProperty != null && columnProperty != null)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Fixed Cell", GUILayout.Width(70f));
+                EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
+                rowProperty.intValue = Mathf.Clamp(
+                    EditorGUILayout.IntField(rowProperty.intValue, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _rows - 1));
+                EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
+                columnProperty.intValue = Mathf.Clamp(
+                    EditorGUILayout.IntField(columnProperty.intValue, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _columns - 1));
+                EditorGUILayout.EndHorizontal();
+            }
+
+            EditorGUI.EndDisabledGroup();
         }
 
         private static void DrawCarryBlockJamSettingsWithoutFrozenVisual(
@@ -619,7 +717,10 @@ namespace GAITemplate.Editor
             SerializedProperty curtainVisualProperty = null,
             SerializedProperty exitsProperty = null,
             SerializedProperty hasTimerProperty = null,
-            SerializedProperty timeLimitProperty = null)
+            SerializedProperty timeLimitProperty = null,
+            SerializedProperty disableAutoTablesProperty = null,
+            SerializedProperty stickmanSpawnModeProperty = null,
+            SerializedProperty fixedStickmanCellProperty = null)
         {
             if (carryBlockJamProperty == null)
                 return;
@@ -639,6 +740,15 @@ namespace GAITemplate.Editor
                 if (hasTimerProperty != null && iterator.propertyPath == hasTimerProperty.propertyPath)
                     continue;
                 if (timeLimitProperty != null && iterator.propertyPath == timeLimitProperty.propertyPath)
+                    continue;
+                if (disableAutoTablesProperty != null &&
+                    iterator.propertyPath == disableAutoTablesProperty.propertyPath)
+                    continue;
+                if (stickmanSpawnModeProperty != null &&
+                    iterator.propertyPath == stickmanSpawnModeProperty.propertyPath)
+                    continue;
+                if (fixedStickmanCellProperty != null &&
+                    iterator.propertyPath == fixedStickmanCellProperty.propertyPath)
                     continue;
 
                 EditorGUILayout.PropertyField(iterator, true);
@@ -661,11 +771,70 @@ namespace GAITemplate.Editor
             EditorGUILayout.LabelField("Instruction");
             stage.instruction = EditorGUILayout.TextArea(stage.instruction, GUILayout.Height(40f));
 
-            stage.targetPos    = EditorGUILayout.Vector3Field("Target Pos",    stage.targetPos);
+            GUILayout.Space(4f);
+            stage.useGridHandPath = EditorGUILayout.Toggle(
+                new GUIContent("Use Grid Hand Path", "Loop hand between Start and Target grid cells."),
+                stage.useGridHandPath);
+
+            if (stage.useGridHandPath)
+            {
+                EditorGUILayout.LabelField("Start Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
+                int startRow = Mathf.Clamp(
+                    EditorGUILayout.IntField(stage.startCell.x, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _rows - 1));
+                EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
+                int startCol = Mathf.Clamp(
+                    EditorGUILayout.IntField(stage.startCell.y, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _columns - 1));
+                EditorGUILayout.EndHorizontal();
+                stage.startCell = new Vector2Int(startRow, startCol);
+                stage.startPositionOffset = EditorGUILayout.Vector3Field(
+                    "Start Position Offset",
+                    stage.startPositionOffset);
+
+                GUILayout.Space(4f);
+                EditorGUILayout.LabelField("Target Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
+                int targetRow = Mathf.Clamp(
+                    EditorGUILayout.IntField(stage.targetCell.x, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _rows - 1));
+                EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
+                int targetCol = Mathf.Clamp(
+                    EditorGUILayout.IntField(stage.targetCell.y, GUILayout.Width(48f)),
+                    0,
+                    Mathf.Max(0, _columns - 1));
+                EditorGUILayout.EndHorizontal();
+                stage.targetCell = new Vector2Int(targetRow, targetCol);
+                stage.targetPositionOffset = EditorGUILayout.Vector3Field(
+                    "Target Position Offset",
+                    stage.targetPositionOffset);
+
+                GUILayout.Space(4f);
+                stage.handMoveDuration = Mathf.Max(
+                    0.05f,
+                    EditorGUILayout.FloatField("Hand Move Duration", stage.handMoveDuration));
+                stage.handPauseAtEnds = Mathf.Max(
+                    0f,
+                    EditorGUILayout.FloatField("Pause At Ends", stage.handPauseAtEnds));
+            }
+            else
+            {
+                stage.targetPos = EditorGUILayout.Vector3Field("Target Pos (World)", stage.targetPos);
+                stage.targetPositionOffset = EditorGUILayout.Vector3Field(
+                    "Target Position Offset",
+                    stage.targetPositionOffset);
+            }
+
             stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
 
             GUILayout.Space(4f);
-            EditorGUILayout.LabelField("Clickable Cells (row, col)", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("Clickable Cells (0-based row, col)", EditorStyles.miniBoldLabel);
             DrawClickableCellsList(stage.clickableCells);
 
             EditorGUILayout.EndVertical();
@@ -813,7 +982,10 @@ namespace GAITemplate.Editor
 
             if (_levelData.carryBlockJam?.exits != null)
             {
-                CarryBlockJamFixedExitSlots.EnsureFixedExits(_levelData.carryBlockJam.exits, _columns);
+                CarryBlockJamExitLayout.NormalizeExits(
+                    _levelData.carryBlockJam.exits,
+                    _rows,
+                    _columns);
                 EditorUtility.SetDirty(_levelData);
             }
         }

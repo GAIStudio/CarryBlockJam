@@ -45,13 +45,26 @@ namespace CarryBlockJam
 
             ClearLegacyCubeExits(board.ExitsRoot);
             ClearExitComponents(gatesRoot);
-            ApplyGateModelOffsets(board, gatesRoot);
 
             PuzzleGrid grid = board.GetComponent<PuzzleGrid>();
             int columns = grid != null ? grid.Columns : board.Columns;
             int rows = grid != null ? grid.Rows : board.Rows;
+            CarryBlockJamExitLayout.NormalizeExits(levelData.carryBlockJam.exits, rows, columns);
+
             BoardExitLabelSettings labelSettings = board.ExitLabel;
+            CarryBlockJamPrefabSettings prefabSettings = board.PrefabSettings;
             HashSet<Transform> usedGates = new HashSet<Transform>();
+
+            // Start with every art gate hidden; only authored exits turn models back on.
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform gate = gatesRoot.GetChild(i);
+                if (gate == null)
+                    continue;
+
+                RemoveGoalLabel(gate);
+                gate.gameObject.SetActive(false);
+            }
 
             List<CarryBlockJamExitDefinition> definitions = levelData.carryBlockJam.exits;
             for (int i = 0; i < definitions.Count; i++)
@@ -60,32 +73,98 @@ namespace CarryBlockJam
                 if (definition == null)
                     continue;
 
-                Transform gate = ResolveGate(gatesRoot, definition, columns, rows);
+                Transform gate = ResolveGate(gatesRoot, definition, columns, rows, usedGates);
                 if (gate == null)
                 {
                     Debug.LogWarning(
-                        $"[CarryBlockJam] No art gate for exit {definition.side} startIndex={definition.startIndex}.");
+                        $"[CarryBlockJam] No art gate for exit at row={definition.row} col={definition.column}.");
                     continue;
                 }
 
-                if (!usedGates.Add(gate))
-                {
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Art gate '{gate.name}' already used by another exit; skipping duplicate.");
-                    continue;
-                }
-
+                usedGates.Add(gate);
+                gate.gameObject.SetActive(true);
+                PositionGateForExit(gate, gatesRoot, grid, board, definition, prefabSettings);
                 BindExitToGate(gate, definition, labelSettings);
             }
+        }
 
-            for (int i = 0; i < gatesRoot.childCount; i++)
+        /// <summary>
+        /// Places an art gate on the authored border cell (one grid), plus Prefab Settings offset.
+        /// </summary>
+        public static void PositionGateForExit(
+            Transform gate,
+            Transform gatesRoot,
+            PuzzleGrid grid,
+            CarryBlockJamSimpleBoard board,
+            CarryBlockJamExitDefinition definition,
+            CarryBlockJamPrefabSettings settings)
+        {
+            if (gate == null || definition == null)
+                return;
+
+            Vector3 boardLocal = ResolveExitBoardLocalPosition(grid, board, definition);
+            Vector3 gateLocal = boardLocal;
+            if (gatesRoot != null && board != null)
             {
-                Transform gate = gatesRoot.GetChild(i);
-                if (gate == null || usedGates.Contains(gate))
-                    continue;
-
-                RemoveGoalLabel(gate);
+                // Convert board-local exit pose into Gates-root local space.
+                Vector3 world = board.transform.TransformPoint(boardLocal);
+                gateLocal = gatesRoot.InverseTransformPoint(world);
             }
+
+            Vector3 offset = settings != null
+                ? settings.GetGateModelOffset(IsUpGate(gate) || definition.side == BoardBorderSide.Top)
+                : Vector3.zero;
+
+            // Cache current placement as the new base so later offset tweaks keep cell alignment.
+            int id = gate.GetInstanceID();
+            GateBaseLocalPositions[id] = gateLocal;
+            gate.localPosition = gateLocal + offset;
+        }
+
+        private static Vector3 ResolveExitBoardLocalPosition(
+            PuzzleGrid grid,
+            CarryBlockJamSimpleBoard board,
+            CarryBlockJamExitDefinition definition)
+        {
+            float spacingX = grid != null
+                ? grid.GridSpacingX
+                : (board != null ? Mathf.Max(0.01f, board.GridSpacingX) : 1.1f);
+            float spacingZ = grid != null
+                ? grid.GridSpacingZ
+                : (board != null ? Mathf.Max(0.01f, board.GridSpacingZ) : 1.1f);
+            int rows = grid != null ? grid.Rows : (board != null ? board.Rows : 8);
+            int columns = grid != null ? grid.Columns : (board != null ? board.Columns : 6);
+
+            Vector3 cellLocal;
+            if (grid != null)
+            {
+                int row = Mathf.Clamp(definition.row, 0, Mathf.Max(0, rows - 1));
+                int column = Mathf.Clamp(definition.column, 0, Mathf.Max(0, columns - 1));
+                cellLocal = grid.GetLocalPosition(row, column);
+                // PuzzleGrid is often on the board object; if not, convert into board space.
+                if (board != null && grid.transform != board.transform)
+                    cellLocal = board.transform.InverseTransformPoint(grid.transform.TransformPoint(cellLocal));
+            }
+            else
+            {
+                float offsetX = (columns - 1) * spacingX * 0.5f;
+                float offsetZ = (rows - 1) * spacingZ * 0.5f;
+                cellLocal = new Vector3(
+                    definition.column * spacingX - offsetX,
+                    0f,
+                    offsetZ - definition.row * spacingZ);
+            }
+
+            Vector3 outward = definition.side switch
+            {
+                BoardBorderSide.Left => new Vector3(-spacingX * 0.58f, 0.375f, 0f),
+                BoardBorderSide.Right => new Vector3(spacingX * 0.58f, 0.375f, 0f),
+                BoardBorderSide.Top => new Vector3(0f, 0.375f, spacingZ * 0.58f),
+                BoardBorderSide.Bottom => new Vector3(0f, 0.375f, -spacingZ * 0.58f),
+                _ => new Vector3(0f, 0.375f, 0f),
+            };
+
+            return cellLocal + outward + definition.positionOffset;
         }
 
         public static void ApplyGateModelOffsets(CarryBlockJamSimpleBoard board, Transform gatesRoot = null)
@@ -101,7 +180,7 @@ namespace CarryBlockJam
             for (int i = 0; i < gatesRoot.childCount; i++)
             {
                 Transform gate = gatesRoot.GetChild(i);
-                if (gate == null)
+                if (gate == null || !gate.gameObject.activeSelf)
                     continue;
 
                 ApplyGateModelOffset(gate, settings);
@@ -300,43 +379,94 @@ namespace CarryBlockJam
             int columns,
             int rows)
         {
+            return ResolveGate(gatesRoot, definition, columns, rows, usedGates: null);
+        }
+
+        public static Transform ResolveGate(
+            Transform gatesRoot,
+            CarryBlockJamExitDefinition definition,
+            int columns,
+            int rows,
+            HashSet<Transform> usedGates)
+        {
             if (gatesRoot == null || definition == null)
                 return null;
 
-            int slotIndex = ResolveFixedSlotIndex(definition, columns);
-            if (slotIndex >= 0)
+            BoardBorderSide visualSide = ResolveVisualSide(definition.side, definition.startIndex, rows);
+            string[] preferredNames = visualSide == BoardBorderSide.Bottom ? BottomGateNames : TopGateNames;
+
+            Transform best = null;
+            float bestScore = float.MaxValue;
+            int targetColumn = definition.column >= 0 ? definition.column : definition.startIndex;
+
+            for (int pass = 0; pass < 2; pass++)
             {
-                string[] allNames =
+                string[] names = pass == 0
+                    ? preferredNames
+                    : (visualSide == BoardBorderSide.Bottom ? TopGateNames : BottomGateNames);
+
+                for (int i = 0; i < names.Length; i++)
                 {
-                    TopGateNames[0],
-                    TopGateNames[1],
-                    BottomGateNames[0],
-                    BottomGateNames[1],
-                };
-                return gatesRoot.Find(allNames[slotIndex]);
+                    Transform gate = FindGateChild(gatesRoot, names[i]);
+                    if (gate == null)
+                        continue;
+                    if (usedGates != null && usedGates.Contains(gate))
+                        continue;
+
+                    // Prefer left/right art gate matching column half, then exact column proximity.
+                    float halfPenalty = (i == 0) == (targetColumn < columns * 0.5f) ? 0f : 10f;
+                    float score = halfPenalty + Mathf.Abs(EstimateGateColumn(gate, columns) - targetColumn);
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        best = gate;
+                    }
+                }
+
+                if (best != null)
+                    return best;
             }
 
-            BoardBorderSide visualSide = ResolveVisualSide(definition.side, definition.startIndex, rows);
-            string[] names = visualSide == BoardBorderSide.Bottom ? BottomGateNames : TopGateNames;
-            int slot = ResolveHorizontalSlot(definition, columns);
-            string gateName = names[Mathf.Clamp(slot, 0, names.Length - 1)];
-            return gatesRoot.Find(gateName);
+            // Any unused child under Gates (includes inactive).
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform gate = gatesRoot.GetChild(i);
+                if (gate == null)
+                    continue;
+                if (usedGates != null && usedGates.Contains(gate))
+                    continue;
+                return gate;
+            }
+
+            return null;
         }
 
-        private static int ResolveFixedSlotIndex(CarryBlockJamExitDefinition definition, int columns)
+        private static Transform FindGateChild(Transform gatesRoot, string name)
         {
-            if (definition == null)
-                return -1;
+            if (gatesRoot == null || string.IsNullOrEmpty(name))
+                return null;
 
-            if (definition.side != BoardBorderSide.Top && definition.side != BoardBorderSide.Bottom)
-                return -1;
+            // Transform.Find skips inactive children — gates may already be hidden.
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform child = gatesRoot.GetChild(i);
+                if (child != null && child.name == name)
+                    return child;
+            }
 
-            int left = CarryBlockJamFixedExitSlots.GetLeftColumnIndex(columns);
-            int right = CarryBlockJamFixedExitSlots.GetRightColumnIndex(columns);
-            int horizontal = Mathf.Abs(definition.startIndex - left) <= Mathf.Abs(definition.startIndex - right)
-                ? 0
-                : 1;
-            return definition.side == BoardBorderSide.Bottom ? 2 + horizontal : horizontal;
+            return null;
+        }
+
+        private static float EstimateGateColumn(Transform gate, int columns)
+        {
+            if (gate == null)
+                return columns * 0.5f;
+
+            // Scene art gates: left names → low columns, right names (1) → high columns.
+            string name = gate.name;
+            if (name.IndexOf("(1)", System.StringComparison.Ordinal) >= 0)
+                return columns * 0.75f;
+            return columns * 0.25f;
         }
 
         private static BoardBorderSide ResolveVisualSide(BoardBorderSide side, int startIndex, int rows)
@@ -353,23 +483,6 @@ namespace CarryBlockJam
                     return startIndex < mid ? BoardBorderSide.Top : BoardBorderSide.Bottom;
                 default:
                     return BoardBorderSide.Top;
-            }
-        }
-
-        private static int ResolveHorizontalSlot(CarryBlockJamExitDefinition definition, int columns)
-        {
-            int safeColumns = Mathf.Max(1, columns);
-            switch (definition.side)
-            {
-                case BoardBorderSide.Left:
-                    return 0;
-                case BoardBorderSide.Right:
-                    return 1;
-                default:
-                {
-                    float centerIndex = definition.startIndex + (Mathf.Max(1, definition.length) - 1) * 0.5f;
-                    return centerIndex < safeColumns * 0.5f ? 0 : 1;
-                }
             }
         }
 

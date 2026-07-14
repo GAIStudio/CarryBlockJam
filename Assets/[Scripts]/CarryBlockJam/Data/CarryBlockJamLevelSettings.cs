@@ -27,15 +27,13 @@ namespace CarryBlockJam
         };
 
         [Header("Exits")]
-        public List<CarryBlockJamExitDefinition> exits = new List<CarryBlockJamExitDefinition>
-        {
-            CarryBlockJamFixedExitSlots.CreateDefault(0, 6),
-            CarryBlockJamFixedExitSlots.CreateDefault(1, 6),
-            CarryBlockJamFixedExitSlots.CreateDefault(2, 6),
-            CarryBlockJamFixedExitSlots.CreateDefault(3, 6),
-        };
+        [Tooltip("Optional exits. Add as many as needed — each covers one 0-based grid cell (row/column).")]
+        public List<CarryBlockJamExitDefinition> exits = new List<CarryBlockJamExitDefinition>();
 
         [Header("Tables")]
+        [Tooltip("When enabled, tables are not auto-generated from exits. Only painted Hidden/Ice/Curtain cells and tablePlacements are used.")]
+        public bool disableAutoTables = false;
+
         [FormerlySerializedAs("boxPlacements")]
         public List<CarryBlockJamBoxPlacement> tablePlacements = new List<CarryBlockJamBoxPlacement>();
 
@@ -43,7 +41,9 @@ namespace CarryBlockJam
         public List<CarryBlockJamPlatePlacement> platePlacements = new List<CarryBlockJamPlatePlacement>();
 
         [Header("Stickman Spawn")]
+        [Tooltip("How the stickman is placed on the grid.")]
         public CarryBlockJamStickmanSpawnMode stickmanSpawnMode = CarryBlockJamStickmanSpawnMode.Center;
+        [Tooltip("0-based stickman cell (row, column). Used when Spawn Mode is Fixed Cell.")]
         public CarryBlockJamGridCoordinate fixedStickmanCell = new CarryBlockJamGridCoordinate(2, 3);
 
         [Header("Frozen Table Visual")]

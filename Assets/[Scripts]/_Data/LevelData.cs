@@ -39,8 +39,31 @@ namespace GAITemplate
         [TextArea(2, 4)]
         public string instruction = "";
 
-        public Vector3 targetPos    = Vector3.zero;
+        [Tooltip("When on, hand loops between Start Cell and Target Cell on the grid.")]
+        public bool useGridHandPath = true;
+
+        [Tooltip("0-based start cell (row, column).")]
+        public Vector2Int startCell = new Vector2Int(0, 0);
+
+        [Tooltip("0-based target / end cell (row, column).")]
+        public Vector2Int targetCell = new Vector2Int(0, 1);
+
+        [Tooltip("World-space offset added to the start cell position.")]
+        public Vector3 startPositionOffset = Vector3.zero;
+
+        [Tooltip("World-space offset added to the target cell position.")]
+        public Vector3 targetPositionOffset = Vector3.zero;
+
+        [Tooltip("Legacy fallback world position when useGridHandPath is off.")]
+        public Vector3 targetPos = Vector3.zero;
+
         public Vector3 handRotation = Vector3.zero;
+
+        [Min(0.05f)]
+        public float handMoveDuration = 0.7f;
+
+        [Min(0f)]
+        public float handPauseAtEnds = 0.25f;
 
         public System.Collections.Generic.List<Vector2Int> clickableCells =
             new System.Collections.Generic.List<Vector2Int>();

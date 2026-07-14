@@ -1,13 +1,13 @@
 using System.Collections;
+using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
 namespace GAITemplate
 {
     /// <summary>
-    /// Level başında, levelData.hasTutorial true ise tutorial sahnesini oynatır.
-    /// Stage'lere göre hand/instruction'ı günceller, sadece izin verilen cell'lerin
-    /// tıklanmasına izin verir, her başarılı tıklamada sonraki stage'e geçer.
+    /// Tutorial: whole hand (finger + click point) slides start → target.
+    /// White click point stays under the fingertip and only shows on the start cell.
     /// </summary>
     [DisallowMultipleComponent]
     public class TutorialManager : MonoBehaviour
@@ -17,28 +17,30 @@ namespace GAITemplate
         public bool IsActive { get; private set; }
 
         [Header("Hand Animation")]
-        [Tooltip("Parmak/el başlangıç scale'i (yoyo'nun bir ucu).")]
         public float handVisualStartScale = 1f;
-
-        [Tooltip("Parmak/el hedef scale'i (yoyo'nun diğer ucu).")]
         public float handVisualScale = 0.8f;
-
-        [Tooltip("Circle vurgu başlangıç scale'i.")]
         public float circleVisualStartScale = 1f;
-
-        [Tooltip("Circle vurgu hedef scale'i.")]
         public float circleVisualScale = 0.5f;
-
-        [Tooltip("Yoyo tween süresi.")]
         public float pulseDuration = 0.5f;
 
-        private LevelData     _levelData;
-        private TutorialPanel _panel;
-        private int           _stageIndex = -1;
-        private Camera        _gameCamera;
+        [Tooltip("Local offset of the white click point under the fingertip (relative to hand root).")]
+        public Vector2 clickPointFingerOffset = new Vector2(-32f, 48f);
 
-        private Tween _handTween;
+        private LevelData _levelData;
+        private TutorialPanel _panel;
+        private int _stageIndex = -1;
+        private Camera _gameCamera;
+        private PuzzleGrid _grid;
+
         private Tween _circleTween;
+        private Tween _handMoveTween;
+        private Coroutine _startRoutine;
+        private float _slideProgress;
+        private Vector2 _slideStartLocal;
+        private Vector2 _slideEndLocal;
+        private RectTransform _handParent;
+        private Vector2 _authoredClickOffset;
+        private bool _hasAuthoredClickOffset;
 
         private void Awake()
         {
@@ -47,24 +49,24 @@ namespace GAITemplate
                 Destroy(gameObject);
                 return;
             }
-            Instance = this;
 
-            // Scene reload sonrası garanti reset.
-            IsActive    = false;
+            Instance = this;
+            IsActive = false;
             _stageIndex = -1;
-            _levelData  = null;
+            _levelData = null;
         }
 
         private void OnDestroy()
         {
-            if (Instance == this) Instance = null;
+            if (Instance == this)
+                Instance = null;
+            Cleanup();
         }
 
         private TutorialStage CurrentStage =>
             (_levelData != null && _stageIndex >= 0 && _stageIndex < _levelData.tutorialStages.Count)
-                ? _levelData.tutorialStages[_stageIndex] : null;
-
-        // ── Lifecycle ────────────────────────────────────────────────────────────────
+                ? _levelData.tutorialStages[_stageIndex]
+                : null;
 
         private const string PrefKeyPrefix = "Tutorial_";
 
@@ -73,90 +75,189 @@ namespace GAITemplate
 
         public static void ResetCompletion(LevelData levelData)
         {
-            if (levelData == null) return;
+            if (levelData == null)
+                return;
+
             PlayerPrefs.DeleteKey(PrefKeyPrefix + levelData.name);
             PlayerPrefs.Save();
         }
 
         public void StartTutorial(LevelData levelData)
         {
-            Cleanup(); // önceki tutorial varsa state'i sıfırla
+            Cleanup();
 
-            if (levelData == null || !levelData.hasTutorial) return;
-            if (levelData.tutorialStages == null || levelData.tutorialStages.Count == 0) return;
+            if (levelData == null || !levelData.hasTutorial)
+                return;
 
-            // Daha önce tamamlandıysa atla.
-            if (IsCompleted(levelData)) return;
+            if (levelData.tutorialStages == null || levelData.tutorialStages.Count == 0)
+            {
+                Debug.LogWarning(
+                    $"[TutorialManager] '{levelData.name}' hasTutorial is on but has no stages.");
+                return;
+            }
 
-            _levelData  = levelData;
-            _panel      = UIManager.instance != null ? UIManager.instance.tutorialPanel : null;
+            if (IsCompleted(levelData))
+                return;
+
+            _levelData = levelData;
+            if (_startRoutine != null)
+                StopCoroutine(_startRoutine);
+            _startRoutine = StartCoroutine(StartTutorialRoutine());
+        }
+
+        private IEnumerator StartTutorialRoutine()
+        {
+            const int maxFrames = 30;
+            for (int i = 0; i < maxFrames; i++)
+            {
+                _grid = FindObjectOfType<PuzzleGrid>();
+                if (_grid != null && _grid.IsBuilt)
+                    break;
+                yield return null;
+            }
+
+            _panel = UIManager.instance != null ? UIManager.instance.tutorialPanel : null;
             _gameCamera = LevelCameraUtility.ResolveGameplayCamera();
-            if (_panel == null) return;
+            if (_grid == null || !_grid.IsBuilt)
+                _grid = FindObjectOfType<PuzzleGrid>();
+
+            if (_panel == null)
+            {
+                Debug.LogWarning("[TutorialManager] TutorialPanel is missing on UIManager.");
+                Cleanup();
+                yield break;
+            }
 
             IsActive = true;
             _panel.Active(true);
 
-            // Instruction text'inin world pozisyonunu screen-space'e çevir.
-            if (_panel.instruction != null && _gameCamera != null)
+            if (_panel.hand != null)
+                _panel.hand.gameObject.SetActive(true);
+            if (_panel.handVisual != null)
+                _panel.handVisual.gameObject.SetActive(true);
+            if (_panel.circleVisual != null)
+                _panel.circleVisual.gameObject.SetActive(true);
+
+            if (_panel.instruction != null && _gameCamera != null && _levelData != null)
             {
-                Vector3 screen = _gameCamera.WorldToScreenPoint(levelData.tutorialTextWorldPosition);
+                Vector3 screen = _gameCamera.WorldToScreenPoint(_levelData.tutorialTextWorldPosition);
                 _panel.instruction.rectTransform.position = screen;
             }
 
-            StartHandAnimation();
+            CaptureAuthoredClickOffset();
+            PlaceClickPointUnderFinger();
+            StartClickPulseAnimation();
             ShowStage(0);
+            _startRoutine = null;
         }
 
-        private void StartHandAnimation()
+        private void CaptureAuthoredClickOffset()
         {
-            if (_panel == null) return;
+            if (_hasAuthoredClickOffset || _panel?.circleVisual == null)
+                return;
 
-            if (_handTween == null && _panel.handVisual != null)
+            // Scene authored fingertip placement (sibling under hand).
+            _authoredClickOffset = _panel.circleVisual.anchoredPosition;
+            _hasAuthoredClickOffset = _authoredClickOffset.sqrMagnitude > 1f;
+        }
+
+        private Vector2 ResolveClickOffset()
+        {
+            // Prefer scene layout if it was authored near the fingertip.
+            if (_hasAuthoredClickOffset)
+                return _authoredClickOffset;
+            return clickPointFingerOffset;
+        }
+
+        private void PlaceClickPointUnderFinger()
+        {
+            if (_panel?.hand == null || _panel.circleVisual == null)
+                return;
+
+            // Keep circle as sibling of the finger sprite under the same hand root,
+            // so both always move together when the hand root slides.
+            if (_panel.circleVisual.parent != _panel.hand)
+                _panel.circleVisual.SetParent(_panel.hand, worldPositionStays: false);
+
+            _panel.circleVisual.anchoredPosition = ResolveClickOffset();
+            _panel.circleVisual.localRotation = Quaternion.identity;
+
+            // Draw under the finger sprite.
+            if (_panel.handVisual != null)
             {
+                _panel.handVisual.anchoredPosition = Vector2.zero;
+                _panel.circleVisual.SetSiblingIndex(_panel.handVisual.GetSiblingIndex());
+            }
+            else
+            {
+                _panel.circleVisual.SetAsFirstSibling();
+            }
+        }
+
+        private void StartClickPulseAnimation()
+        {
+            if (_panel?.circleVisual == null)
+                return;
+
+            if (_circleTween != null)
+            {
+                _circleTween.Kill();
+                _circleTween = null;
+            }
+
+            _panel.circleVisual.anchoredPosition = ResolveClickOffset();
+            _panel.circleVisual.localScale = Vector3.one * circleVisualStartScale;
+            _circleTween = _panel.circleVisual
+                .DOScale(circleVisualScale, pulseDuration)
+                .SetEase(Ease.InOutCubic)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetUpdate(true);
+
+            if (_panel.handVisual != null)
                 _panel.handVisual.localScale = Vector3.one * handVisualStartScale;
-                _handTween = _panel.handVisual
-                    .DOScale(handVisualScale, pulseDuration)
-                    .SetEase(Ease.InOutCubic)
-                    .SetLoops(-1, LoopType.Yoyo);
-            }
-
-            if (_circleTween == null && _panel.circleVisual != null)
-            {
-                // Ters faz: hand "start"tayken circle "target"ta, hand büyürken circle küçülür.
-                _panel.circleVisual.localScale = Vector3.one * circleVisualScale;
-                _circleTween = _panel.circleVisual
-                    .DOScale(circleVisualStartScale, pulseDuration)
-                    .SetEase(Ease.InOutCubic)
-                    .SetLoops(-1, LoopType.Yoyo);
-            }
         }
 
-        private void StopHandAnimation()
+        private void StopClickPulseAnimation()
         {
-            if (_handTween != null) { _handTween.Kill(); _handTween = null; }
-            if (_circleTween != null) { _circleTween.Kill(); _circleTween = null; }
-
-            if (_panel != null)
+            if (_circleTween != null)
             {
-                if (_panel.handVisual != null)
-                    _panel.handVisual.localScale   = Vector3.one * handVisualStartScale;
-                if (_panel.circleVisual != null)
-                    _panel.circleVisual.localScale = Vector3.one * circleVisualStartScale;
+                _circleTween.Kill();
+                _circleTween = null;
+            }
+
+            if (_panel?.circleVisual != null)
+                _panel.circleVisual.localScale = Vector3.one * circleVisualStartScale;
+            if (_panel?.handVisual != null)
+                _panel.handVisual.localScale = Vector3.one * handVisualStartScale;
+        }
+
+        private void StopHandMoveAnimation()
+        {
+            if (_handMoveTween != null)
+            {
+                _handMoveTween.Kill();
+                _handMoveTween = null;
+            }
+
+            if (_panel?.handVisual != null)
+                _panel.handVisual.anchoredPosition = Vector2.zero;
+
+            if (_panel?.circleVisual != null)
+            {
+                _panel.circleVisual.anchoredPosition = ResolveClickOffset();
+                _panel.circleVisual.gameObject.SetActive(true);
             }
         }
 
         private void ShowStage(int index)
         {
-            if (_levelData == null || _panel == null) return;
+            if (_levelData == null || _panel == null)
+                return;
 
             if (index < 0 || index >= _levelData.tutorialStages.Count)
             {
-                // Tüm stage'ler bitti → tamamlandı olarak işaretle ve kapat.
-                if (_levelData != null)
-                {
-                    PlayerPrefs.SetInt(PrefKeyPrefix + _levelData.name, 1);
-                    PlayerPrefs.Save();
-                }
+                PlayerPrefs.SetInt(PrefKeyPrefix + _levelData.name, 1);
+                PlayerPrefs.Save();
                 EndTutorial();
                 return;
             }
@@ -164,58 +265,363 @@ namespace GAITemplate
             _stageIndex = index;
             TutorialStage stage = _levelData.tutorialStages[index];
 
-            // Instruction text
             if (_panel.instruction != null)
                 _panel.instruction.text = stage.instruction;
 
-            // Hand world → screen pozisyonu
-            if (_panel.hand != null && _gameCamera != null)
-            {
-                Vector3 screen = _gameCamera.WorldToScreenPoint(stage.targetPos);
-                _panel.hand.position = screen;
-            }
-
-            // Hand rotation (handVisual üzerinde)
             if (_panel.handVisual != null)
                 _panel.handVisual.localEulerAngles = stage.handRotation;
+
+            // Only place stickman for the first stage. Later stages only update the hand UI —
+            // stickman stays where the player left them after the previous action.
+            if (index == 0)
+                SnapStickmanToStageStart(stage);
+
+            StartHandPathLoop(stage);
+        }
+
+        private void SnapStickmanToStageStart(TutorialStage stage)
+        {
+            if (stage == null)
+                return;
+
+            CarryBlockJam.CarryBlockJamSwipeController swipe =
+                FindObjectOfType<CarryBlockJam.CarryBlockJamSwipeController>();
+            if (swipe != null)
+                swipe.PlaceStickmanAtCell(stage.startCell.x, stage.startCell.y, force: true);
+        }
+
+        private void StartHandPathLoop(TutorialStage stage)
+        {
+            StopHandMoveAnimation();
+            if (_panel?.hand == null || _gameCamera == null || stage == null)
+                return;
+
+            if (_grid == null || !_grid.IsBuilt)
+                _grid = FindObjectOfType<PuzzleGrid>();
+
+            ResolveStageWorldPoints(stage, out Vector3 startWorld, out Vector3 endWorld);
+
+            Vector3 startScreen = _gameCamera.WorldToScreenPoint(startWorld);
+            Vector3 endScreen = _gameCamera.WorldToScreenPoint(endWorld);
+
+            _handParent = _panel.hand.parent as RectTransform;
+            Camera uiCamera = ResolveUiCamera(_panel.hand);
+
+            if (_handParent == null)
+            {
+                Debug.LogWarning("[TutorialManager] hand parent RectTransform missing.");
+                return;
+            }
+
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _handParent, startScreen, uiCamera, out Vector2 startLocal);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _handParent, endScreen, uiCamera, out Vector2 endLocal);
+
+            // Finger sprite stays at local zero; click point stays at fingertip offset.
+            // Shift the hand root so the click point (not the hand pivot) sits on the cell.
+            Vector2 tipOffset = ResolveClickOffset();
+            _slideStartLocal = startLocal - tipOffset;
+            _slideEndLocal = endLocal - tipOffset;
+
+            if (_panel.handVisual != null)
+                _panel.handVisual.anchoredPosition = Vector2.zero;
+
+            PlaceClickPointUnderFinger();
+
+            _slideProgress = 0f;
+            ApplyHandSlide(0f);
+
+            float moveDuration = Mathf.Max(0.05f, stage.handMoveDuration);
+            float pause = Mathf.Max(0f, stage.handPauseAtEnds);
+
+            Sequence sequence = DOTween.Sequence().SetUpdate(true);
+            sequence.Append(
+                DOTween.To(() => _slideProgress, ApplyHandSlide, 1f, moveDuration)
+                    .SetEase(Ease.InOutSine));
+
+            if (pause > 0f)
+                sequence.AppendInterval(pause);
+
+            sequence.Append(
+                DOTween.To(() => _slideProgress, ApplyHandSlide, 0f, moveDuration)
+                    .SetEase(Ease.InOutSine));
+
+            if (pause > 0f)
+                sequence.AppendInterval(pause);
+
+            sequence.SetLoops(-1, LoopType.Restart);
+            _handMoveTween = sequence;
+        }
+
+        private void ApplyHandSlide(float t)
+        {
+            _slideProgress = t;
+            if (_panel?.hand == null)
+                return;
+
+            _panel.hand.anchoredPosition = Vector2.LerpUnclamped(_slideStartLocal, _slideEndLocal, t);
+
+            if (_panel.circleVisual == null)
+                return;
+
+            // Stay glued under fingertip; only visible on the start cell.
+            _panel.circleVisual.anchoredPosition = ResolveClickOffset();
+            bool onStartCell = t <= 0.001f;
+            if (_panel.circleVisual.gameObject.activeSelf != onStartCell)
+                _panel.circleVisual.gameObject.SetActive(onStartCell);
+        }
+
+        private static Camera ResolveUiCamera(RectTransform rect)
+        {
+            if (rect == null)
+                return null;
+
+            Canvas canvas = rect.GetComponentInParent<Canvas>();
+            if (canvas == null)
+                return null;
+
+            if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                return null;
+
+            return canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+        }
+
+        private void ResolveStageWorldPoints(TutorialStage stage, out Vector3 startWorld, out Vector3 endWorld)
+        {
+            startWorld = stage.targetPos;
+            endWorld = stage.targetPos;
+
+            if (stage.useGridHandPath && _grid != null && _grid.IsBuilt)
+            {
+                int startRow = Mathf.Clamp(stage.startCell.x, 0, Mathf.Max(0, _grid.Rows - 1));
+                int startCol = Mathf.Clamp(stage.startCell.y, 0, Mathf.Max(0, _grid.Columns - 1));
+                int endRow = Mathf.Clamp(stage.targetCell.x, 0, Mathf.Max(0, _grid.Rows - 1));
+                int endCol = Mathf.Clamp(stage.targetCell.y, 0, Mathf.Max(0, _grid.Columns - 1));
+
+                startWorld = _grid.GetWorldPosition(startRow, startCol) + stage.startPositionOffset;
+                endWorld = _grid.GetWorldPosition(endRow, endCol) + stage.targetPositionOffset;
+
+                if (Mathf.Abs(stage.startPositionOffset.y) < 0.001f)
+                    startWorld += Vector3.up * 0.35f;
+                if (Mathf.Abs(stage.targetPositionOffset.y) < 0.001f)
+                    endWorld += Vector3.up * 0.35f;
+                return;
+            }
+
+            endWorld = stage.targetPos + stage.targetPositionOffset;
+            startWorld = endWorld + stage.startPositionOffset;
+            if (stage.startPositionOffset.sqrMagnitude < 0.0001f)
+                startWorld = endWorld + new Vector3(-0.8f, 0f, 0f);
         }
 
         private void EndTutorial()
         {
-            StopHandAnimation();
-            if (_panel != null) _panel.ActiveSmooth(false);
+            StopHandMoveAnimation();
+            StopClickPulseAnimation();
+            if (_panel != null)
+                _panel.ActiveSmooth(false);
             Cleanup();
         }
 
         private void Cleanup()
         {
-            StopHandAnimation();
-            IsActive    = false;
+            if (_startRoutine != null)
+            {
+                StopCoroutine(_startRoutine);
+                _startRoutine = null;
+            }
+
+            StopHandMoveAnimation();
+            StopClickPulseAnimation();
+            IsActive = false;
             _stageIndex = -1;
-            _levelData  = null;
+            _levelData = null;
+            _grid = null;
+            _handParent = null;
         }
 
-        // ── Click gate / advance ─────────────────────────────────────────────────────
-
-        /// <summary>Tutorial aktifken cell tıklanabilir mi.</summary>
         public bool IsCellClickable(int row, int col)
         {
-            if (!IsActive) return true;
-            var stage = CurrentStage;
-            if (stage == null) return true;
-            if (stage.clickableCells == null || stage.clickableCells.Count == 0) return true;
+            if (!IsActive)
+                return true;
 
-            foreach (var c in stage.clickableCells)
-                if (c.x == row && c.y == col) return true;
+            TutorialStage stage = CurrentStage;
+            if (stage == null)
+                return true;
 
-            return false;
+            // Prefer explicit whitelist when authored; otherwise only the target plate cell.
+            if (stage.clickableCells != null && stage.clickableCells.Count > 0)
+            {
+                for (int i = 0; i < stage.clickableCells.Count; i++)
+                {
+                    Vector2Int cell = stage.clickableCells[i];
+                    if (cell.x == row && cell.y == col)
+                        return true;
+                }
+
+                // Also allow the authored target cell so plate moves stay consistent.
+                if (stage.targetCell.x == row && stage.targetCell.y == col)
+                    return true;
+
+                return false;
+            }
+
+            return IsTutorialTargetCell(row, col);
         }
 
-        /// <summary>Bir cell başarıyla tıklanıp gönderildiğinde çağrılır.</summary>
+        /// <summary>True while a tutorial stage is teaching a grid path.</summary>
+        public bool TryGetActivePath(out Vector2Int startCell, out Vector2Int targetCell)
+        {
+            startCell = default;
+            targetCell = default;
+            if (!IsActive)
+                return false;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null)
+                return false;
+
+            startCell = stage.startCell;
+            targetCell = stage.targetCell;
+            return true;
+        }
+
+        public bool IsTutorialTargetCell(int row, int col) =>
+            CanCollectTutorialPlate(row, col);
+
+        /// <summary>
+        /// Path cells from from→target (target inclusive, from exclusive).
+        /// </summary>
+        public bool TryBuildPathCells(
+            int fromRow,
+            int fromCol,
+            Vector2Int target,
+            List<Vector2Int> pathCells)
+        {
+            if (pathCells == null)
+                return false;
+            pathCells.Clear();
+
+            var from = new Vector2Int(fromRow, fromCol);
+            if (!TryGetRequiredSwipe(from, target, out int rowStep, out int colStep, out int steps))
+                return false;
+
+            int row = fromRow;
+            int col = fromCol;
+            for (int i = 0; i < steps; i++)
+            {
+                row += rowStep;
+                col += colStep;
+                pathCells.Add(new Vector2Int(row, col));
+            }
+
+            return pathCells.Count > 0;
+        }
+
+        public bool TryBuildAuthoredPathCells(List<Vector2Int> pathCells)
+        {
+            if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
+                return false;
+            return TryBuildPathCells(start.x, start.y, target, pathCells);
+        }
+
+        /// <summary>
+        /// Locks swipe to authored startCell→targetCell direction and full length.
+        /// Stickman is placed on startCell when the move executes.
+        /// </summary>
+        public bool TryClampSwipeToAuthoredPath(
+            int stickmanRow,
+            int stickmanCol,
+            ref int rowStep,
+            ref int columnStep,
+            ref int requestedSteps)
+        {
+            if (!IsActive)
+                return true;
+
+            if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
+                return true;
+
+            if (!TryGetRequiredSwipe(start, target, out int requiredRowStep, out int requiredColStep, out int requiredSteps))
+                return false;
+
+            if (rowStep != requiredRowStep || columnStep != requiredColStep)
+                return false;
+
+            // Any committed swipe in the taught direction runs the full start→target path.
+            if (requestedSteps < 1)
+                return false;
+
+            rowStep = requiredRowStep;
+            columnStep = requiredColStep;
+            requestedSteps = requiredSteps;
+            return true;
+        }
+
+        public bool CanCollectTutorialPlate(int row, int col)
+        {
+            if (!IsActive)
+                return true;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null)
+                return true;
+
+            return stage.targetCell.x == row && stage.targetCell.y == col;
+        }
+
+        private static bool TryGetRequiredSwipe(
+            Vector2Int start,
+            Vector2Int target,
+            out int rowStep,
+            out int columnStep,
+            out int requiredSteps)
+        {
+            rowStep = 0;
+            columnStep = 0;
+            requiredSteps = 0;
+
+            int rowDelta = target.x - start.x;
+            int colDelta = target.y - start.y;
+            if (rowDelta == 0 && colDelta == 0)
+                return false;
+
+            if (rowDelta != 0 && colDelta != 0)
+                return false;
+
+            if (rowDelta != 0)
+            {
+                rowStep = rowDelta > 0 ? 1 : -1;
+                requiredSteps = Mathf.Abs(rowDelta);
+            }
+            else
+            {
+                columnStep = colDelta > 0 ? 1 : -1;
+                requiredSteps = Mathf.Abs(colDelta);
+            }
+
+            return requiredSteps > 0;
+        }
+
         public void NotifyCellSent(int row, int col)
         {
-            if (!IsActive) return;
-            if (!IsCellClickable(row, col)) return;
+            if (!IsActive)
+                return;
+            if (!IsCellClickable(row, col))
+                return;
+
+            ShowStage(_stageIndex + 1);
+        }
+
+        /// <summary>
+        /// Call after the player completes the taught start→target action (e.g. picks the target plate).
+        /// Advances to the next stage, or hides the hand when finished.
+        /// </summary>
+        public void NotifyTutorialActionCompleted()
+        {
+            if (!IsActive)
+                return;
 
             ShowStage(_stageIndex + 1);
         }

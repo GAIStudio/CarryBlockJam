@@ -618,8 +618,11 @@ namespace CarryBlockJam
             PuzzleGrid grid,
             HashSet<Vector2Int> occupied)
         {
-            ExitDrivenSpawnPlan plan = BuildExitDrivenSpawnPlan();
             BoardBoxPlacement[] levelPlacements = GetLevelBoxPlacements();
+            if (IsAutoTableGenerationDisabled())
+                return levelPlacements;
+
+            ExitDrivenSpawnPlan plan = BuildExitDrivenSpawnPlan();
 
             if (plan.BoxColors.Count > 0 && levelPlacements.Length > 0 && levelPlacements.Length < plan.BoxColors.Count)
                 return MergeLevelAndGeneratedBoxPlacements(grid, occupied, levelPlacements, plan);
@@ -631,6 +634,12 @@ namespace CarryBlockJam
                 return GetManualBoxPlacements(GetActiveColors());
 
             return GenerateExitDrivenBoxPlacements(grid, occupied);
+        }
+
+        private bool IsAutoTableGenerationDisabled()
+        {
+            LevelData levelData = ResolveLevelData();
+            return levelData?.carryBlockJam != null && levelData.carryBlockJam.disableAutoTables;
         }
 
         private BoardBoxPlacement[] MergeLevelAndGeneratedBoxPlacements(

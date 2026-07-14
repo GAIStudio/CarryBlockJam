@@ -73,10 +73,7 @@ namespace GAITemplate
                 carryBlockJamController.ApplyLevel(levelData);
 
             // Camera stays as authored in the scene hierarchy.
-
-            // Tutorial'ı build sonrası başlat (positions hazır olmalı).
-            if (TutorialManager.Instance != null)
-                TutorialManager.Instance.StartTutorial(levelData);
+            // Tutorial is started by LevelManager after ConstructLevel (scene + prefab paths).
         }
 
         private void BuildGridLevel(LevelData levelData)

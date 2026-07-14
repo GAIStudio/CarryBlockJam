@@ -43,6 +43,10 @@ namespace GAITemplate
             else if (currentLevelData != null)
                 CarryBlockJamSceneLevelRuntime.EnsureGameplayOnSceneBoards(currentLevelData);
 
+            // Scene-board path does not go through LevelBase.BuildLevel, so start tutorial here.
+            if (currentLevelData != null && TutorialManager.Instance != null)
+                TutorialManager.Instance.StartTutorial(currentLevelData);
+
             if (!PlayerPrefs.HasKey("Elephant"))
             {
                 PlayerPrefs.SetInt("Elephant", elephant);
