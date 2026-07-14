@@ -111,6 +111,7 @@ namespace GAITemplate
             if (_isFinishing) return;
             _isFinishing = true;
 
+            Haptic.HeavyTaptic();
             SetContinueInteractable(false);
 
             int amount = ResolveRewardAmount();
@@ -125,7 +126,9 @@ namespace GAITemplate
             {
                 if (amount > 0 && GameManager.instance != null)
                     GameManager.instance.AddMoney(amount);
-                base.OnPressRestart();
+                // Skip EndPanelBase Heavy (already fired above).
+                if (GameManager.instance != null)
+                    GameManager.instance.RestartScene();
             }
         }
 
@@ -236,8 +239,13 @@ namespace GAITemplate
             // Son coin iniş yapınca kısa bir bekleme sonrası sahneyi reload et.
             _coinsInFlight--;
             if (_coinsInFlight <= 0)
-                DOVirtual.DelayedCall(postLandingDelay, () => base.OnPressRestart(),
-                    ignoreTimeScale: false);
+                DOVirtual.DelayedCall(postLandingDelay, RestartAfterCoins, ignoreTimeScale: false);
+        }
+
+        private void RestartAfterCoins()
+        {
+            if (GameManager.instance != null)
+                GameManager.instance.RestartScene();
         }
 
         // ── Money text update ────────────────────────────────────────────────────────

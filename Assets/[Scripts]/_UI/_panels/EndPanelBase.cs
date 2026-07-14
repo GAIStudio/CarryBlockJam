@@ -56,6 +56,7 @@ namespace GAITemplate
 
         public virtual void OnPressRestart()
         {
+            Haptic.HeavyTaptic();
             if (GameManager.instance != null)
                 GameManager.instance.RestartScene();
         }

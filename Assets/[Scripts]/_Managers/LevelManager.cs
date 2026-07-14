@@ -87,6 +87,7 @@ namespace GAITemplate
         public void Fail()
         {
             PlayerPrefs.DeleteKey("Elephant");
+            Haptic.MediumTaptic();
             endGameEvent.Invoke(false);
         }
     }

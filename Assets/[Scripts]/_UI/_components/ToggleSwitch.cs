@@ -60,7 +60,11 @@ namespace GAITemplate
         // ── Public API ────────────────────────────────────────────────────────────────
 
         /// <summary>Mevcut değeri tersine çevirir. UI Button.OnClick'e bağlanır.</summary>
-        public void Toggle() => SetValue(!isOn);
+        public void Toggle()
+        {
+            Haptic.HeavyTaptic();
+            SetValue(!isOn);
+        }
 
         /// <summary>Değeri programatik olarak ayarlar.</summary>
         public void SetValue(bool value, bool animate = true, bool fireEvent = true)

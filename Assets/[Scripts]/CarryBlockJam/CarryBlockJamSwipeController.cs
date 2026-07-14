@@ -395,6 +395,7 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             RefreshStickmanAnimation(moving: true);
+            Haptic.LightTaptic();
 
             if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
                 _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
@@ -505,6 +506,7 @@ namespace CarryBlockJam
 
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(consumedCount);
             RefreshStickmanAnimation(moving: false);
+            Haptic.MediumTaptic();
 
             Sequence sequence = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
@@ -544,6 +546,7 @@ namespace CarryBlockJam
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
             RefreshStickmanAnimation(moving: false);
+            Haptic.MediumTaptic();
             CarryBlockJamBoardPiece currentTop = GetTopStackPiece(targetBox);
             Sequence sequence = DOTween.Sequence();
 
@@ -729,15 +732,16 @@ namespace CarryBlockJam
 
                     if (IsBoxCellBlocker(piece))
                     {
-                        if (CanPickUpPiece(piece) && !ShouldPickupFromPreviousCell(piece))
+                        // Stickman stops on the previous cell when picking up from a table,
+                        // but still highlight the table so the swipe target is clear.
+                        if (CanPickUpPiece(piece))
                             path.Add(new Vector2Int(nextRow, nextColumn));
                         break;
                     }
 
                     if (CanPickUpPiece(piece))
                     {
-                        if (!ShouldPickupFromPreviousCell(piece))
-                            path.Add(new Vector2Int(nextRow, nextColumn));
+                        path.Add(new Vector2Int(nextRow, nextColumn));
                         break;
                     }
                 }
@@ -749,23 +753,25 @@ namespace CarryBlockJam
                         {
                             CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(piece);
                             if (blockedStorageBox != null && blockedStorageBox.Color == CarriedColor)
-                                break;
-                            if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
                             {
-                                if (!ShouldPickupFromPreviousCell(piece))
-                                    path.Add(new Vector2Int(nextRow, nextColumn));
+                                path.Add(new Vector2Int(nextRow, nextColumn));
+                                break;
                             }
+
+                            if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
+                                path.Add(new Vector2Int(nextRow, nextColumn));
                             break;
                         }
 
                         CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
                         if (storageBox != null && storageBox.Color == CarriedColor)
-                            break;
-                        if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
                         {
-                            if (!ShouldPickupFromPreviousCell(piece))
-                                path.Add(new Vector2Int(nextRow, nextColumn));
+                            path.Add(new Vector2Int(nextRow, nextColumn));
+                            break;
                         }
+
+                        if (CanPickUpPiece(piece) && piece.Color == CarriedColor)
+                            path.Add(new Vector2Int(nextRow, nextColumn));
                         else if (IsMatchingDropTarget(piece))
                             path.Add(new Vector2Int(nextRow, nextColumn));
                         break;
@@ -1159,6 +1165,7 @@ namespace CarryBlockJam
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plates[i]);
             }
 
+            Haptic.MediumTaptic();
             RefreshStickmanAnimation(moving: false);
         }
 
@@ -1299,6 +1306,7 @@ namespace CarryBlockJam
             }
 
             _successTriggered = true;
+            Haptic.MediumTaptic();
             LevelManager.instance.Success();
         }
     }

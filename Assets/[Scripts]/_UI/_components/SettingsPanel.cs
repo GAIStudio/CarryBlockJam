@@ -39,6 +39,7 @@ public class SettingsPanel : MonoBehaviour
 
     public void OnPressSettingsButton()
     {
+        Haptic.HeavyTaptic();
         if (!_isOpen) AppearSettings();
         else          DisappearSettings();
         _isOpen = !_isOpen;
