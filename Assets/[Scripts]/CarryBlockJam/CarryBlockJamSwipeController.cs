@@ -30,6 +30,7 @@ namespace CarryBlockJam
         private bool _trackingSwipe;
         private bool _isAnimating;
         private bool _successTriggered;
+        private bool _failTriggered;
         private CarryBlockJamBoardPiece _cylinder;
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
@@ -124,7 +125,7 @@ namespace CarryBlockJam
 
         private void TryStartSwipe(Vector2 screenPosition)
         {
-            if (_isAnimating)
+            if (_isAnimating || _failTriggered)
                 return;
 
             if (_cylinder == null)
@@ -158,6 +159,9 @@ namespace CarryBlockJam
 
             ResolveGameplayReferences();
             if (_cylinder == null)
+                return;
+
+            if (_failTriggered)
                 return;
 
             if (!TryGetSwipeIntent(screenPosition, out int rowStep, out int columnStep, out int requestedSteps))
@@ -664,10 +668,15 @@ namespace CarryBlockJam
             if (safePath == null || safePath.Count == 0)
             {
                 onComplete?.Invoke();
+                EvaluateCarriedPlateDeadlock();
                 return;
             }
 
-            AnimateCylinderTravel(safePath, onComplete);
+            AnimateCylinderTravel(safePath, () =>
+            {
+                onComplete?.Invoke();
+                EvaluateCarriedPlateDeadlock();
+            });
         }
 
         private List<CarryBlockJamBoardPiece> ExtractPickupPlates(CarryBlockJamBoardPiece piece, int row, int column)
@@ -880,7 +889,10 @@ namespace CarryBlockJam
                 UpdateCarriedPlateVisuals();
                 _isAnimating = false;
                 MaybeNotifyTutorialExitDelivery();
-                TryTriggerSuccess(plates);
+                if (HasCarriedPlates)
+                    EvaluateCarriedPlateDeadlock();
+                else
+                    TryTriggerSuccess(plates);
             });
         }
 
@@ -1695,6 +1707,8 @@ namespace CarryBlockJam
                 pickupRow >= 0 &&
                 TutorialManager.Instance.IsTutorialTargetCell(pickupRow, pickupColumn))
                 TutorialManager.Instance.NotifyTutorialActionCompleted();
+
+            EvaluateCarriedPlateDeadlock();
         }
 
         private void UpdateCarriedPlateVisuals()
@@ -1804,7 +1818,7 @@ namespace CarryBlockJam
 
         private void TryTriggerSuccess(List<CarryBlockJamBoardPiece> ignoredPlates = null)
         {
-            if (_successTriggered)
+            if (_successTriggered || _failTriggered)
                 return;
 
             if (HasCarriedPlates)
@@ -1836,6 +1850,136 @@ namespace CarryBlockJam
             _successTriggered = true;
             Haptic.MediumTaptic();
             LevelManager.instance.Success();
+        }
+
+        /// <summary>
+        /// While carrying a color, fail if that color cannot reach a matching table or matching exit.
+        /// Same-color plates count as walkable because they can be picked up along the way.
+        /// </summary>
+        private void EvaluateCarriedPlateDeadlock()
+        {
+            if (_failTriggered || _successTriggered || !HasCarriedPlates)
+                return;
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+            if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+                return;
+            if (LevelManager.instance == null)
+                return;
+
+            if (HasReachableSinkForCarriedPlates())
+                return;
+
+            _failTriggered = true;
+            LevelManager.instance.Fail();
+        }
+
+        private bool HasReachableSinkForCarriedPlates()
+        {
+            PieceColorType color = CarriedColor;
+            if (color == PieceColorType.None)
+                return false;
+
+            int startRow = _cylinder.Row;
+            int startColumn = _cylinder.Column;
+            if (!_grid.IsInside(startRow, startColumn))
+                return false;
+
+            if (IsCarriedPlateSinkCell(startRow, startColumn, color))
+                return true;
+
+            int cellCount = _grid.Rows * _grid.Columns;
+            var visited = new bool[cellCount];
+            var queue = new Queue<Vector2Int>(cellCount);
+            queue.Enqueue(new Vector2Int(startRow, startColumn));
+            visited[startRow * _grid.Columns + startColumn] = true;
+
+            int[] rowOffsets = { -1, 1, 0, 0 };
+            int[] colOffsets = { 0, 0, -1, 1 };
+
+            while (queue.Count > 0)
+            {
+                Vector2Int cell = queue.Dequeue();
+                for (int i = 0; i < 4; i++)
+                {
+                    int nextRow = cell.x + rowOffsets[i];
+                    int nextColumn = cell.y + colOffsets[i];
+                    if (!_grid.IsInside(nextRow, nextColumn))
+                        continue;
+
+                    int visitIndex = nextRow * _grid.Columns + nextColumn;
+                    if (visited[visitIndex])
+                        continue;
+                    if (!IsWalkableWhileCarrying(nextRow, nextColumn, color))
+                        continue;
+
+                    if (IsCarriedPlateSinkCell(nextRow, nextColumn, color))
+                        return true;
+
+                    visited[visitIndex] = true;
+                    queue.Enqueue(new Vector2Int(nextRow, nextColumn));
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsWalkableWhileCarrying(int row, int column, PieceColorType carriedColor)
+        {
+            if (IsBoxOwnedCell(row, column))
+                return false;
+
+            if (!_grid.TryGetCell(row, column, out PuzzleCell cell) || cell == null)
+                return false;
+
+            if (cell.Occupant == null || cell.Occupant == _cylinder.gameObject)
+                return true;
+
+            CarryBlockJamBoardPiece piece = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+            if (piece == null || piece == _cylinder)
+                return true;
+
+            if (IsBoxCellBlocker(piece))
+                return false;
+
+            return piece.Kind == CarryBlockJamPieceKind.Plate && piece.Color == carriedColor;
+        }
+
+        private bool IsCarriedPlateSinkCell(int row, int column, PieceColorType carriedColor)
+        {
+            if (FindMatchingExit(row, column, carriedColor) != null)
+                return true;
+
+            return IsOrthogonallyAdjacentToMatchingTable(row, column, carriedColor);
+        }
+
+        private bool IsOrthogonallyAdjacentToMatchingTable(int row, int column, PieceColorType carriedColor)
+        {
+            int[] rowOffsets = { -1, 1, 0, 0 };
+            int[] colOffsets = { 0, 0, -1, 1 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nextRow = row + rowOffsets[i];
+                int nextColumn = column + colOffsets[i];
+                if (!_grid.IsInside(nextRow, nextColumn))
+                    continue;
+                if (!_grid.TryGetCell(nextRow, nextColumn, out PuzzleCell cell) || cell == null)
+                    continue;
+                if (cell.Occupant == null)
+                    continue;
+
+                CarryBlockJamBoardPiece piece = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                if (piece == null)
+                    continue;
+
+                CarryBlockJamBoardPiece storageBox = GetStorageBox(piece) ??
+                    (piece.Kind == CarryBlockJamPieceKind.Box ? piece : null);
+                if (storageBox != null && storageBox.Color == carriedColor)
+                    return true;
+            }
+
+            return false;
         }
     }
 }
