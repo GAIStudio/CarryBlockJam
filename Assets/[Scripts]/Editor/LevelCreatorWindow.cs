@@ -199,6 +199,7 @@ namespace GAITemplate.Editor
                 CellTool.None => "Cell'e tıklayınca üzerindeki tüm flag'ler temizlenir. Renk dropdown'la seçilir.",
                 CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Hidden cell + color spawns a hidden CarryBlockJam table at that cell. " +
+                    "It reveals when every plate on surrounding cells (including diagonals) is collected. " +
                     "With No Auto Tables off, other tables may still auto-fill to match exits.",
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Ice cell + color spawns a frozen CarryBlockJam table. Set unlock moves below the cell. " +
@@ -656,7 +657,7 @@ namespace GAITemplate.Editor
                 noAuto
                     ? "Auto table generation is off. Paint Hidden/Ice/Curtain cells (with color) or leave the grid empty for no tables."
                     : "By default, missing tables are auto-generated to match exits. Paint Hidden/Ice/Curtain cells or use tablePlacements for manual tables. " +
-                      "Hidden tables reveal when adjacent plates are collected. Frozen tables unlock after N collected plates. " +
+                      "Hidden tables reveal when all surrounding plates are collected (including diagonals). Frozen tables unlock after N collected plates. " +
                       "Curtain tables open when all plates of the curtain color are delivered to the matching exit.",
                 MessageType.Info);
 
@@ -820,6 +821,12 @@ namespace GAITemplate.Editor
             }
 
             stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
+
+            stage.completeOnHiddenReveal = EditorGUILayout.Toggle(
+                new GUIContent(
+                    "Complete On Hidden Reveal",
+                    "End this stage (and unlock normal movement) when a hidden table is revealed."),
+                stage.completeOnHiddenReveal);
 
             GUILayout.Space(4f);
             EditorGUILayout.LabelField("Clickable Cells (0-based row, col)", EditorStyles.miniBoldLabel);

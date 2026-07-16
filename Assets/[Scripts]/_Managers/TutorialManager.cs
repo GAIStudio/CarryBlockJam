@@ -19,6 +19,25 @@ namespace GAITemplate
         /// <summary>While true, swipes are clamped to the current stage start→target path.</summary>
         public bool IsStagePathLocked => IsActive && _stagePathLocked;
 
+        /// <summary>
+        /// Guided start→target clamping. Off for stages that complete on hidden reveal
+        /// so the player can freely collect surrounding plates (swipe-until-plate).
+        /// </summary>
+        public bool UsesGuidedPathLock
+        {
+            get
+            {
+                if (!IsActive)
+                    return false;
+
+                TutorialStage stage = CurrentStage;
+                if (stage == null)
+                    return false;
+
+                return !stage.completeOnHiddenReveal;
+            }
+        }
+
         public void ReleaseStagePathLock() => _stagePathLocked = false;
 
         [Header("Hand Animation")]
@@ -153,7 +172,7 @@ namespace GAITemplate
             CaptureAuthoredClickOffset();
             PlaceClickPointUnderFinger();
             StartClickPulseAnimation();
-            ShowStage(0, lockPath: true);
+            ShowStage(0, lockPath: false);
             _startRoutine = null;
         }
 
@@ -424,6 +443,7 @@ namespace GAITemplate
 
         private void EndTutorial()
         {
+            ReleaseStagePathLock();
             StopHandMoveAnimation();
             StopClickPulseAnimation();
             if (_panel != null)
@@ -495,8 +515,17 @@ namespace GAITemplate
             return true;
         }
 
-        public bool IsTutorialTargetCell(int row, int col) =>
-            CanCollectTutorialPlate(row, col);
+        public bool IsTutorialTargetCell(int row, int col)
+        {
+            if (!IsActive)
+                return false;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null)
+                return false;
+
+            return stage.targetCell.x == row && stage.targetCell.y == col;
+        }
 
         /// <summary>
         /// Path cells from from→target (target inclusive, from exclusive).
@@ -544,7 +573,7 @@ namespace GAITemplate
         /// </summary>
         public bool TryEngageStagePathLock(int row, int col, int rowStep, int columnStep)
         {
-            if (!IsActive)
+            if (!UsesGuidedPathLock)
                 return false;
 
             if (_stagePathLocked)
@@ -588,7 +617,7 @@ namespace GAITemplate
             ref int columnStep,
             ref int requestedSteps)
         {
-            if (!IsActive)
+            if (!UsesGuidedPathLock)
                 return true;
 
             if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
@@ -735,7 +764,23 @@ namespace GAITemplate
             if (!IsActive)
                 return;
 
+            ReleaseStagePathLock();
             ShowStage(_stageIndex + 1, lockPath: false);
+        }
+
+        /// <summary>
+        /// Ends the current stage when it is configured to complete on hidden-table reveal.
+        /// </summary>
+        public void TryCompleteStageOnHiddenReveal()
+        {
+            if (!IsActive)
+                return;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null || !stage.completeOnHiddenReveal)
+                return;
+
+            NotifyTutorialActionCompleted();
         }
     }
 }

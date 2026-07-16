@@ -1007,8 +1007,8 @@ namespace CarryBlockJam
 
                 var boxCell = new Vector2Int(placement.row, placement.column);
 
-                for (int directionIndex = 0; directionIndex < CardinalDirections.Length; directionIndex++)
-                    preferredCells.Add(boxCell + CardinalDirections[directionIndex]);
+                for (int directionIndex = 0; directionIndex < HiddenBoxSurroundingOffsets.Length; directionIndex++)
+                    preferredCells.Add(boxCell + HiddenBoxSurroundingOffsets[directionIndex]);
             }
 
             return preferredCells;
@@ -1126,6 +1126,18 @@ namespace CarryBlockJam
             Vector2Int.down,
             Vector2Int.left,
             Vector2Int.right,
+        };
+
+        private static readonly Vector2Int[] HiddenBoxSurroundingOffsets =
+        {
+            Vector2Int.up,
+            Vector2Int.down,
+            Vector2Int.left,
+            Vector2Int.right,
+            new Vector2Int(-1, -1),
+            new Vector2Int(-1, 1),
+            new Vector2Int(1, -1),
+            new Vector2Int(1, 1),
         };
         private List<PieceColorType> GetActiveColors()
         {

@@ -160,7 +160,12 @@ namespace CarryBlockJam
             if (!TryGetSwipeIntent(screenPosition, out int rowStep, out int columnStep, out int requestedSteps))
                 return;
 
-            if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+            bool tutorialActive =
+                TutorialManager.Instance != null && TutorialManager.Instance.IsActive;
+            bool guidedTutorial =
+                tutorialActive && TutorialManager.Instance.UsesGuidedPathLock;
+
+            if (guidedTutorial)
             {
                 if (!TutorialManager.Instance.TryEngageStagePathLock(
                         _cylinder.Row,
@@ -168,10 +173,7 @@ namespace CarryBlockJam
                         rowStep,
                         columnStep))
                 {
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+                    ExecuteNormalSwipe(rowStep, columnStep, requestedSteps, swipeUntilPlate: true);
                     return;
                 }
 
@@ -183,28 +185,50 @@ namespace CarryBlockJam
                         ref requestedSteps))
                 {
                     TutorialManager.Instance.ReleaseStagePathLock();
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+                    ExecuteNormalSwipe(rowStep, columnStep, requestedSteps, swipeUntilPlate: true);
                     return;
                 }
 
                 if (!TryExecuteTutorialTravelSwipe(rowStep, columnStep, requestedSteps))
                 {
                     TutorialManager.Instance.ReleaseStagePathLock();
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+                    ExecuteNormalSwipe(rowStep, columnStep, requestedSteps, swipeUntilPlate: true);
                 }
                 return;
             }
+
+            // Hidden-reveal tutorial (or free roam): swipe continues until a plate / blocker.
+            if (tutorialActive && !HasCarriedPlates)
+                requestedSteps = Mathf.Max(requestedSteps, GetMaxStepsInDirection(rowStep, columnStep));
+
+            ExecuteNormalSwipe(rowStep, columnStep, requestedSteps, swipeUntilPlate: false);
+        }
+
+        private void ExecuteNormalSwipe(int rowStep, int columnStep, int requestedSteps, bool swipeUntilPlate)
+        {
+            if (swipeUntilPlate && !HasCarriedPlates)
+                requestedSteps = Mathf.Max(requestedSteps, GetMaxStepsInDirection(rowStep, columnStep));
 
             if (HasCarriedPlates)
                 ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
             else
                 ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+        }
+
+        private int GetMaxStepsInDirection(int rowStep, int columnStep)
+        {
+            if (_grid == null || _cylinder == null)
+                return 0;
+
+            if (rowStep > 0)
+                return Mathf.Max(0, _grid.Rows - 1 - _cylinder.Row);
+            if (rowStep < 0)
+                return Mathf.Max(0, _cylinder.Row);
+            if (columnStep > 0)
+                return Mathf.Max(0, _grid.Columns - 1 - _cylinder.Column);
+            if (columnStep < 0)
+                return Mathf.Max(0, _cylinder.Column);
+            return 0;
         }
 
         /// <summary>
@@ -221,9 +245,6 @@ namespace CarryBlockJam
 
             var path = new List<Vector2Int>();
             if (!TutorialManager.Instance.TryBuildAuthoredPathCells(fromRow, fromCol, path))
-                return false;
-
-            if (path.Count != requestedSteps)
                 return false;
 
             CarryBlockJamBoardPiece pickupSource = null;
@@ -247,6 +268,13 @@ namespace CarryBlockJam
             if (!IsTutorialTravelPathClear(path, target, pickupSource))
                 return false;
 
+            bool stopBeforeTableDrop = TrimTutorialPathBeforeTableDrop(path, target);
+
+            if (!stopBeforeTableDrop && path.Count != requestedSteps)
+                return false;
+            if (stopBeforeTableDrop && path.Count != requestedSteps - 1)
+                return false;
+
             if (pickupSource != null)
                 pickupPieces = ExtractPickupPlates(pickupSource, pickupRow, pickupColumn);
 
@@ -256,6 +284,9 @@ namespace CarryBlockJam
                     AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
                 else if (HasCarriedPlates)
                     CompleteTutorialTargetArrival(target.x, target.y);
+
+                if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+                    TutorialManager.Instance.ReleaseStagePathLock();
                 return true;
             }
 
@@ -265,6 +296,9 @@ namespace CarryBlockJam
                     AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
                 else
                     CompleteTutorialTargetArrival(target.x, target.y);
+
+                if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+                    TutorialManager.Instance.ReleaseStagePathLock();
             });
             return true;
         }
@@ -369,6 +403,28 @@ namespace CarryBlockJam
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// When delivering to a table, stop on the adjacent cell like normal carry swipes.
+        /// </summary>
+        private bool TrimTutorialPathBeforeTableDrop(List<Vector2Int> path, Vector2Int target)
+        {
+            if (!HasCarriedPlates || path == null || path.Count == 0)
+                return false;
+
+            if (TryResolveExitAtCell(target.x, target.y, out _))
+                return false;
+
+            if (!TryResolveDropTargetAtCell(target.x, target.y, out _))
+                return false;
+
+            Vector2Int lastStep = path[path.Count - 1];
+            if (lastStep.x != target.x || lastStep.y != target.y)
+                return false;
+
+            path.RemoveAt(path.Count - 1);
+            return true;
         }
 
         /// <summary>
@@ -1040,9 +1096,13 @@ namespace CarryBlockJam
 
             if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
             {
-                if (!TutorialManager.Instance.IsStagePathLocked)
+                bool guided = TutorialManager.Instance.UsesGuidedPathLock;
+                if (!guided || !TutorialManager.Instance.IsStagePathLocked)
                 {
-                    DrawHighlights(BuildPreviewPath(rowStep, columnStep, requestedSteps));
+                    int previewSteps = requestedSteps;
+                    if (!HasCarriedPlates)
+                        previewSteps = Mathf.Max(previewSteps, GetMaxStepsInDirection(rowStep, columnStep));
+                    DrawHighlights(BuildPreviewPath(rowStep, columnStep, previewSteps));
                     return;
                 }
 
@@ -1066,6 +1126,9 @@ namespace CarryBlockJam
                     ShowHighlights(false);
                     return;
                 }
+
+                if (TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int previewTarget))
+                    TrimTutorialPathBeforeTableDrop(previewPath, previewTarget);
 
                 DrawHighlights(previewPath);
                 return;
@@ -1173,26 +1236,112 @@ namespace CarryBlockJam
             if (screenDelta.magnitude < swipeThresholdPixels)
                 return false;
 
-            if (!TryGetNearestGridCell(screenPosition, out int endRow, out int endColumn))
+            if (_gameplayCamera == null)
+                ResolveGameplayReferences();
+
+            if (_gameplayCamera == null || _grid == null)
                 return false;
 
-            int rowDelta = endRow - _swipeStartRow;
-            int columnDelta = endColumn - _swipeStartColumn;
-            if (rowDelta == 0 && columnDelta == 0)
+            GetGridAxisScreenVectors(
+                _swipeStartRow,
+                _swipeStartColumn,
+                out Vector2 rowAxisScreen,
+                out Vector2 columnAxisScreen);
+
+            float rowAxisSqr = rowAxisScreen.sqrMagnitude;
+            float columnAxisSqr = columnAxisScreen.sqrMagnitude;
+            if (rowAxisSqr < 0.0001f && columnAxisSqr < 0.0001f)
                 return false;
 
-            if (Mathf.Abs(columnDelta) > Mathf.Abs(rowDelta))
+            float rowCells = rowAxisSqr > 0.0001f
+                ? Vector2.Dot(screenDelta, rowAxisScreen) / rowAxisSqr
+                : 0f;
+            float columnCells = columnAxisSqr > 0.0001f
+                ? Vector2.Dot(screenDelta, columnAxisScreen) / columnAxisSqr
+                : 0f;
+
+            if (Mathf.Abs(columnCells) > Mathf.Abs(rowCells))
             {
-                columnStep = columnDelta > 0 ? 1 : -1;
-                requestedSteps = Mathf.Abs(columnDelta);
+                if (Mathf.Abs(columnCells) < 0.35f)
+                    return false;
+
+                columnStep = columnCells > 0f ? 1 : -1;
+                rowStep = 0;
+                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(columnCells)));
             }
             else
             {
-                rowStep = rowDelta > 0 ? 1 : -1;
-                requestedSteps = Mathf.Abs(rowDelta);
+                if (Mathf.Abs(rowCells) < 0.35f)
+                    return false;
+
+                rowStep = rowCells > 0f ? 1 : -1;
+                columnStep = 0;
+                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(rowCells)));
+            }
+
+            // Prefer finger end-cell when it agrees with the projected direction
+            // (so a short or long swipe stops where the finger lifts).
+            // If the finger is off-grid / disagrees (common near bottom exits),
+            // keep the projection-based step count instead of rejecting the swipe.
+            if (TryGetNearestGridCell(screenPosition, out int endRow, out int endColumn))
+            {
+                if (rowStep != 0)
+                {
+                    int rowDelta = endRow - _swipeStartRow;
+                    if (rowDelta * rowStep > 0)
+                        requestedSteps = Mathf.Abs(rowDelta);
+                }
+                else if (columnStep != 0)
+                {
+                    int columnDelta = endColumn - _swipeStartColumn;
+                    if (columnDelta * columnStep > 0)
+                        requestedSteps = Mathf.Abs(columnDelta);
+                }
+            }
+
+            if (rowStep != 0)
+            {
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    rowStep > 0
+                        ? _grid.Rows - 1 - _swipeStartRow
+                        : _swipeStartRow);
+            }
+            else
+            {
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    columnStep > 0
+                        ? _grid.Columns - 1 - _swipeStartColumn
+                        : _swipeStartColumn);
             }
 
             return requestedSteps > 0;
+        }
+
+        private void GetGridAxisScreenVectors(
+            int row,
+            int column,
+            out Vector2 rowAxisScreen,
+            out Vector2 columnAxisScreen)
+        {
+            Vector2 originScreen = WorldToScreenPoint(_grid.GetWorldPosition(row, column));
+
+            int rowNeighbor = row < _grid.Rows - 1 ? row + 1 : row - 1;
+            int rowDirection = rowNeighbor > row ? 1 : -1;
+            Vector2 rowNeighborScreen = WorldToScreenPoint(_grid.GetWorldPosition(rowNeighbor, column));
+            rowAxisScreen = (rowNeighborScreen - originScreen) * rowDirection;
+
+            int columnNeighbor = column < _grid.Columns - 1 ? column + 1 : column - 1;
+            int columnDirection = columnNeighbor > column ? 1 : -1;
+            Vector2 columnNeighborScreen = WorldToScreenPoint(_grid.GetWorldPosition(row, columnNeighbor));
+            columnAxisScreen = (columnNeighborScreen - originScreen) * columnDirection;
+        }
+
+        private Vector2 WorldToScreenPoint(Vector3 worldPosition)
+        {
+            Vector3 screen = _gameplayCamera.WorldToScreenPoint(worldPosition);
+            return new Vector2(screen.x, screen.y);
         }
 
         private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out CarryBlockJamExit exitComponent)
