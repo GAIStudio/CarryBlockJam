@@ -550,6 +550,7 @@ namespace GAITemplate.Editor
                     _levelData.tutorialStages.Add(new TutorialStage
                     {
                         stageName = $"Stage {_levelData.tutorialStages.Count + 1}",
+                        hideHand = false,
                         useGridHandPath = true,
                         startCell = new Vector2Int(Mathf.Max(0, _rows / 2), Mathf.Max(0, _columns / 2 - 1)),
                         targetCell = new Vector2Int(Mathf.Max(0, _rows / 2), Mathf.Min(_columns - 1, _columns / 2 + 1)),
@@ -791,11 +792,23 @@ namespace GAITemplate.Editor
             stage.instruction = EditorGUILayout.TextArea(stage.instruction, GUILayout.Height(40f));
 
             GUILayout.Space(4f);
-            stage.useGridHandPath = EditorGUILayout.Toggle(
-                new GUIContent("Use Grid Hand Path", "Loop hand between Start and Target grid cells."),
-                stage.useGridHandPath);
+            bool showHand = !stage.hideHand;
+            showHand = EditorGUILayout.Toggle(
+                new GUIContent(
+                    "Show Hand",
+                    "When off, this stage shows instruction text only (no hand / click point)."),
+                showHand);
+            stage.hideHand = !showHand;
 
-            if (stage.useGridHandPath)
+            if (showHand)
+            {
+                stage.useGridHandPath = EditorGUILayout.Toggle(
+                    new GUIContent("Use Grid Hand Path", "Loop hand between Start and Target grid cells."),
+                    stage.useGridHandPath);
+            }
+
+            // Start/target still drive movement teaching even when the hand is hidden.
+            if (!showHand || stage.useGridHandPath)
             {
                 EditorGUILayout.LabelField("Start Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
                 EditorGUILayout.BeginHorizontal();
@@ -834,15 +847,18 @@ namespace GAITemplate.Editor
                     "Target Position Offset",
                     stage.targetPositionOffset);
 
-                GUILayout.Space(4f);
-                stage.handMoveDuration = Mathf.Max(
-                    0.05f,
-                    EditorGUILayout.FloatField("Hand Move Duration", stage.handMoveDuration));
-                stage.handPauseAtEnds = Mathf.Max(
-                    0f,
-                    EditorGUILayout.FloatField("Pause At Ends", stage.handPauseAtEnds));
+                if (showHand)
+                {
+                    GUILayout.Space(4f);
+                    stage.handMoveDuration = Mathf.Max(
+                        0.05f,
+                        EditorGUILayout.FloatField("Hand Move Duration", stage.handMoveDuration));
+                    stage.handPauseAtEnds = Mathf.Max(
+                        0f,
+                        EditorGUILayout.FloatField("Pause At Ends", stage.handPauseAtEnds));
+                }
             }
-            else
+            else if (showHand)
             {
                 stage.targetPos = EditorGUILayout.Vector3Field("Target Pos (World)", stage.targetPos);
                 stage.targetPositionOffset = EditorGUILayout.Vector3Field(
@@ -850,7 +866,8 @@ namespace GAITemplate.Editor
                     stage.targetPositionOffset);
             }
 
-            stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
+            if (showHand)
+                stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
 
             GUILayout.Space(4f);
             EditorGUILayout.LabelField("Clickable Cells (0-based row, col)", EditorStyles.miniBoldLabel);

@@ -137,13 +137,6 @@ namespace GAITemplate
             IsActive = true;
             _panel.Active(true);
 
-            if (_panel.hand != null)
-                _panel.hand.gameObject.SetActive(true);
-            if (_panel.handVisual != null)
-                _panel.handVisual.gameObject.SetActive(true);
-            if (_panel.circleVisual != null)
-                _panel.circleVisual.gameObject.SetActive(true);
-
             if (_panel.instruction != null && _gameCamera != null && _levelData != null)
             {
                 Vector3 screen = _gameCamera.WorldToScreenPoint(_levelData.tutorialTextWorldPosition);
@@ -152,7 +145,6 @@ namespace GAITemplate
 
             CaptureAuthoredClickOffset();
             PlaceClickPointUnderFinger();
-            StartClickPulseAnimation();
             ShowStage(0, lockPath: true);
             _startRoutine = null;
         }
@@ -251,8 +243,39 @@ namespace GAITemplate
             if (_panel?.circleVisual != null)
             {
                 _panel.circleVisual.anchoredPosition = ResolveClickOffset();
-                _panel.circleVisual.gameObject.SetActive(true);
+                // Visibility is controlled by ShowHandForStage — don't force-show here.
             }
+        }
+
+        private void SetHandVisible(bool visible)
+        {
+            if (_panel == null)
+                return;
+
+            if (_panel.hand != null)
+                _panel.hand.gameObject.SetActive(visible);
+            if (_panel.handVisual != null)
+                _panel.handVisual.gameObject.SetActive(visible);
+            if (_panel.circleVisual != null)
+                _panel.circleVisual.gameObject.SetActive(visible);
+        }
+
+        private void ShowHandForStage(TutorialStage stage)
+        {
+            // hideHand defaults false on old assets → hand stays visible.
+            bool showHand = stage == null || !stage.hideHand;
+            SetHandVisible(showHand);
+
+            if (!showHand)
+            {
+                StopHandMoveAnimation();
+                StopClickPulseAnimation();
+                return;
+            }
+
+            PlaceClickPointUnderFinger();
+            StartClickPulseAnimation();
+            StartHandPathLoop(stage);
         }
 
         private void ShowStage(int index, bool lockPath)
@@ -282,7 +305,7 @@ namespace GAITemplate
             // later stages continue from the previous target when authored that way.
             SnapStickmanToStageStart(stage);
 
-            StartHandPathLoop(stage);
+            ShowHandForStage(stage);
         }
 
         private void SnapStickmanToStageStart(TutorialStage stage)
