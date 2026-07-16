@@ -65,9 +65,6 @@ namespace GAITemplate
         [Min(0f)]
         public float handPauseAtEnds = 0.25f;
 
-        [Tooltip("When on, this stage completes as soon as a hidden table is revealed.")]
-        public bool completeOnHiddenReveal;
-
         public System.Collections.Generic.List<Vector2Int> clickableCells =
             new System.Collections.Generic.List<Vector2Int>();
     }

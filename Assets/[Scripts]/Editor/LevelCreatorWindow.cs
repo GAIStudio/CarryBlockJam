@@ -822,12 +822,6 @@ namespace GAITemplate.Editor
 
             stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
 
-            stage.completeOnHiddenReveal = EditorGUILayout.Toggle(
-                new GUIContent(
-                    "Complete On Hidden Reveal",
-                    "End this stage (and unlock normal movement) when a hidden table is revealed."),
-                stage.completeOnHiddenReveal);
-
             GUILayout.Space(4f);
             EditorGUILayout.LabelField("Clickable Cells (0-based row, col)", EditorStyles.miniBoldLabel);
             DrawClickableCellsList(stage.clickableCells);

@@ -96,7 +96,6 @@ MonoBehaviour:
     handRotation: {x: 0, y: 0, z: 0}
     handMoveDuration: 0.7
     handPauseAtEnds: 0.25
-    completeOnHiddenReveal: 1
     clickableCells: []
   cameraPosition: {x: 0, y: 15.6, z: -20.89}
   cameraRotation: {x: 60, y: 0, z: 0}

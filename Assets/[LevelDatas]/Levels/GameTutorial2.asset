@@ -61,14 +61,6 @@ MonoBehaviour:
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
-    - color: 1
-      row: 4
-      column: 3
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
     platePlacements:
     - color: 1
       row: 4

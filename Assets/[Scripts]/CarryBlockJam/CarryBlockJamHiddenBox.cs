@@ -87,8 +87,6 @@ namespace CarryBlockJam
             if (_visualPiece != null)
                 _visualPiece.ApplyHidden(false);
 
-            GAITemplate.TutorialManager.Instance?.TryCompleteStageOnHiddenReveal();
-
             enabled = false;
         }
 
