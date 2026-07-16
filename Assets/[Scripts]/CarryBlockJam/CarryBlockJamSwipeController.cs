@@ -162,15 +162,42 @@ namespace CarryBlockJam
 
             if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
             {
+                if (!TutorialManager.Instance.TryEngageStagePathLock(
+                        _cylinder.Row,
+                        _cylinder.Column,
+                        rowStep,
+                        columnStep))
+                {
+                    if (HasCarriedPlates)
+                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
+                    else
+                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+                    return;
+                }
+
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
                         _cylinder.Column,
                         ref rowStep,
                         ref columnStep,
                         ref requestedSteps))
+                {
+                    TutorialManager.Instance.ReleaseStagePathLock();
+                    if (HasCarriedPlates)
+                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
+                    else
+                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
                     return;
+                }
 
-                ExecuteTutorialTravelSwipe(rowStep, columnStep, requestedSteps);
+                if (!TryExecuteTutorialTravelSwipe(rowStep, columnStep, requestedSteps))
+                {
+                    TutorialManager.Instance.ReleaseStagePathLock();
+                    if (HasCarriedPlates)
+                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
+                    else
+                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+                }
                 return;
             }
 
@@ -181,31 +208,31 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Tutorial travel: authored startCell → targetCell (target inclusive).
+        /// Tutorial travel: current cell → targetCell along the authored segment (target inclusive).
         /// Works empty-handed (pickup) or while carrying plates.
         /// </summary>
-        private void ExecuteTutorialTravelSwipe(int rowStep, int columnStep, int requestedSteps)
+        private bool TryExecuteTutorialTravelSwipe(int rowStep, int columnStep, int requestedSteps)
         {
-            if (!TutorialManager.Instance.TryGetActivePath(out Vector2Int start, out Vector2Int target))
-                return;
+            if (!TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int target))
+                return false;
 
-            // Do not relocate the stickman — they must already stand on startCell.
-            if (_cylinder.Row != start.x || _cylinder.Column != start.y)
-                return;
+            int fromRow = _cylinder.Row;
+            int fromCol = _cylinder.Column;
 
             var path = new List<Vector2Int>();
-            if (!TutorialManager.Instance.TryBuildAuthoredPathCells(path))
-                return;
+            if (!TutorialManager.Instance.TryBuildAuthoredPathCells(fromRow, fromCol, path))
+                return false;
 
             if (path.Count != requestedSteps)
-                return;
+                return false;
 
             CarryBlockJamBoardPiece pickupSource = null;
             int pickupRow = target.x;
             int pickupColumn = target.y;
             List<CarryBlockJamBoardPiece> pickupPieces = null;
 
-            if (_grid.TryGetCell(target.x, target.y, out PuzzleCell targetCell) &&
+            if (!HasCarriedPlates &&
+                _grid.TryGetCell(target.x, target.y, out PuzzleCell targetCell) &&
                 targetCell != null &&
                 targetCell.Occupant != null)
             {
@@ -214,25 +241,11 @@ namespace CarryBlockJam
                 if (CanPickUpPiece(targetPiece, target.x, target.y))
                     pickupSource = targetPiece;
                 else if (targetPiece != null)
-                    return;
+                    return false;
             }
 
-            for (int i = 0; i < path.Count; i++)
-            {
-                Vector2Int step = path[i];
-                bool isTargetStep = step.x == target.x && step.y == target.y;
-                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
-                    return;
-
-                if (cell.Occupant == null)
-                    continue;
-
-                CarryBlockJamBoardPiece occupant = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
-                if (isTargetStep && pickupSource != null && occupant == pickupSource)
-                    continue;
-
-                return;
-            }
+            if (!IsTutorialTravelPathClear(path, target, pickupSource))
+                return false;
 
             if (pickupSource != null)
                 pickupPieces = ExtractPickupPlates(pickupSource, pickupRow, pickupColumn);
@@ -243,7 +256,7 @@ namespace CarryBlockJam
                     AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
                 else if (HasCarriedPlates)
                     CompleteTutorialTargetArrival(target.x, target.y);
-                return;
+                return true;
             }
 
             AnimateTutorialCylinderTravel(path, () =>
@@ -253,6 +266,46 @@ namespace CarryBlockJam
                 else
                     CompleteTutorialTargetArrival(target.x, target.y);
             });
+            return true;
+        }
+
+        private bool IsTutorialTravelPathClear(
+            List<Vector2Int> path,
+            Vector2Int target,
+            CarryBlockJamBoardPiece pickupSource)
+        {
+            for (int i = 0; i < path.Count; i++)
+            {
+                Vector2Int step = path[i];
+                bool isTargetStep = step.x == target.x && step.y == target.y;
+                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
+                    return false;
+
+                if (cell.Occupant == null)
+                    continue;
+
+                CarryBlockJamBoardPiece occupant = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                if (occupant == null)
+                    continue;
+
+                if (HasCarriedPlates)
+                {
+                    if (isTargetStep && TryResolveExitAtCell(step.x, step.y, out _))
+                        continue;
+                    if (isTargetStep && IsMatchingDropTarget(occupant))
+                        continue;
+                    if (IsBoxCellBlocker(occupant))
+                        return false;
+                    return false;
+                }
+
+                if (isTargetStep && pickupSource != null && occupant == pickupSource)
+                    continue;
+
+                return false;
+            }
+
+            return true;
         }
 
         private void CompleteTutorialTargetArrival(int targetRow, int targetColumn)
@@ -260,18 +313,62 @@ namespace CarryBlockJam
             if (TutorialManager.Instance == null || !TutorialManager.Instance.IsActive)
                 return;
 
-            // Deliver to exit when the authored target is an accepting gate.
-            if (HasCarriedPlates &&
-                TryResolveExitAtCell(targetRow, targetColumn, out CarryBlockJamExit exit) &&
-                exit != null &&
-                exit.CanAccept(CarriedColor))
+            if (HasCarriedPlates)
             {
-                SendCarriedPlatesToExit(exit, null);
-                TutorialManager.Instance.NotifyTutorialActionCompleted();
-                return;
+                if (TryResolveExitAtCell(targetRow, targetColumn, out CarryBlockJamExit exit) &&
+                    exit != null &&
+                    exit.CanAccept(CarriedColor))
+                {
+                    SendCarriedPlatesToExit(exit, null);
+                    TutorialManager.Instance.NotifyTutorialActionCompleted();
+                    return;
+                }
+
+                if (TryResolveDropTargetAtCell(targetRow, targetColumn, out CarryBlockJamBoardPiece dropBox))
+                {
+                    AnimateCarriedPlatesToBox(dropBox);
+                    return;
+                }
             }
 
             TutorialManager.Instance.NotifyTutorialActionCompleted();
+        }
+
+        private bool TryResolveDropTargetAtCell(int row, int column, out CarryBlockJamBoardPiece targetBox)
+        {
+            targetBox = null;
+            if (!HasCarriedPlates)
+                return false;
+
+            if (_grid.TryGetCell(row, column, out PuzzleCell cell) &&
+                cell?.Occupant != null)
+            {
+                CarryBlockJamBoardPiece occupant =
+                    cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                if (IsMatchingDropTarget(occupant))
+                {
+                    targetBox = occupant.Kind == CarryBlockJamPieceKind.Box
+                        ? occupant
+                        : GetStorageBox(occupant) ?? occupant;
+                    return true;
+                }
+            }
+
+            // Tutorial travel can place the stickman on the table cell, hiding the table occupant.
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Row != row || piece.Column != column)
+                    continue;
+                if (piece.Kind == CarryBlockJamPieceKind.Box && piece.Color == CarriedColor)
+                {
+                    targetBox = piece;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -739,15 +836,30 @@ namespace CarryBlockJam
             {
                 UpdateCarriedPlateVisuals();
                 _isAnimating = false;
+                MaybeNotifyTutorialExitDelivery();
                 TryTriggerSuccess(plates);
             });
         }
 
-        private void AnimateCarriedPlatesToBox(CarryBlockJamBoardPiece targetBox)
+        private void MaybeNotifyTutorialExitDelivery()
+        {
+            if (TutorialManager.Instance == null ||
+                !TutorialManager.Instance.IsActive ||
+                _cylinder == null)
+                return;
+
+            if (!TutorialManager.Instance.IsTutorialTargetCell(_cylinder.Row, _cylinder.Column))
+                return;
+
+            TutorialManager.Instance.NotifyTutorialActionCompleted();
+        }
+
+        private void AnimateCarriedPlatesToBox(CarryBlockJamBoardPiece targetBox, TweenCallback onComplete = null)
         {
             if (!HasCarriedPlates || targetBox == null)
             {
                 _isAnimating = false;
+                onComplete?.Invoke();
                 return;
             }
 
@@ -779,7 +891,27 @@ namespace CarryBlockJam
                 currentTop = plate;
             }
 
-            sequence.OnComplete(() => _isAnimating = false);
+            sequence.OnComplete(() =>
+            {
+                _isAnimating = false;
+                if (onComplete != null)
+                    onComplete.Invoke();
+                else
+                    MaybeNotifyTutorialTableDrop(targetBox);
+            });
+        }
+
+        private void MaybeNotifyTutorialTableDrop(CarryBlockJamBoardPiece targetBox)
+        {
+            if (TutorialManager.Instance == null ||
+                !TutorialManager.Instance.IsActive ||
+                targetBox == null)
+                return;
+
+            if (!TutorialManager.Instance.IsTutorialTargetCell(targetBox.Row, targetBox.Column))
+                return;
+
+            TutorialManager.Instance.NotifyTutorialActionCompleted();
         }
 
         private Vector3 GetPieceLocalPosition(CarryBlockJamBoardPiece piece, int row, int column)
@@ -908,6 +1040,12 @@ namespace CarryBlockJam
 
             if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
             {
+                if (!TutorialManager.Instance.IsStagePathLocked)
+                {
+                    DrawHighlights(BuildPreviewPath(rowStep, columnStep, requestedSteps));
+                    return;
+                }
+
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
                         _cylinder.Column,
@@ -920,7 +1058,10 @@ namespace CarryBlockJam
                 }
 
                 var previewPath = new List<Vector2Int>();
-                if (!TutorialManager.Instance.TryBuildAuthoredPathCells(previewPath))
+                if (!TutorialManager.Instance.TryBuildAuthoredPathCells(
+                        _cylinder.Row,
+                        _cylinder.Column,
+                        previewPath))
                 {
                     ShowHighlights(false);
                     return;

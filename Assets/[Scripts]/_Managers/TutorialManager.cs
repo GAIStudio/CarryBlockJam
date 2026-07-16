@@ -16,6 +16,11 @@ namespace GAITemplate
 
         public bool IsActive { get; private set; }
 
+        /// <summary>While true, swipes are clamped to the current stage start→target path.</summary>
+        public bool IsStagePathLocked => IsActive && _stagePathLocked;
+
+        public void ReleaseStagePathLock() => _stagePathLocked = false;
+
         [Header("Hand Animation")]
         public float handVisualStartScale = 1f;
         public float handVisualScale = 0.8f;
@@ -29,6 +34,7 @@ namespace GAITemplate
         private LevelData _levelData;
         private TutorialPanel _panel;
         private int _stageIndex = -1;
+        private bool _stagePathLocked;
         private Camera _gameCamera;
         private PuzzleGrid _grid;
 
@@ -147,7 +153,7 @@ namespace GAITemplate
             CaptureAuthoredClickOffset();
             PlaceClickPointUnderFinger();
             StartClickPulseAnimation();
-            ShowStage(0);
+            ShowStage(0, lockPath: true);
             _startRoutine = null;
         }
 
@@ -249,7 +255,7 @@ namespace GAITemplate
             }
         }
 
-        private void ShowStage(int index)
+        private void ShowStage(int index, bool lockPath)
         {
             if (_levelData == null || _panel == null)
                 return;
@@ -263,6 +269,7 @@ namespace GAITemplate
             }
 
             _stageIndex = index;
+            _stagePathLocked = lockPath;
             TutorialStage stage = _levelData.tutorialStages[index];
 
             if (_panel.instruction != null)
@@ -435,6 +442,7 @@ namespace GAITemplate
             StopHandMoveAnimation();
             StopClickPulseAnimation();
             IsActive = false;
+            _stagePathLocked = false;
             _stageIndex = -1;
             _levelData = null;
             _grid = null;
@@ -443,7 +451,7 @@ namespace GAITemplate
 
         public bool IsCellClickable(int row, int col)
         {
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return true;
 
             TutorialStage stage = CurrentStage;
@@ -519,16 +527,59 @@ namespace GAITemplate
             return pathCells.Count > 0;
         }
 
-        public bool TryBuildAuthoredPathCells(List<Vector2Int> pathCells)
+        public bool TryBuildAuthoredPathCells(int fromRow, int fromCol, List<Vector2Int> pathCells)
         {
             if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
                 return false;
-            return TryBuildPathCells(start.x, start.y, target, pathCells);
+
+            if (!IsOnAuthoredPathSegment(fromRow, fromCol, start, target))
+                return false;
+
+            return TryBuildPathCells(fromRow, fromCol, target, pathCells);
         }
 
         /// <summary>
-        /// Locks swipe to authored startCell→targetCell direction and full length.
-        /// Stickman is placed on startCell when the move executes.
+        /// When the stage path is unlocked, engage it only if the player swipes along the
+        /// taught direction while standing on the authored start→target segment.
+        /// </summary>
+        public bool TryEngageStagePathLock(int row, int col, int rowStep, int columnStep)
+        {
+            if (!IsActive)
+                return false;
+
+            if (_stagePathLocked)
+            {
+                if (!TryGetActivePath(out Vector2Int lockedStart, out Vector2Int lockedTarget) ||
+                    !IsOnAuthoredPathSegment(row, col, lockedStart, lockedTarget))
+                {
+                    _stagePathLocked = false;
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
+                return false;
+
+            if (!IsOnAuthoredPathSegment(row, col, start, target))
+                return false;
+
+            if (!TryGetRequiredSwipe(start, target, out int requiredRowStep, out int requiredColStep, out _))
+                return false;
+
+            if (rowStep != requiredRowStep || columnStep != requiredColStep)
+                return false;
+
+            if (!IsSwipeTowardTarget(row, col, target, rowStep, columnStep))
+                return false;
+
+            _stagePathLocked = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Locks swipe to the taught direction from the stickman's current cell to targetCell.
         /// </summary>
         public bool TryClampSwipeToAuthoredPath(
             int stickmanRow,
@@ -543,25 +594,35 @@ namespace GAITemplate
             if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
                 return true;
 
-            if (!TryGetRequiredSwipe(start, target, out int requiredRowStep, out int requiredColStep, out int requiredSteps))
+            if (!IsOnAuthoredPathSegment(stickmanRow, stickmanCol, start, target))
+                return false;
+
+            if (!TryGetRequiredSwipe(start, target, out int requiredRowStep, out int requiredColStep, out _))
                 return false;
 
             if (rowStep != requiredRowStep || columnStep != requiredColStep)
                 return false;
 
-            // Any committed swipe in the taught direction runs the full start→target path.
+            if (!IsSwipeTowardTarget(stickmanRow, stickmanCol, target, rowStep, columnStep))
+                return false;
+
             if (requestedSteps < 1)
+                return false;
+
+            int remainingSteps = GetRemainingStepsTowardTarget(
+                stickmanRow, stickmanCol, target, rowStep, columnStep);
+            if (remainingSteps < 1)
                 return false;
 
             rowStep = requiredRowStep;
             columnStep = requiredColStep;
-            requestedSteps = requiredSteps;
+            requestedSteps = remainingSteps;
             return true;
         }
 
         public bool CanCollectTutorialPlate(int row, int col)
         {
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return true;
 
             TutorialStage stage = CurrentStage;
@@ -569,6 +630,57 @@ namespace GAITemplate
                 return true;
 
             return stage.targetCell.x == row && stage.targetCell.y == col;
+        }
+
+        private static bool IsOnAuthoredPathSegment(int row, int col, Vector2Int start, Vector2Int target)
+        {
+            if (start.x == target.x && row == start.x)
+            {
+                int minCol = Mathf.Min(start.y, target.y);
+                int maxCol = Mathf.Max(start.y, target.y);
+                return col >= minCol && col <= maxCol;
+            }
+
+            if (start.y == target.y && col == start.y)
+            {
+                int minRow = Mathf.Min(start.x, target.x);
+                int maxRow = Mathf.Max(start.x, target.x);
+                return row >= minRow && row <= maxRow;
+            }
+
+            return start.x == target.x && start.y == target.y && row == start.x && col == start.y;
+        }
+
+        private static bool IsSwipeTowardTarget(
+            int row,
+            int col,
+            Vector2Int target,
+            int rowStep,
+            int columnStep)
+        {
+            if (rowStep != 0)
+                return Mathf.Sign(target.x - row) == Mathf.Sign(rowStep);
+
+            if (columnStep != 0)
+                return Mathf.Sign(target.y - col) == Mathf.Sign(columnStep);
+
+            return false;
+        }
+
+        private static int GetRemainingStepsTowardTarget(
+            int row,
+            int col,
+            Vector2Int target,
+            int rowStep,
+            int columnStep)
+        {
+            if (rowStep != 0)
+                return Mathf.Abs(target.x - row);
+
+            if (columnStep != 0)
+                return Mathf.Abs(target.y - col);
+
+            return 0;
         }
 
         private static bool TryGetRequiredSwipe(
@@ -611,7 +723,7 @@ namespace GAITemplate
             if (!IsCellClickable(row, col))
                 return;
 
-            ShowStage(_stageIndex + 1);
+            ShowStage(_stageIndex + 1, lockPath: false);
         }
 
         /// <summary>
@@ -623,7 +735,7 @@ namespace GAITemplate
             if (!IsActive)
                 return;
 
-            ShowStage(_stageIndex + 1);
+            ShowStage(_stageIndex + 1, lockPath: false);
         }
     }
 }
