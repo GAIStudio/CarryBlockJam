@@ -29,8 +29,8 @@ MonoBehaviour:
       minPlateStacks: 1
       maxPlateStacks: 2
     exits:
-    - row: -1
-      column: -1
+    - row: 0
+      column: 1
       side: 0
       startIndex: 1
       length: 1
@@ -42,8 +42,8 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 2
         requiredPlateCount: 2
-    - row: -1
-      column: -1
+    - row: 0
+      column: 4
       side: 0
       startIndex: 4
       length: 1
@@ -53,8 +53,8 @@ MonoBehaviour:
       goals:
       - color: 3
         requiredPlateCount: 2
-    - row: -1
-      column: -1
+    - row: 9
+      column: 1
       side: 1
       startIndex: 1
       length: 1
@@ -64,8 +64,8 @@ MonoBehaviour:
       goals:
       - color: 6
         requiredPlateCount: 3
-    - row: -1
-      column: -1
+    - row: 9
+      column: 4
       side: 1
       startIndex: 4
       length: 1
@@ -75,38 +75,13 @@ MonoBehaviour:
       goals:
       - color: 2
         requiredPlateCount: 3
+    disableAutoTables: 0
     tablePlacements: []
     platePlacements: []
     stickmanSpawnMode: 0
     fixedStickmanCell:
       row: 2
       column: 3
-    frozenTableVisual:
-      model: {fileID: 919132149155446097, guid: a9c8c615477d1468fbefdfbffa346c9f,
-        type: 3}
-      material: {fileID: 2100000, guid: cf3ab68d24ba247389423c15d361179a, type: 2}
-      scale: {x: 1, y: 1, z: 1}
-      offset: {x: 0, y: 0, z: 0}
-      autoFitToTable: 1
-      coverPadding: 1.2
-      font: {fileID: 11400000, guid: 9a2157e1f9c4c4d38841fbb92558f587, type: 2}
-      fontSize: 7
-      textOffset: {x: -0.2, y: -0.5, z: 0.7}
-      textScale: {x: 1, y: 1, z: 1}
-      textColor: {r: 0.57872015, g: 0.77744794, b: 0.8018868, a: 1}
-      bold: 1
-      useOutline: 1
-    curtainTableVisual:
-      curtainMaterial: {fileID: 0}
-      curtainTint: {r: 1, g: 1, b: 1, a: 1}
-      colorSprite: {fileID: 0}
-      curtainScale: {x: 1, y: 1, z: 1}
-      curtainOffset: {x: 0, y: 0, z: 0}
-      autoFitToTable: 1
-      coverPadding: 1.05
-      badgeOffset: {x: 0, y: 0, z: 0}
-      badgeScale: {x: 0.85, y: 0.85, z: 0.85}
-      badgeRotation: {x: 90, y: 180, z: 0}
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []
