@@ -23,6 +23,7 @@ MonoBehaviour:
     flagValue: 0
     direction: 0
     tunnelPieces: 
+    secondaryColor: 5
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 360

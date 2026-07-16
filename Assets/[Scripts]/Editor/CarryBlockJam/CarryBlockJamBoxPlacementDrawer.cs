@@ -41,7 +41,7 @@ namespace CarryBlockJam.Editor
             if (colorProperty != null)
             {
                 PieceColorType color = (PieceColorType)colorProperty.enumValueIndex;
-                color = TableColorEditorUtility.DrawPopup(rowRect, "Color", color);
+                color = TableColorEditorUtility.DrawPopup(rowRect, "Table Color", color);
                 colorProperty.enumValueIndex = (int)color;
                 rowRect.y += lineHeight + spacing;
             }
@@ -73,7 +73,7 @@ namespace CarryBlockJam.Editor
             if (curtainColorProperty != null && curtainProperty != null && curtainProperty.boolValue)
             {
                 PieceColorType curtainColor = (PieceColorType)curtainColorProperty.enumValueIndex;
-                curtainColor = PlateColorEditorUtility.DrawPopup(rowRect, "Curtain Color", curtainColor);
+                curtainColor = PlateColorEditorUtility.DrawPopup(rowRect, "Collect Color", curtainColor);
                 curtainColorProperty.enumValueIndex = (int)curtainColor;
                 rowRect.y += lineHeight + spacing;
             }

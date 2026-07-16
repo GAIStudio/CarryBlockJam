@@ -13,7 +13,8 @@ namespace GAITemplate.Editor
             LevelCellFlag[,] cellFlags = null,
             int[,] cellFlagValues = null,
             CellDirection[,] cellDirections = null,
-            System.Collections.Generic.List<PieceColorType>[,] cellTunnelPieces = null)
+            System.Collections.Generic.List<PieceColorType>[,] cellTunnelPieces = null,
+            PieceColorType[,] cellSecondaryColors = null)
         {
             if (levelData == null)
                 return;
@@ -35,9 +36,12 @@ namespace GAITemplate.Editor
                         int flagValue = ReadAt(cellFlagValues, row, column);
                         CellDirection direction = ReadAt(cellDirections, row, column);
                         PieceColorType[] tunnelPieces = ReadTunnelPiecesAt(cellTunnelPieces, row, column);
+                        PieceColorType secondaryColor = ReadAt(cellSecondaryColors, row, column);
 
                         // Hem renk hem flag boşsa cell'i hiç kaydetme.
-                        if (color == PieceColorType.None && flag == LevelCellFlag.None)
+                        if (color == PieceColorType.None &&
+                            secondaryColor == PieceColorType.None &&
+                            flag == LevelCellFlag.None)
                             continue;
 
                         cells.Add(new LevelColorCell
@@ -49,6 +53,7 @@ namespace GAITemplate.Editor
                             flagValue = flagValue,
                             direction = direction,
                             tunnelPieces = tunnelPieces,
+                            secondaryColor = secondaryColor,
                         });
                     }
                 }
@@ -75,6 +80,26 @@ namespace GAITemplate.Editor
                     continue;
 
                 cellColors[cell.row, cell.column] = cell.color;
+            }
+        }
+
+        public static void ReadSecondaryColorsIntoGrid(LevelData levelData, PieceColorType[,] cellSecondaryColors)
+        {
+            if (cellSecondaryColors == null) return;
+            ClearGrid(cellSecondaryColors);
+
+            if (levelData == null || levelData.colorCells == null) return;
+
+            int rows = cellSecondaryColors.GetLength(0);
+            int columns = cellSecondaryColors.GetLength(1);
+
+            for (int i = 0; i < levelData.colorCells.Length; i++)
+            {
+                LevelColorCell cell = levelData.colorCells[i];
+                if (cell.row < 0 || cell.row >= rows || cell.column < 0 || cell.column >= columns)
+                    continue;
+
+                cellSecondaryColors[cell.row, cell.column] = cell.secondaryColor;
             }
         }
 

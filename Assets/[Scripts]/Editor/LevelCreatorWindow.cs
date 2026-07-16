@@ -19,6 +19,7 @@ namespace GAITemplate.Editor
         private SerializedObject _levelDataSo;
 
         private PieceColorType[,] _cellColors;
+        private PieceColorType[,] _cellSecondaryColors;
         private LevelCellFlag[,]  _cellFlags;
         private int[,]            _cellFlagValues;
         private CellDirection[,]  _cellDirections;
@@ -205,9 +206,9 @@ namespace GAITemplate.Editor
                     "Ice cell + color spawns a frozen CarryBlockJam table. Set unlock moves below the cell. " +
                     "Each collected plate counts down until the table unlocks.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Curtain cell + color spawns a curtained table. Choose the cell color for the curtain badge; " +
-                    "curtain look is shared on CarryBlockJamRuntimePieceSpawner. " +
-                    "The table opens when all plates of that color are delivered to the matching exit.",
+                    "Curtain cell: set Table Color and Collect Color separately. " +
+                    "Collect Color is the plate color that unlocks the curtain when delivered to its exit. " +
+                    "Curtain look is shared on CarryBlockJamRuntimePieceSpawner.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -300,7 +301,25 @@ namespace GAITemplate.Editor
             // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
             if (!isTunnel)
             {
-                _cellColors[row, column] = DrawGridCellColorPopup(_cellColors[row, column], flags);
+                bool isCurtain = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
+                if (isCurtain && IsCarryBlockJamGrid())
+                {
+                    EditorGUILayout.LabelField("Table", EditorStyles.miniLabel);
+                    _cellColors[row, column] = TableColorEditorUtility.DrawPopupNoLabel(
+                        _cellColors[row, column],
+                        includeNone: true,
+                        GUILayout.Width(70f));
+
+                    EditorGUILayout.LabelField("Collect", EditorStyles.miniLabel);
+                    _cellSecondaryColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
+                        _cellSecondaryColors[row, column],
+                        includeNone: true,
+                        GUILayout.Width(70f));
+                }
+                else
+                {
+                    _cellColors[row, column] = DrawGridCellColorPopup(_cellColors[row, column], flags);
+                }
             }
             else
             {
@@ -339,6 +358,7 @@ namespace GAITemplate.Editor
                 return (PieceColorType)EditorGUILayout.EnumPopup(current, GUILayout.Width(70f));
 
             // Hidden / Ice cell color paints the table material.
+            // Curtain uses dedicated Table + Collect pickers in DrawCell.
             bool isTableCell =
                 (flags & LevelCellFlag.Hidden) != 0 ||
                 (flags & LevelCellFlag.Ice) != 0;
@@ -351,7 +371,6 @@ namespace GAITemplate.Editor
                     GUILayout.Width(70f));
             }
 
-            // Curtain badge / plain cell / other uses plate material colors.
             return PlateColorEditorUtility.DrawPopupNoLabel(
                 current,
                 includeNone: true,
@@ -464,7 +483,18 @@ namespace GAITemplate.Editor
 
                 // Tunnel set edildiğinde renk temizlenir (default direction zaten Front).
                 if (bit == LevelCellFlag.Tunnel)
+                {
                     _cellColors[row, column] = PieceColorType.None;
+                    _cellSecondaryColors[row, column] = PieceColorType.None;
+                }
+
+                // Curtain: seed collect color from table color when unset (old single-color levels).
+                if (bit == LevelCellFlag.Curtain &&
+                    _cellSecondaryColors[row, column] == PieceColorType.None &&
+                    _cellColors[row, column] != PieceColorType.None)
+                {
+                    _cellSecondaryColors[row, column] = _cellColors[row, column];
+                }
             }
         }
 
@@ -596,7 +626,7 @@ namespace GAITemplate.Editor
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
             EditorGUILayout.HelpBox(
                 "Frozen ice and curtain look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
-                "In Level Creator only paint Ice/Curtain cells (and unlock moves / curtain color).",
+                "In Level Creator only paint Ice/Curtain cells (and unlock moves / table + collect colors).",
                 MessageType.None);
             EditorGUILayout.Space(6f);
 
@@ -689,7 +719,7 @@ namespace GAITemplate.Editor
                     ? "Auto table generation is off. Paint Hidden/Ice/Curtain cells (with color) or leave the grid empty for no tables."
                     : "By default, missing tables are auto-generated to match exits. Paint Hidden/Ice/Curtain cells or use tablePlacements for manual tables. " +
                       "Hidden tables reveal when all surrounding plates are collected (including diagonals). Frozen tables unlock after N collected plates. " +
-                      "Curtain tables open when all plates of the curtain color are delivered to the matching exit.",
+                      "Curtain tables open when all plates of the Collect Color are delivered to the matching exit.",
                 MessageType.Info);
 
             EditorGUILayout.EndVertical();
@@ -956,6 +986,7 @@ namespace GAITemplate.Editor
                 else
                 {
                     _cellColors       = null;
+                    _cellSecondaryColors = null;
                     _cellFlags        = null;
                     _cellFlagValues   = null;
                     _cellDirections   = null;
@@ -998,7 +1029,7 @@ namespace GAITemplate.Editor
                 return;
 
             if (_lastLoadedLevelData != _levelData ||
-                _cellColors == null || _cellFlags == null ||
+                _cellColors == null || _cellSecondaryColors == null || _cellFlags == null ||
                 _cellFlagValues == null || _cellDirections == null ||
                 _cellTunnelPieces == null)
             {
@@ -1013,10 +1044,26 @@ namespace GAITemplate.Editor
             _columns = Mathf.Max(1, _levelData.gridColumns);
             EnsureGridSizes();
             LevelCreatorUtility.ReadColorsIntoGrid(_levelData, _cellColors);
+            LevelCreatorUtility.ReadSecondaryColorsIntoGrid(_levelData, _cellSecondaryColors);
             LevelCreatorUtility.ReadFlagsIntoGrid(_levelData, _cellFlags);
             LevelCreatorUtility.ReadFlagValuesIntoGrid(_levelData, _cellFlagValues);
             LevelCreatorUtility.ReadDirectionsIntoGrid(_levelData, _cellDirections);
             LevelCreatorUtility.ReadTunnelPiecesIntoGrid(_levelData, _cellTunnelPieces);
+
+            // Old curtain cells only stored one color — seed Collect from Table when missing.
+            for (int row = 0; row < _rows; row++)
+            {
+                for (int column = 0; column < _columns; column++)
+                {
+                    if ((_cellFlags[row, column] & LevelCellFlag.Curtain) == 0)
+                        continue;
+                    if (_cellSecondaryColors[row, column] != PieceColorType.None)
+                        continue;
+                    if (_cellColors[row, column] == PieceColorType.None)
+                        continue;
+                    _cellSecondaryColors[row, column] = _cellColors[row, column];
+                }
+            }
 
             if (_levelData.carryBlockJam?.exits != null)
             {
@@ -1034,6 +1081,10 @@ namespace GAITemplate.Editor
                             _cellColors.GetLength(0) != _rows ||
                             _cellColors.GetLength(1) != _columns;
 
+            bool secondaryBad = _cellSecondaryColors == null ||
+                                _cellSecondaryColors.GetLength(0) != _rows ||
+                                _cellSecondaryColors.GetLength(1) != _columns;
+
             bool flagBad = _cellFlags == null ||
                            _cellFlags.GetLength(0) != _rows ||
                            _cellFlags.GetLength(1) != _columns;
@@ -1050,19 +1101,21 @@ namespace GAITemplate.Editor
                              _cellTunnelPieces.GetLength(0) != _rows ||
                              _cellTunnelPieces.GetLength(1) != _columns;
 
-            if (colorBad || flagBad || valueBad || dirBad || tunnelBad)
+            if (colorBad || secondaryBad || flagBad || valueBad || dirBad || tunnelBad)
                 ResizeGrids(_rows, _columns);
         }
 
         private void ResizeGrids(int rows, int columns)
         {
             var newColors  = new PieceColorType[rows, columns];
+            var newSecondary = new PieceColorType[rows, columns];
             var newFlags   = new LevelCellFlag[rows, columns];
             var newValues  = new int[rows, columns];
             var newDirs    = new CellDirection[rows, columns];
             var newTunnels = new System.Collections.Generic.List<PieceColorType>[rows, columns];
 
             CopyGrid(_cellColors,       newColors);
+            CopyGrid(_cellSecondaryColors, newSecondary);
             CopyGrid(_cellFlags,        newFlags);
             CopyGrid(_cellFlagValues,   newValues);
             CopyGrid(_cellDirections,   newDirs);
@@ -1075,6 +1128,7 @@ namespace GAITemplate.Editor
                         newTunnels[r, c] = new System.Collections.Generic.List<PieceColorType>();
 
             _cellColors       = newColors;
+            _cellSecondaryColors = newSecondary;
             _cellFlags        = newFlags;
             _cellFlagValues   = newValues;
             _cellDirections   = newDirs;
@@ -1099,6 +1153,7 @@ namespace GAITemplate.Editor
                 for (int column = 0; column < _columns; column++)
                 {
                     _cellColors[row, column]     = PieceColorType.None;
+                    _cellSecondaryColors[row, column] = PieceColorType.None;
                     _cellFlags[row, column]      = LevelCellFlag.None;
                     _cellFlagValues[row, column] = 0;
                     _cellDirections[row, column] = CellDirection.Front;
@@ -1115,7 +1170,8 @@ namespace GAITemplate.Editor
 
             EnsureGridSizes();
             LevelCreatorUtility.WriteGridToLevel(_levelData, _rows, _columns,
-                _cellColors, _cellFlags, _cellFlagValues, _cellDirections, _cellTunnelPieces);
+                _cellColors, _cellFlags, _cellFlagValues, _cellDirections, _cellTunnelPieces,
+                _cellSecondaryColors);
 
             if (_levelDataSo != null)
             {
