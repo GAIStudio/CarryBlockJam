@@ -39,7 +39,7 @@ namespace GAITemplate
         [TextArea(2, 4)]
         public string instruction = "";
 
-        [Tooltip("When on, only instruction text is shown (no hand / click point).")]
+        [Tooltip("When on, only instruction text is shown (no hand / click point). Stickman keeps free movement.")]
         public bool hideHand;
 
         [Tooltip("When on, hand loops between Start Cell and Target Cell on the grid.")]

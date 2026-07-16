@@ -292,11 +292,21 @@ namespace GAITemplate
             }
 
             _stageIndex = index;
-            _stagePathLocked = lockPath;
             TutorialStage stage = _levelData.tutorialStages[index];
 
             if (_panel.instruction != null)
                 _panel.instruction.text = stage.instruction;
+
+            // Text-only tip: keep instruction visible, free swipe, leave stickman where the level spawned them.
+            // First click dismisses via NotifyPlayerInteracted.
+            if (stage.hideHand)
+            {
+                _stagePathLocked = false;
+                ShowHandForStage(stage);
+                return;
+            }
+
+            _stagePathLocked = lockPath;
 
             if (_panel.handVisual != null)
                 _panel.handVisual.localEulerAngles = stage.handRotation;
@@ -511,11 +521,11 @@ namespace GAITemplate
         {
             startCell = default;
             targetCell = default;
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return false;
 
             TutorialStage stage = CurrentStage;
-            if (stage == null)
+            if (stage == null || stage.hideHand)
                 return false;
 
             startCell = stage.startCell;
@@ -525,11 +535,11 @@ namespace GAITemplate
 
         public bool IsTutorialTargetCell(int row, int col)
         {
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return false;
 
             TutorialStage stage = CurrentStage;
-            if (stage == null)
+            if (stage == null || stage.hideHand)
                 return false;
 
             return stage.targetCell.x == row && stage.targetCell.y == col;
@@ -760,6 +770,21 @@ namespace GAITemplate
             ReleaseStagePathLock();
             // Next stage locks to its own start→target. Finishing the last stage ends tutorial (free swipe).
             ShowStage(_stageIndex + 1, lockPath: true);
+        }
+
+        /// <summary>
+        /// Text-only stages dismiss on the first click / swipe start.
+        /// </summary>
+        public void NotifyPlayerInteracted()
+        {
+            if (!IsActive)
+                return;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null || !stage.hideHand)
+                return;
+
+            NotifyTutorialActionCompleted();
         }
     }
 }

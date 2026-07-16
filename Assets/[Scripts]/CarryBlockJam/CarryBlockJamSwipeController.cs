@@ -140,6 +140,9 @@ namespace CarryBlockJam
             if (!TryGetNearestGridCell(screenPosition, out _, out _))
                 return;
 
+            // Text-only tutorial tip: hide instruction on first press.
+            TutorialManager.Instance?.NotifyPlayerInteracted();
+
             _swipeStartScreen = screenPosition;
             _swipeStartRow = _cylinder.Row;
             _swipeStartColumn = _cylinder.Column;
@@ -160,7 +163,9 @@ namespace CarryBlockJam
             if (!TryGetSwipeIntent(screenPosition, out int rowStep, out int columnStep, out int requestedSteps))
                 return;
 
-            if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+            if (TutorialManager.Instance != null &&
+                TutorialManager.Instance.IsActive &&
+                TutorialManager.Instance.IsStagePathLocked)
             {
                 if (!TutorialManager.Instance.TryEngageStagePathLock(
                         _cylinder.Row,
@@ -1076,14 +1081,10 @@ namespace CarryBlockJam
                 return;
             }
 
-            if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
+            if (TutorialManager.Instance != null &&
+                TutorialManager.Instance.IsActive &&
+                TutorialManager.Instance.IsStagePathLocked)
             {
-                if (!TutorialManager.Instance.IsStagePathLocked)
-                {
-                    ShowHighlights(false);
-                    return;
-                }
-
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
                         _cylinder.Column,

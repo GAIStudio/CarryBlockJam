@@ -800,55 +800,58 @@ namespace GAITemplate.Editor
                 showHand);
             stage.hideHand = !showHand;
 
-            if (showHand)
+            if (!showHand)
+            {
+                EditorGUILayout.HelpBox(
+                    "Text-only stage: instruction stays on screen until the first click/swipe, " +
+                    "then disappears. Stickman keeps free movement (no hand / path lock).",
+                    MessageType.None);
+            }
+            else
             {
                 stage.useGridHandPath = EditorGUILayout.Toggle(
                     new GUIContent("Use Grid Hand Path", "Loop hand between Start and Target grid cells."),
                     stage.useGridHandPath);
-            }
 
-            // Start/target still drive movement teaching even when the hand is hidden.
-            if (!showHand || stage.useGridHandPath)
-            {
-                EditorGUILayout.LabelField("Start Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
-                int startRow = Mathf.Clamp(
-                    EditorGUILayout.IntField(stage.startCell.x, GUILayout.Width(48f)),
-                    0,
-                    Mathf.Max(0, _rows - 1));
-                EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
-                int startCol = Mathf.Clamp(
-                    EditorGUILayout.IntField(stage.startCell.y, GUILayout.Width(48f)),
-                    0,
-                    Mathf.Max(0, _columns - 1));
-                EditorGUILayout.EndHorizontal();
-                stage.startCell = new Vector2Int(startRow, startCol);
-                stage.startPositionOffset = EditorGUILayout.Vector3Field(
-                    "Start Position Offset",
-                    stage.startPositionOffset);
-
-                GUILayout.Space(4f);
-                EditorGUILayout.LabelField("Target Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
-                int targetRow = Mathf.Clamp(
-                    EditorGUILayout.IntField(stage.targetCell.x, GUILayout.Width(48f)),
-                    0,
-                    Mathf.Max(0, _rows - 1));
-                EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
-                int targetCol = Mathf.Clamp(
-                    EditorGUILayout.IntField(stage.targetCell.y, GUILayout.Width(48f)),
-                    0,
-                    Mathf.Max(0, _columns - 1));
-                EditorGUILayout.EndHorizontal();
-                stage.targetCell = new Vector2Int(targetRow, targetCol);
-                stage.targetPositionOffset = EditorGUILayout.Vector3Field(
-                    "Target Position Offset",
-                    stage.targetPositionOffset);
-
-                if (showHand)
+                if (stage.useGridHandPath)
                 {
+                    EditorGUILayout.LabelField("Start Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
+                    int startRow = Mathf.Clamp(
+                        EditorGUILayout.IntField(stage.startCell.x, GUILayout.Width(48f)),
+                        0,
+                        Mathf.Max(0, _rows - 1));
+                    EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
+                    int startCol = Mathf.Clamp(
+                        EditorGUILayout.IntField(stage.startCell.y, GUILayout.Width(48f)),
+                        0,
+                        Mathf.Max(0, _columns - 1));
+                    EditorGUILayout.EndHorizontal();
+                    stage.startCell = new Vector2Int(startRow, startCol);
+                    stage.startPositionOffset = EditorGUILayout.Vector3Field(
+                        "Start Position Offset",
+                        stage.startPositionOffset);
+
+                    GUILayout.Space(4f);
+                    EditorGUILayout.LabelField("Target Cell (0-based Row / Col)", EditorStyles.miniBoldLabel);
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Row", GUILayout.Width(28f));
+                    int targetRow = Mathf.Clamp(
+                        EditorGUILayout.IntField(stage.targetCell.x, GUILayout.Width(48f)),
+                        0,
+                        Mathf.Max(0, _rows - 1));
+                    EditorGUILayout.LabelField("Col", GUILayout.Width(24f));
+                    int targetCol = Mathf.Clamp(
+                        EditorGUILayout.IntField(stage.targetCell.y, GUILayout.Width(48f)),
+                        0,
+                        Mathf.Max(0, _columns - 1));
+                    EditorGUILayout.EndHorizontal();
+                    stage.targetCell = new Vector2Int(targetRow, targetCol);
+                    stage.targetPositionOffset = EditorGUILayout.Vector3Field(
+                        "Target Position Offset",
+                        stage.targetPositionOffset);
+
                     GUILayout.Space(4f);
                     stage.handMoveDuration = Mathf.Max(
                         0.05f,
@@ -857,17 +860,16 @@ namespace GAITemplate.Editor
                         0f,
                         EditorGUILayout.FloatField("Pause At Ends", stage.handPauseAtEnds));
                 }
-            }
-            else if (showHand)
-            {
-                stage.targetPos = EditorGUILayout.Vector3Field("Target Pos (World)", stage.targetPos);
-                stage.targetPositionOffset = EditorGUILayout.Vector3Field(
-                    "Target Position Offset",
-                    stage.targetPositionOffset);
-            }
+                else
+                {
+                    stage.targetPos = EditorGUILayout.Vector3Field("Target Pos (World)", stage.targetPos);
+                    stage.targetPositionOffset = EditorGUILayout.Vector3Field(
+                        "Target Position Offset",
+                        stage.targetPositionOffset);
+                }
 
-            if (showHand)
                 stage.handRotation = EditorGUILayout.Vector3Field("Hand Rotation", stage.handRotation);
+            }
 
             GUILayout.Space(4f);
             EditorGUILayout.LabelField("Clickable Cells (0-based row, col)", EditorStyles.miniBoldLabel);
