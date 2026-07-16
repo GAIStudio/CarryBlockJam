@@ -1679,7 +1679,18 @@ namespace CarryBlockJam
                 if (!PieceColorPalette.IsPaintable(cell.color))
                 {
                     Debug.LogWarning(
-                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a color for the curtain sprite / unlock.");
+                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a table color.");
+                    usedCells.Remove(gridCell);
+                    continue;
+                }
+
+                PieceColorType collectColor = PieceColorPalette.IsPaintable(cell.secondaryColor)
+                    ? cell.secondaryColor
+                    : cell.color;
+                if (!PieceColorPalette.IsPaintable(collectColor))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a collect (plate) color.");
                     usedCells.Remove(gridCell);
                     continue;
                 }
@@ -1688,7 +1699,7 @@ namespace CarryBlockJam
                     cell.row,
                     cell.column,
                     cell.color,
-                    cell.color));
+                    collectColor));
             }
         }
 

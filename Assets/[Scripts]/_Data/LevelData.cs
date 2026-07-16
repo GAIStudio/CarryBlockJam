@@ -18,8 +18,12 @@ namespace GAITemplate
         // Tunnel flag için yön (Front/Back/Left/Right). Diğer flag'lerde anlamı yok.
         public CellDirection direction;
 
-        // Tunnel'dan ��ıkacak piece'lerin renk sırası. Yalnızca Tunnel flag'li cell'de anlamlı.
+        // Tunnel'dan çıkacak piece'lerin renk sırası. Yalnızca Tunnel flag'li cell'de anlamlı.
         public PieceColorType[] tunnelPieces;
+
+        // Curtain: plate color that must be delivered to unlock. Table color stays in `color`.
+        // When None on old assets, runtime falls back to `color`.
+        public PieceColorType secondaryColor;
     }
 
     /// <summary>Hücre yönü — şu an sadece Tunnel için kullanılır.</summary>
@@ -38,6 +42,9 @@ namespace GAITemplate
 
         [TextArea(2, 4)]
         public string instruction = "";
+
+        [Tooltip("When on, only instruction text is shown (no hand / click point). Stickman keeps free movement.")]
+        public bool hideHand;
 
         [Tooltip("When on, hand loops between Start Cell and Target Cell on the grid.")]
         public bool useGridHandPath = true;

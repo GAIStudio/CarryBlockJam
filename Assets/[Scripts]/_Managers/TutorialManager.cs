@@ -137,13 +137,6 @@ namespace GAITemplate
             IsActive = true;
             _panel.Active(true);
 
-            if (_panel.hand != null)
-                _panel.hand.gameObject.SetActive(true);
-            if (_panel.handVisual != null)
-                _panel.handVisual.gameObject.SetActive(true);
-            if (_panel.circleVisual != null)
-                _panel.circleVisual.gameObject.SetActive(true);
-
             if (_panel.instruction != null && _gameCamera != null && _levelData != null)
             {
                 Vector3 screen = _gameCamera.WorldToScreenPoint(_levelData.tutorialTextWorldPosition);
@@ -152,7 +145,6 @@ namespace GAITemplate
 
             CaptureAuthoredClickOffset();
             PlaceClickPointUnderFinger();
-            StartClickPulseAnimation();
             ShowStage(0, lockPath: true);
             _startRoutine = null;
         }
@@ -251,8 +243,39 @@ namespace GAITemplate
             if (_panel?.circleVisual != null)
             {
                 _panel.circleVisual.anchoredPosition = ResolveClickOffset();
-                _panel.circleVisual.gameObject.SetActive(true);
+                // Visibility is controlled by ShowHandForStage — don't force-show here.
             }
+        }
+
+        private void SetHandVisible(bool visible)
+        {
+            if (_panel == null)
+                return;
+
+            if (_panel.hand != null)
+                _panel.hand.gameObject.SetActive(visible);
+            if (_panel.handVisual != null)
+                _panel.handVisual.gameObject.SetActive(visible);
+            if (_panel.circleVisual != null)
+                _panel.circleVisual.gameObject.SetActive(visible);
+        }
+
+        private void ShowHandForStage(TutorialStage stage)
+        {
+            // hideHand defaults false on old assets → hand stays visible.
+            bool showHand = stage == null || !stage.hideHand;
+            SetHandVisible(showHand);
+
+            if (!showHand)
+            {
+                StopHandMoveAnimation();
+                StopClickPulseAnimation();
+                return;
+            }
+
+            PlaceClickPointUnderFinger();
+            StartClickPulseAnimation();
+            StartHandPathLoop(stage);
         }
 
         private void ShowStage(int index, bool lockPath)
@@ -269,11 +292,21 @@ namespace GAITemplate
             }
 
             _stageIndex = index;
-            _stagePathLocked = lockPath;
             TutorialStage stage = _levelData.tutorialStages[index];
 
             if (_panel.instruction != null)
                 _panel.instruction.text = stage.instruction;
+
+            // Text-only tip: keep instruction visible, free swipe, leave stickman where the level spawned them.
+            // First click dismisses via NotifyPlayerInteracted.
+            if (stage.hideHand)
+            {
+                _stagePathLocked = false;
+                ShowHandForStage(stage);
+                return;
+            }
+
+            _stagePathLocked = lockPath;
 
             if (_panel.handVisual != null)
                 _panel.handVisual.localEulerAngles = stage.handRotation;
@@ -282,7 +315,7 @@ namespace GAITemplate
             // later stages continue from the previous target when authored that way.
             SnapStickmanToStageStart(stage);
 
-            StartHandPathLoop(stage);
+            ShowHandForStage(stage);
         }
 
         private void SnapStickmanToStageStart(TutorialStage stage)
@@ -488,11 +521,11 @@ namespace GAITemplate
         {
             startCell = default;
             targetCell = default;
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return false;
 
             TutorialStage stage = CurrentStage;
-            if (stage == null)
+            if (stage == null || stage.hideHand)
                 return false;
 
             startCell = stage.startCell;
@@ -502,11 +535,11 @@ namespace GAITemplate
 
         public bool IsTutorialTargetCell(int row, int col)
         {
-            if (!IsActive)
+            if (!IsActive || !_stagePathLocked)
                 return false;
 
             TutorialStage stage = CurrentStage;
-            if (stage == null)
+            if (stage == null || stage.hideHand)
                 return false;
 
             return stage.targetCell.x == row && stage.targetCell.y == col;
@@ -737,6 +770,21 @@ namespace GAITemplate
             ReleaseStagePathLock();
             // Next stage locks to its own start→target. Finishing the last stage ends tutorial (free swipe).
             ShowStage(_stageIndex + 1, lockPath: true);
+        }
+
+        /// <summary>
+        /// Text-only stages dismiss on the first click / swipe start.
+        /// </summary>
+        public void NotifyPlayerInteracted()
+        {
+            if (!IsActive)
+                return;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null || !stage.hideHand)
+                return;
+
+            NotifyTutorialActionCompleted();
         }
     }
 }
