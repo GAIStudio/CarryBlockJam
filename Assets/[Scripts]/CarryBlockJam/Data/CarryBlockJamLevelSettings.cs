@@ -45,13 +45,5 @@ namespace CarryBlockJam
         public CarryBlockJamStickmanSpawnMode stickmanSpawnMode = CarryBlockJamStickmanSpawnMode.Center;
         [Tooltip("0-based stickman cell (row, column). Used when Spawn Mode is Fixed Cell.")]
         public CarryBlockJamGridCoordinate fixedStickmanCell = new CarryBlockJamGridCoordinate(2, 3);
-
-        [Header("Frozen Table Visual")]
-        [FormerlySerializedAs("frozenBoxVisual")]
-        public BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
-
-        [Header("Curtain Table Visual")]
-        [FormerlySerializedAs("curtainBoxVisual")]
-        public BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
     }
 }

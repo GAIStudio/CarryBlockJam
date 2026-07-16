@@ -56,13 +56,19 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.Space(8f);
             CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
-                "Frozen Table Visual (Fallback)",
+                "Frozen Table Visual (All Levels)",
                 _frozenTableVisual);
+            EditorGUILayout.HelpBox(
+                "Shared for every level. Level Creator only chooses ice cell positions and unlock moves.",
+                MessageType.None);
 
             EditorGUILayout.Space(8f);
             CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
-                "Curtain Table Visual (Fallback)",
+                "Curtain Table Visual (All Levels)",
                 _curtainTableVisual);
+            EditorGUILayout.HelpBox(
+                "Shared for every level. Level Creator only chooses curtain cell positions and color.",
+                MessageType.None);
 
             EditorGUILayout.Space(8f);
             _showManualFallback = EditorGUILayout.Foldout(_showManualFallback, "Manual Fallback Placements", true);

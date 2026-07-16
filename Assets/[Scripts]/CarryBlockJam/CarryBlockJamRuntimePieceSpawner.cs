@@ -30,8 +30,12 @@ namespace CarryBlockJam
         [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
 
         public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
+
+        [Header("Frozen Table Visual (All Levels)")]
         [FormerlySerializedAs("frozenBoxVisual")]
         [SerializeField] private BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
+
+        [Header("Curtain Table Visual (All Levels)")]
         [FormerlySerializedAs("curtainBoxVisual")]
         [SerializeField] private BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
@@ -111,10 +115,6 @@ namespace CarryBlockJam
             EnsureTableVisualDefaults(tableVisual);
             EnsurePlateVisualDefaults(plateVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
-
-            LevelData levelData = ResolveLevelData();
-            if (levelData?.carryBlockJam?.frozenTableVisual != null)
-                EnsureFrozenTableVisualDefaults(levelData.carryBlockJam.frozenTableVisual);
 #endif
         }
 
@@ -480,25 +480,11 @@ namespace CarryBlockJam
             return spawnedCount;
         }
 
-        private BoardFrozenBoxVisualSettings ResolveFrozenBoxVisualSettings()
-        {
-            LevelData levelData = ResolveLevelData();
-            BoardFrozenBoxVisualSettings levelSettings = levelData?.carryBlockJam?.frozenTableVisual;
-            if (levelSettings != null)
-                return levelSettings;
+        private BoardFrozenBoxVisualSettings ResolveFrozenBoxVisualSettings() =>
+            frozenTableVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
 
-            return frozenTableVisual ?? BoardFrozenBoxVisualSettings.CreateDefault();
-        }
-
-        private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings()
-        {
-            LevelData levelData = ResolveLevelData();
-            BoardCurtainBoxVisualSettings levelSettings = levelData?.carryBlockJam?.curtainTableVisual;
-            if (levelSettings != null)
-                return levelSettings;
-
-            return curtainTableVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
-        }
+        private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings() =>
+            curtainTableVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
 
         private int CountRequiredExitPlatesForColor(PieceColorType color)
         {

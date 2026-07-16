@@ -204,8 +204,9 @@ namespace GAITemplate.Editor
                     "Ice cell + color spawns a frozen CarryBlockJam table. Set unlock moves below the cell. " +
                     "Each collected plate counts down until the table unlocks.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Curtain cell + color spawns a curtained table. Choose the cell color for the curtain sprite; " +
-                    "the table opens when all plates of that color are delivered to the matching exit.",
+                    "Curtain cell + color spawns a curtained table. Choose the cell color for the curtain badge; " +
+                    "curtain look is shared on CarryBlockJamRuntimePieceSpawner. " +
+                    "The table opens when all plates of that color are delivered to the matching exit.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -561,15 +562,10 @@ namespace GAITemplate.Editor
             DrawCarryBlockJamTimerSettings(carryBlockJamProperty);
             EditorGUILayout.Space(6f);
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
-            SerializedProperty frozenVisualProperty = carryBlockJamProperty.FindPropertyRelative("frozenTableVisual");
-            CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
-                "Frozen Table Visual",
-                frozenVisualProperty);
-            EditorGUILayout.Space(6f);
-            SerializedProperty curtainVisualProperty = carryBlockJamProperty.FindPropertyRelative("curtainTableVisual");
-            CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
-                "Curtain Table Visual",
-                curtainVisualProperty);
+            EditorGUILayout.HelpBox(
+                "Frozen ice and curtain look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
+                "In Level Creator only paint Ice/Curtain cells (and unlock moves / curtain color).",
+                MessageType.None);
             EditorGUILayout.Space(6f);
 
             SerializedProperty exitsProperty = carryBlockJamProperty.FindPropertyRelative("exits");
@@ -590,8 +586,6 @@ namespace GAITemplate.Editor
 
             DrawCarryBlockJamSettingsWithoutFrozenVisual(
                 carryBlockJamProperty,
-                frozenVisualProperty,
-                curtainVisualProperty,
                 exitsProperty,
                 hasTimerProperty,
                 timeLimitProperty,
@@ -713,8 +707,6 @@ namespace GAITemplate.Editor
 
         private static void DrawCarryBlockJamSettingsWithoutFrozenVisual(
             SerializedProperty carryBlockJamProperty,
-            SerializedProperty frozenVisualProperty,
-            SerializedProperty curtainVisualProperty = null,
             SerializedProperty exitsProperty = null,
             SerializedProperty hasTimerProperty = null,
             SerializedProperty timeLimitProperty = null,
@@ -731,10 +723,6 @@ namespace GAITemplate.Editor
             while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, endProperty))
             {
                 enterChildren = false;
-                if (frozenVisualProperty != null && iterator.propertyPath == frozenVisualProperty.propertyPath)
-                    continue;
-                if (curtainVisualProperty != null && iterator.propertyPath == curtainVisualProperty.propertyPath)
-                    continue;
                 if (exitsProperty != null && iterator.propertyPath == exitsProperty.propertyPath)
                     continue;
                 if (hasTimerProperty != null && iterator.propertyPath == hasTimerProperty.propertyPath)
