@@ -7,12 +7,16 @@ namespace CarryBlockJam
     [DisallowMultipleComponent]
     public sealed class CarryBlockJamHiddenBox : MonoBehaviour
     {
-        private static readonly Vector2Int[] CardinalDirections =
+        private static readonly Vector2Int[] SurroundingOffsets =
         {
             new Vector2Int(-1, 0),
             new Vector2Int(1, 0),
             new Vector2Int(0, -1),
             new Vector2Int(0, 1),
+            new Vector2Int(-1, -1),
+            new Vector2Int(-1, 1),
+            new Vector2Int(1, -1),
+            new Vector2Int(1, 1),
         };
 
         private CarryBlockJamBoardPiece _boxPiece;
@@ -100,9 +104,9 @@ namespace CarryBlockJam
 
         private void RegisterAdjacentPlates(PuzzleGrid grid)
         {
-            for (int directionIndex = 0; directionIndex < CardinalDirections.Length; directionIndex++)
+            for (int directionIndex = 0; directionIndex < SurroundingOffsets.Length; directionIndex++)
             {
-                Vector2Int offset = CardinalDirections[directionIndex];
+                Vector2Int offset = SurroundingOffsets[directionIndex];
                 int row = _boxPiece.Row + offset.x;
                 int column = _boxPiece.Column + offset.y;
                 if (!grid.TryGetCell(row, column, out PuzzleCell cell) || cell?.Occupant == null)

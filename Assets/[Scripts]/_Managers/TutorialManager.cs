@@ -278,10 +278,9 @@ namespace GAITemplate
             if (_panel.handVisual != null)
                 _panel.handVisual.localEulerAngles = stage.handRotation;
 
-            // Only place stickman for the first stage. Later stages only update the hand UI —
-            // stickman stays where the player left them after the previous action.
-            if (index == 0)
-                SnapStickmanToStageStart(stage);
+            // Place stickman on this stage's start cell. Stage 1 usually matches spawn;
+            // later stages continue from the previous target when authored that way.
+            SnapStickmanToStageStart(stage);
 
             StartHandPathLoop(stage);
         }
@@ -424,10 +423,16 @@ namespace GAITemplate
 
         private void EndTutorial()
         {
+            ReleaseStagePathLock();
             StopHandMoveAnimation();
             StopClickPulseAnimation();
             if (_panel != null)
                 _panel.ActiveSmooth(false);
+
+            CarryBlockJam.CarryBlockJamSwipeController swipe =
+                FindObjectOfType<CarryBlockJam.CarryBlockJamSwipeController>();
+            swipe?.ClearStaleStickmanOccupants();
+
             Cleanup();
         }
 
@@ -495,8 +500,17 @@ namespace GAITemplate
             return true;
         }
 
-        public bool IsTutorialTargetCell(int row, int col) =>
-            CanCollectTutorialPlate(row, col);
+        public bool IsTutorialTargetCell(int row, int col)
+        {
+            if (!IsActive)
+                return false;
+
+            TutorialStage stage = CurrentStage;
+            if (stage == null)
+                return false;
+
+            return stage.targetCell.x == row && stage.targetCell.y == col;
+        }
 
         /// <summary>
         /// Path cells from from→target (target inclusive, from exclusive).
@@ -542,22 +556,13 @@ namespace GAITemplate
         /// When the stage path is unlocked, engage it only if the player swipes along the
         /// taught direction while standing on the authored start→target segment.
         /// </summary>
+        /// <summary>
+        /// Locks swipe to the taught direction. Stickman must stand on the stage start→target line.
+        /// </summary>
         public bool TryEngageStagePathLock(int row, int col, int rowStep, int columnStep)
         {
             if (!IsActive)
                 return false;
-
-            if (_stagePathLocked)
-            {
-                if (!TryGetActivePath(out Vector2Int lockedStart, out Vector2Int lockedTarget) ||
-                    !IsOnAuthoredPathSegment(row, col, lockedStart, lockedTarget))
-                {
-                    _stagePathLocked = false;
-                    return false;
-                }
-
-                return true;
-            }
 
             if (!TryGetActivePath(out Vector2Int start, out Vector2Int target))
                 return false;
@@ -622,14 +627,8 @@ namespace GAITemplate
 
         public bool CanCollectTutorialPlate(int row, int col)
         {
-            if (!IsActive || !_stagePathLocked)
-                return true;
-
-            TutorialStage stage = CurrentStage;
-            if (stage == null)
-                return true;
-
-            return stage.targetCell.x == row && stage.targetCell.y == col;
+            // Tutorial movement is start→target only; plate cells do not gate pickups.
+            return true;
         }
 
         private static bool IsOnAuthoredPathSegment(int row, int col, Vector2Int start, Vector2Int target)
@@ -723,7 +722,7 @@ namespace GAITemplate
             if (!IsCellClickable(row, col))
                 return;
 
-            ShowStage(_stageIndex + 1, lockPath: false);
+            ShowStage(_stageIndex + 1, lockPath: true);
         }
 
         /// <summary>
@@ -735,7 +734,9 @@ namespace GAITemplate
             if (!IsActive)
                 return;
 
-            ShowStage(_stageIndex + 1, lockPath: false);
+            ReleaseStagePathLock();
+            // Next stage locks to its own start→target. Finishing the last stage ends tutorial (free swipe).
+            ShowStage(_stageIndex + 1, lockPath: true);
         }
     }
 }

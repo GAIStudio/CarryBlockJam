@@ -167,13 +167,7 @@ namespace CarryBlockJam
                         _cylinder.Column,
                         rowStep,
                         columnStep))
-                {
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
                     return;
-                }
 
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
@@ -181,23 +175,9 @@ namespace CarryBlockJam
                         ref rowStep,
                         ref columnStep,
                         ref requestedSteps))
-                {
-                    TutorialManager.Instance.ReleaseStagePathLock();
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
                     return;
-                }
 
-                if (!TryExecuteTutorialTravelSwipe(rowStep, columnStep, requestedSteps))
-                {
-                    TutorialManager.Instance.ReleaseStagePathLock();
-                    if (HasCarriedPlates)
-                        ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
-                    else
-                        ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
-                }
+                TryExecuteTutorialTravelSwipe(requestedSteps);
                 return;
             }
 
@@ -208,130 +188,129 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Tutorial travel: current cell → targetCell along the authored segment (target inclusive).
-        /// Works empty-handed (pickup) or while carrying plates.
+        /// Tutorial move: always travel the full remaining start→target path in one swipe.
+        /// Contents of cells do not block or change the path. Stage completes on arrival.
         /// </summary>
-        private bool TryExecuteTutorialTravelSwipe(int rowStep, int columnStep, int requestedSteps)
+        private bool TryExecuteTutorialTravelSwipe(int requestedSteps)
         {
-            if (!TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int target))
+            if (TutorialManager.Instance == null ||
+                !TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int target))
                 return false;
-
-            int fromRow = _cylinder.Row;
-            int fromCol = _cylinder.Column;
 
             var path = new List<Vector2Int>();
-            if (!TutorialManager.Instance.TryBuildAuthoredPathCells(fromRow, fromCol, path))
+            if (!TutorialManager.Instance.TryBuildAuthoredPathCells(
+                    _cylinder.Row,
+                    _cylinder.Column,
+                    path))
                 return false;
+
+            if (path.Count == 0)
+            {
+                FinishTutorialStageAtTarget(target);
+                return true;
+            }
 
             if (path.Count != requestedSteps)
                 return false;
 
-            CarryBlockJamBoardPiece pickupSource = null;
-            int pickupRow = target.x;
-            int pickupColumn = target.y;
-            List<CarryBlockJamBoardPiece> pickupPieces = null;
-
-            if (!HasCarriedPlates &&
-                _grid.TryGetCell(target.x, target.y, out PuzzleCell targetCell) &&
-                targetCell != null &&
-                targetCell.Occupant != null)
-            {
-                CarryBlockJamBoardPiece targetPiece =
-                    targetCell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
-                if (CanPickUpPiece(targetPiece, target.x, target.y))
-                    pickupSource = targetPiece;
-                else if (targetPiece != null)
-                    return false;
-            }
-
-            if (!IsTutorialTravelPathClear(path, target, pickupSource))
-                return false;
-
-            if (pickupSource != null)
-                pickupPieces = ExtractPickupPlates(pickupSource, pickupRow, pickupColumn);
-
-            if (path.Count == 0)
-            {
-                if (pickupPieces != null)
-                    AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
-                else if (HasCarriedPlates)
-                    CompleteTutorialTargetArrival(target.x, target.y);
-                return true;
-            }
-
-            AnimateTutorialCylinderTravel(path, () =>
-            {
-                if (pickupPieces != null)
-                    AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
-                else
-                    CompleteTutorialTargetArrival(target.x, target.y);
-            });
-            return true;
-        }
-
-        private bool IsTutorialTravelPathClear(
-            List<Vector2Int> path,
-            Vector2Int target,
-            CarryBlockJamBoardPiece pickupSource)
-        {
+            // Collect any pickable plates on the path up front so the stickman can walk the line.
+            var pickupPieces = new List<CarryBlockJamBoardPiece>();
             for (int i = 0; i < path.Count; i++)
             {
                 Vector2Int step = path[i];
-                bool isTargetStep = step.x == target.x && step.y == target.y;
-                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
-                    return false;
-
-                if (cell.Occupant == null)
+                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell?.Occupant == null)
                     continue;
 
-                CarryBlockJamBoardPiece occupant = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
-                if (occupant == null)
+                CarryBlockJamBoardPiece occupant =
+                    cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                if (!CanPickUpPiece(occupant, step.x, step.y))
                     continue;
 
-                if (HasCarriedPlates)
+                List<CarryBlockJamBoardPiece> extracted = ExtractPickupPlates(occupant, step.x, step.y);
+                if (extracted == null)
+                    continue;
+
+                for (int p = 0; p < extracted.Count; p++)
                 {
-                    if (isTargetStep && TryResolveExitAtCell(step.x, step.y, out _))
-                        continue;
-                    if (isTargetStep && IsMatchingDropTarget(occupant))
-                        continue;
-                    if (IsBoxCellBlocker(occupant))
-                        return false;
-                    return false;
+                    if (extracted[p] != null)
+                        pickupPieces.Add(extracted[p]);
                 }
-
-                if (isTargetStep && pickupSource != null && occupant == pickupSource)
-                    continue;
-
-                return false;
             }
 
+            // While carrying, stop beside a matching table at the target (normal drop).
+            bool stopBeforeTable =
+                HasCarriedPlates &&
+                path.Count > 0 &&
+                path[path.Count - 1].x == target.x &&
+                path[path.Count - 1].y == target.y &&
+                TryResolveDropTargetAtCell(target.x, target.y, out _);
+            if (stopBeforeTable)
+                path.RemoveAt(path.Count - 1);
+
+            void OnArrived()
+            {
+                if (pickupPieces.Count > 0)
+                    AddPlatesToCarryStack(pickupPieces, notifyTutorialComplete: false);
+
+                FinishTutorialStageAtTarget(target);
+            }
+
+            if (path.Count == 0)
+            {
+                OnArrived();
+                return true;
+            }
+
+            AnimateTutorialCylinderTravel(path, OnArrived);
             return true;
         }
 
-        private void CompleteTutorialTargetArrival(int targetRow, int targetColumn)
+        /// <summary>
+        /// Opportunistic pickup/drop/exit at the stage target, then always advance the stage.
+        /// </summary>
+        private void FinishTutorialStageAtTarget(Vector2Int target)
         {
             if (TutorialManager.Instance == null || !TutorialManager.Instance.IsActive)
                 return;
 
             if (HasCarriedPlates)
             {
-                if (TryResolveExitAtCell(targetRow, targetColumn, out CarryBlockJamExit exit) &&
+                if (TryResolveExitAtCell(target.x, target.y, out CarryBlockJamExit exit) &&
                     exit != null &&
                     exit.CanAccept(CarriedColor))
                 {
                     SendCarriedPlatesToExit(exit, null);
-                    TutorialManager.Instance.NotifyTutorialActionCompleted();
+                    // Stage advances from exit-delivery completion callback.
                     return;
                 }
 
-                if (TryResolveDropTargetAtCell(targetRow, targetColumn, out CarryBlockJamBoardPiece dropBox))
+                if (TryResolveDropTargetAtCell(target.x, target.y, out CarryBlockJamBoardPiece dropBox))
                 {
-                    AnimateCarriedPlatesToBox(dropBox);
+                    AnimateCarriedPlatesToBox(dropBox, () =>
+                        TutorialManager.Instance.NotifyTutorialActionCompleted());
                     return;
+                }
+            }
+            else if (_grid.TryGetCell(target.x, target.y, out PuzzleCell cell) &&
+                     cell?.Occupant != null)
+            {
+                CarryBlockJamBoardPiece occupant =
+                    cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                if (CanPickUpPiece(occupant, target.x, target.y))
+                {
+                    List<CarryBlockJamBoardPiece> leftover =
+                        ExtractPickupPlates(occupant, target.x, target.y);
+                    if (leftover != null && leftover.Count > 0)
+                        AddPlatesToCarryStack(leftover, notifyTutorialComplete: false);
                 }
             }
 
             TutorialManager.Instance.NotifyTutorialActionCompleted();
+        }
+
+        private void CompleteTutorialTargetArrival(int targetRow, int targetColumn)
+        {
+            FinishTutorialStageAtTarget(new Vector2Int(targetRow, targetColumn));
         }
 
         private bool TryResolveDropTargetAtCell(int row, int column, out CarryBlockJamBoardPiece targetBox)
@@ -372,6 +351,28 @@ namespace CarryBlockJam
         }
 
         /// <summary>
+        /// When delivering to a table, stop on the adjacent cell like normal carry swipes.
+        /// </summary>
+        private bool TrimTutorialPathBeforeTableDrop(List<Vector2Int> path, Vector2Int target)
+        {
+            if (!HasCarriedPlates || path == null || path.Count == 0)
+                return false;
+
+            if (TryResolveExitAtCell(target.x, target.y, out _))
+                return false;
+
+            if (!TryResolveDropTargetAtCell(target.x, target.y, out _))
+                return false;
+
+            Vector2Int lastStep = path[path.Count - 1];
+            if (lastStep.x != target.x || lastStep.y != target.y)
+                return false;
+
+            path.RemoveAt(path.Count - 1);
+            return true;
+        }
+
+        /// <summary>
         /// Same movement as <see cref="AnimateCylinderTravel"/> but never truncates before
         /// the last cell (needed so tutorial reaches targetCell when a plate sits on a table).
         /// </summary>
@@ -387,8 +388,7 @@ namespace CarryBlockJam
             RefreshStickmanAnimation(moving: true);
             Haptic.LightTaptic();
 
-            if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
-                _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
+            ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
 
             Sequence sequence = DOTween.Sequence();
             for (int i = 0; i < path.Count; i++)
@@ -402,15 +402,9 @@ namespace CarryBlockJam
                     targetPosition,
                     moveDurationPerCell).SetEase(Ease.Linear));
 
-                // Capture per-step indices for the callback (avoid loop-variable capture issues).
                 int placeRow = targetRow;
                 int placeColumn = targetColumn;
-                sequence.AppendCallback(() =>
-                {
-                    _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), placeRow, placeColumn);
-                    if (_grid.TryGetCell(placeRow, placeColumn, out PuzzleCell stepCell) && stepCell != null)
-                        stepCell.Occupant = _cylinder.gameObject;
-                });
+                sequence.AppendCallback(() => PlaceStickmanOnCell(placeRow, placeColumn));
             }
 
             sequence.OnComplete(() =>
@@ -419,6 +413,53 @@ namespace CarryBlockJam
                 RefreshStickmanAnimation(moving: false);
                 onComplete?.Invoke();
             });
+        }
+
+        private void PlaceStickmanOnCell(int row, int column)
+        {
+            if (_cylinder == null || _grid == null)
+                return;
+
+            ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
+            _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), row, column);
+            if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
+                cell.Occupant = _cylinder.gameObject;
+        }
+
+        private void ClearStickmanOccupantFromCell(int row, int column)
+        {
+            if (_cylinder == null || _grid == null || !_grid.IsInside(row, column))
+                return;
+
+            if (_grid.TryGetCell(row, column, out PuzzleCell cell) &&
+                cell != null &&
+                cell.Occupant == _cylinder.gameObject)
+                cell.Occupant = null;
+        }
+
+        /// <summary>
+        /// Tutorial travel used to leave the stickman marked as occupant on every walked cell.
+        /// Clear those ghosts so free movement is not invisibly blocked.
+        /// </summary>
+        public void ClearStaleStickmanOccupants()
+        {
+            ResolveGameplayReferences();
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+
+            for (int row = 0; row < _grid.Rows; row++)
+            {
+                for (int column = 0; column < _grid.Columns; column++)
+                {
+                    if (row == _cylinder.Row && column == _cylinder.Column)
+                        continue;
+
+                    ClearStickmanOccupantFromCell(row, column);
+                }
+            }
+
+            if (_grid.TryGetCell(_cylinder.Row, _cylinder.Column, out PuzzleCell current) && current != null)
+                current.Occupant = _cylinder.gameObject;
         }
 
         private void ExecuteTravelSwipe(int rowStep, int columnStep, int requestedSteps)
@@ -442,6 +483,8 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece nextPiece = nextCell.Occupant != null
                     ? nextCell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
                     : null;
+                if (nextPiece == _cylinder)
+                    nextPiece = null;
 
                 if (nextPiece == null)
                 {
@@ -517,6 +560,8 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece nextPiece = nextCell.Occupant != null
                     ? nextCell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
                     : null;
+                if (nextPiece == _cylinder)
+                    nextPiece = null;
 
                 if (nextPiece == null)
                 {
@@ -715,24 +760,15 @@ namespace CarryBlockJam
                 sequence.AppendCallback(() =>
                 {
                     if (!IsBoxOwnedCell(targetRow, targetColumn))
-                    {
-                        _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), targetRow, targetColumn);
-                    }
+                        PlaceStickmanOnCell(targetRow, targetColumn);
                 });
             }
 
             Vector2Int finalStep = path[path.Count - 1];
             sequence.OnComplete(() =>
             {
-                if (_grid.TryGetCell(finalStep.x, finalStep.y, out PuzzleCell cell) && cell != null)
-                {
-                    CarryBlockJamBoardPiece occupantPiece = cell.Occupant != null
-                        ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
-                        : null;
-
-                    if (!IsBoxCellBlocker(occupantPiece))
-                        cell.Occupant = _cylinder.gameObject;
-                }
+                if (!IsBoxOwnedCell(finalStep.x, finalStep.y))
+                    PlaceStickmanOnCell(finalStep.x, finalStep.y);
 
                 _isAnimating = false;
                 RefreshStickmanAnimation(moving: false);
@@ -758,6 +794,8 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece occupantPiece = cell.Occupant != null
                     ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
                     : null;
+                if (occupantPiece == _cylinder)
+                    occupantPiece = null;
 
                 if (IsBoxCellBlocker(occupantPiece))
                     break;
@@ -1042,7 +1080,7 @@ namespace CarryBlockJam
             {
                 if (!TutorialManager.Instance.IsStagePathLocked)
                 {
-                    DrawHighlights(BuildPreviewPath(rowStep, columnStep, requestedSteps));
+                    ShowHighlights(false);
                     return;
                 }
 
@@ -1066,6 +1104,9 @@ namespace CarryBlockJam
                     ShowHighlights(false);
                     return;
                 }
+
+                if (TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int previewTarget))
+                    TrimTutorialPathBeforeTableDrop(previewPath, previewTarget);
 
                 DrawHighlights(previewPath);
                 return;
@@ -1093,6 +1134,8 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece piece = cell.Occupant != null
                     ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
                     : null;
+                if (piece == _cylinder)
+                    piece = null;
 
                 if (!HasCarriedPlates)
                 {
@@ -1173,26 +1216,112 @@ namespace CarryBlockJam
             if (screenDelta.magnitude < swipeThresholdPixels)
                 return false;
 
-            if (!TryGetNearestGridCell(screenPosition, out int endRow, out int endColumn))
+            if (_gameplayCamera == null)
+                ResolveGameplayReferences();
+
+            if (_gameplayCamera == null || _grid == null)
                 return false;
 
-            int rowDelta = endRow - _swipeStartRow;
-            int columnDelta = endColumn - _swipeStartColumn;
-            if (rowDelta == 0 && columnDelta == 0)
+            GetGridAxisScreenVectors(
+                _swipeStartRow,
+                _swipeStartColumn,
+                out Vector2 rowAxisScreen,
+                out Vector2 columnAxisScreen);
+
+            float rowAxisSqr = rowAxisScreen.sqrMagnitude;
+            float columnAxisSqr = columnAxisScreen.sqrMagnitude;
+            if (rowAxisSqr < 0.0001f && columnAxisSqr < 0.0001f)
                 return false;
 
-            if (Mathf.Abs(columnDelta) > Mathf.Abs(rowDelta))
+            float rowCells = rowAxisSqr > 0.0001f
+                ? Vector2.Dot(screenDelta, rowAxisScreen) / rowAxisSqr
+                : 0f;
+            float columnCells = columnAxisSqr > 0.0001f
+                ? Vector2.Dot(screenDelta, columnAxisScreen) / columnAxisSqr
+                : 0f;
+
+            if (Mathf.Abs(columnCells) > Mathf.Abs(rowCells))
             {
-                columnStep = columnDelta > 0 ? 1 : -1;
-                requestedSteps = Mathf.Abs(columnDelta);
+                if (Mathf.Abs(columnCells) < 0.35f)
+                    return false;
+
+                columnStep = columnCells > 0f ? 1 : -1;
+                rowStep = 0;
+                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(columnCells)));
             }
             else
             {
-                rowStep = rowDelta > 0 ? 1 : -1;
-                requestedSteps = Mathf.Abs(rowDelta);
+                if (Mathf.Abs(rowCells) < 0.35f)
+                    return false;
+
+                rowStep = rowCells > 0f ? 1 : -1;
+                columnStep = 0;
+                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(rowCells)));
+            }
+
+            // Prefer finger end-cell when it agrees with the projected direction
+            // (so a short or long swipe stops where the finger lifts).
+            // If the finger is off-grid / disagrees (common near bottom exits),
+            // keep the projection-based step count instead of rejecting the swipe.
+            if (TryGetNearestGridCell(screenPosition, out int endRow, out int endColumn))
+            {
+                if (rowStep != 0)
+                {
+                    int rowDelta = endRow - _swipeStartRow;
+                    if (rowDelta * rowStep > 0)
+                        requestedSteps = Mathf.Abs(rowDelta);
+                }
+                else if (columnStep != 0)
+                {
+                    int columnDelta = endColumn - _swipeStartColumn;
+                    if (columnDelta * columnStep > 0)
+                        requestedSteps = Mathf.Abs(columnDelta);
+                }
+            }
+
+            if (rowStep != 0)
+            {
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    rowStep > 0
+                        ? _grid.Rows - 1 - _swipeStartRow
+                        : _swipeStartRow);
+            }
+            else
+            {
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    columnStep > 0
+                        ? _grid.Columns - 1 - _swipeStartColumn
+                        : _swipeStartColumn);
             }
 
             return requestedSteps > 0;
+        }
+
+        private void GetGridAxisScreenVectors(
+            int row,
+            int column,
+            out Vector2 rowAxisScreen,
+            out Vector2 columnAxisScreen)
+        {
+            Vector2 originScreen = WorldToScreenPoint(_grid.GetWorldPosition(row, column));
+
+            int rowNeighbor = row < _grid.Rows - 1 ? row + 1 : row - 1;
+            int rowDirection = rowNeighbor > row ? 1 : -1;
+            Vector2 rowNeighborScreen = WorldToScreenPoint(_grid.GetWorldPosition(rowNeighbor, column));
+            rowAxisScreen = (rowNeighborScreen - originScreen) * rowDirection;
+
+            int columnNeighbor = column < _grid.Columns - 1 ? column + 1 : column - 1;
+            int columnDirection = columnNeighbor > column ? 1 : -1;
+            Vector2 columnNeighborScreen = WorldToScreenPoint(_grid.GetWorldPosition(row, columnNeighbor));
+            columnAxisScreen = (columnNeighborScreen - originScreen) * columnDirection;
+        }
+
+        private Vector2 WorldToScreenPoint(Vector3 worldPosition)
+        {
+            Vector3 screen = _gameplayCamera.WorldToScreenPoint(worldPosition);
+            return new Vector2(screen.x, screen.y);
         }
 
         private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out CarryBlockJamExit exitComponent)
@@ -1538,16 +1667,14 @@ namespace CarryBlockJam
             UpdateCarriedPlateVisuals();
         }
 
-        private void AddPlatesToCarryStack(List<CarryBlockJamBoardPiece> plates, int pickupRow = -1, int pickupColumn = -1)
+        private void AddPlatesToCarryStack(
+            List<CarryBlockJamBoardPiece> plates,
+            int pickupRow = -1,
+            int pickupColumn = -1,
+            bool notifyTutorialComplete = false)
         {
             if (plates == null || plates.Count == 0)
                 return;
-
-            bool completedTutorialTarget =
-                TutorialManager.Instance != null &&
-                TutorialManager.Instance.IsActive &&
-                pickupRow >= 0 &&
-                TutorialManager.Instance.IsTutorialTargetCell(pickupRow, pickupColumn);
 
             for (int i = 0; i < plates.Count; i++)
             {
@@ -1560,7 +1687,12 @@ namespace CarryBlockJam
             Haptic.MediumTaptic();
             RefreshStickmanAnimation(moving: false);
 
-            if (completedTutorialTarget)
+            // Tutorial stages advance only when the start→target move finishes, never from pickup alone.
+            if (notifyTutorialComplete &&
+                TutorialManager.Instance != null &&
+                TutorialManager.Instance.IsActive &&
+                pickupRow >= 0 &&
+                TutorialManager.Instance.IsTutorialTargetCell(pickupRow, pickupColumn))
                 TutorialManager.Instance.NotifyTutorialActionCompleted();
         }
 
