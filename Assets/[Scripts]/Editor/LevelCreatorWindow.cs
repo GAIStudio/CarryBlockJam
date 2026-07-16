@@ -300,9 +300,7 @@ namespace GAITemplate.Editor
             // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
             if (!isTunnel)
             {
-                _cellColors[row, column] = (PieceColorType)EditorGUILayout.EnumPopup(
-                    _cellColors[row, column],
-                    GUILayout.Width(70f));
+                _cellColors[row, column] = DrawGridCellColorPopup(_cellColors[row, column], flags);
             }
             else
             {
@@ -328,6 +326,36 @@ namespace GAITemplate.Editor
             }
 
             GUILayout.EndVertical();
+        }
+
+        private bool IsCarryBlockJamGrid()
+        {
+            return _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid;
+        }
+
+        private PieceColorType DrawGridCellColorPopup(PieceColorType current, LevelCellFlag flags)
+        {
+            if (!IsCarryBlockJamGrid())
+                return (PieceColorType)EditorGUILayout.EnumPopup(current, GUILayout.Width(70f));
+
+            // Hidden / Ice cell color paints the table material.
+            bool isTableCell =
+                (flags & LevelCellFlag.Hidden) != 0 ||
+                (flags & LevelCellFlag.Ice) != 0;
+
+            if (isTableCell)
+            {
+                return TableColorEditorUtility.DrawPopupNoLabel(
+                    current,
+                    includeNone: true,
+                    GUILayout.Width(70f));
+            }
+
+            // Curtain badge / plain cell / other uses plate material colors.
+            return PlateColorEditorUtility.DrawPopupNoLabel(
+                current,
+                includeNone: true,
+                GUILayout.Width(70f));
         }
 
         private void DrawTunnelPiecesSection()
@@ -383,7 +411,9 @@ namespace GAITemplate.Editor
                 Rect colorRect = GUILayoutUtility.GetRect(20f, 16f, GUILayout.Width(20f));
                 EditorGUI.DrawRect(colorRect, PieceColorPalette.GetColor(list[i]));
 
-                list[i] = (PieceColorType)EditorGUILayout.EnumPopup(list[i], GUILayout.Width(120f));
+                list[i] = IsCarryBlockJamGrid()
+                    ? PlateColorEditorUtility.DrawPopupNoLabel(list[i], includeNone: true, GUILayout.Width(120f))
+                    : (PieceColorType)EditorGUILayout.EnumPopup(list[i], GUILayout.Width(120f));
                 if (GUILayout.Button("×", GUILayout.Width(22f)))
                 {
                     list.RemoveAt(i);
