@@ -54,7 +54,7 @@ MonoBehaviour:
     disableAutoTables: 1
     tablePlacements:
     - color: 4
-      row: 4
+      row: 5
       column: 2
       isHidden: 1
       isFrozen: 0
@@ -63,7 +63,7 @@ MonoBehaviour:
       unlockMoves: 0
     platePlacements:
     - color: 4
-      row: 4
+      row: 5
       column: 1
       count: 1
     - color: 4
@@ -93,6 +93,30 @@ MonoBehaviour:
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
+    handRotation: {x: 0, y: 0, z: 0}
+    handMoveDuration: 0.7
+    handPauseAtEnds: 0.25
+    clickableCells: []
+  - stageName: Stage 2
+    instruction: ' Collect plates around hidden tables to reveal them '
+    useGridHandPath: 1
+    startCell: {x: 6, y: 3}
+    targetCell: {x: 6, y: 1}
+    startPositionOffset: {x: 0, y: 0, z: 0}
+    targetPositionOffset: {x: 0, y: 0, z: 0}
+    targetPos: {x: 0, y: 0, z: 0}
+    handRotation: {x: 0, y: 0, z: 0}
+    handMoveDuration: 0.7
+    handPauseAtEnds: 0.25
+    clickableCells: []
+  - stageName: Stage 3
+    instruction: 
+    useGridHandPath: 1
+    startCell: {x: 6, y: 1}
+    targetCell: {x: 5, y: 1}
+    startPositionOffset: {x: 0, y: 0, z: 0}
+    targetPositionOffset: {x: 0, y: 0, z: 0}
+    targetPos: {x: 0, y: 0, z: 0}
     handRotation: {x: 0, y: 0, z: 0}
     handMoveDuration: 0.7
     handPauseAtEnds: 0.25
