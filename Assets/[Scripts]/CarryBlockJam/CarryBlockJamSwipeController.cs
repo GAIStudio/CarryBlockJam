@@ -23,6 +23,14 @@ namespace CarryBlockJam
         [SerializeField] private float tablePlateJumpDuration = 0.3f;
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
         [SerializeField] private float tablePlateSettleDuration = 0.16f;
+        [SerializeField] private float tablePlateAnimationSpeed = 1.4f;
+        [SerializeField] private float pickupPlateBounceDuration = 0.42f;
+        [SerializeField] private float pickupPlateBounceHeight = 0.8f;
+        [SerializeField] private float pickupPlateStagger = 0.07f;
+        [SerializeField] private float pickupPlateSettleDuration = 0.2f;
+        [SerializeField] private float pickupPlateSettleScale = 0.22f;
+        [SerializeField] private float pickupPlateFrontClearance = 0.65f;
+        [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
         [SerializeField] private bool showSwipeHighlights;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
@@ -48,6 +56,7 @@ namespace CarryBlockJam
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
+        private Tween _plateCollectionTween;
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
 
@@ -982,7 +991,10 @@ namespace CarryBlockJam
             plate.transform.SetParent(GetPiecesRoot(), true);
             Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
                 basePiece.GetStackAttachLocalPosition(plate));
-            float jumpDuration = Mathf.Max(exitTravelDuration, tablePlateJumpDuration);
+            float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
+            float jumpDuration = Mathf.Max(
+                0.01f,
+                Mathf.Max(exitTravelDuration, tablePlateJumpDuration) / tableAnimationSpeed);
             Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 270f, 0f);
 
             Sequence landing = DOTween.Sequence();
@@ -1005,7 +1017,7 @@ namespace CarryBlockJam
             Vector3 settlePunch = plate.transform.localScale * 0.12f;
             landing.Append(plate.transform.DOPunchScale(
                 settlePunch,
-                Mathf.Max(0.01f, tablePlateSettleDuration),
+                Mathf.Max(0.01f, tablePlateSettleDuration / tableAnimationSpeed),
                 6,
                 0.5f));
 
@@ -1732,16 +1744,58 @@ namespace CarryBlockJam
         private PieceColorType CarriedColor =>
             HasCarriedPlates ? _carriedPlates[0].Color : PieceColorType.None;
 
-        private void AddPlateToCarryStack(CarryBlockJamBoardPiece plate)
+        private Tween AddPlateToCarryStack(CarryBlockJamBoardPiece plate, int pickupIndex)
         {
             if (plate == null)
-                return;
+                return null;
 
             plate.ClearStackLinks();
-            plate.transform.SetParent(GetCarryAttachRoot(), false);
+            Transform attachRoot = GetCarryAttachRoot();
+            plate.transform.SetParent(attachRoot, true);
             if (!_carriedPlates.Contains(plate))
                 _carriedPlates.Add(plate);
-            UpdateCarriedPlateVisuals();
+
+            int stackIndex = _carriedPlates.IndexOf(plate);
+            Vector3 targetPosition = GetCarriedPlateLocalPosition(stackIndex);
+            float animationSpeed = Mathf.Max(0.01f, pickupPlateAnimationSpeed);
+            float bounceDuration = Mathf.Max(0.01f, pickupPlateBounceDuration / animationSpeed);
+            float bounceHeight = Mathf.Max(0.01f, pickupPlateBounceHeight);
+            Vector3 startPosition = plate.transform.localPosition;
+            Vector3 horizontalFromStickman = new Vector3(startPosition.x, 0f, startPosition.z);
+            Vector3 outward = horizontalFromStickman.sqrMagnitude > 0.001f
+                ? horizontalFromStickman.normalized * 0.2f
+                : Vector3.right * (pickupIndex % 2 == 0 ? 0.2f : -0.2f);
+            Vector3 liftPosition = startPosition + Vector3.up * bounceHeight + outward;
+            Vector3 frontWaypoint = targetPosition +
+                Vector3.forward * Mathf.Max(0f, pickupPlateFrontClearance) +
+                Vector3.up * (bounceHeight * 0.45f);
+
+            Sequence bounce = DOTween.Sequence();
+            bounce.SetDelay(Mathf.Max(0f, pickupPlateStagger) * pickupIndex / animationSpeed);
+            bounce.Append(plate.transform.DOLocalMove(
+                liftPosition,
+                bounceDuration * 0.35f).SetEase(Ease.OutQuad));
+            bounce.Append(plate.transform.DOLocalPath(
+                new[] { frontWaypoint, targetPosition },
+                bounceDuration * 0.65f,
+                PathType.CatmullRom,
+                PathMode.Ignore).SetEase(Ease.InOutSine));
+            bounce.Insert(0f, plate.transform.DOLocalRotate(
+                Vector3.zero,
+                bounceDuration,
+                RotateMode.Fast).SetEase(Ease.OutQuad));
+            float settleDuration = Mathf.Max(0.01f, pickupPlateSettleDuration / animationSpeed);
+            bounce.Append(plate.transform.DOLocalJump(
+                targetPosition,
+                bounceHeight * 0.22f,
+                1,
+                settleDuration).SetEase(Ease.OutQuad));
+            bounce.Join(plate.transform.DOPunchScale(
+                plate.transform.localScale * Mathf.Max(0f, pickupPlateSettleScale),
+                settleDuration,
+                6,
+                0.5f));
+            return bounce;
         }
 
         private void AddPlatesToCarryStack(
@@ -1753,14 +1807,27 @@ namespace CarryBlockJam
             if (plates == null || plates.Count == 0)
                 return;
 
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Complete();
+
+            Sequence collection = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = plates[i];
-                AddPlateToCarryStack(plate);
+                Tween bounce = AddPlateToCarryStack(plate, i);
+                if (bounce != null)
+                    collection.Join(bounce);
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
             }
 
+            collection.OnComplete(() =>
+            {
+                if (!_failTriggered)
+                    UpdateCarriedPlateVisuals();
+                _plateCollectionTween = null;
+            });
+            _plateCollectionTween = collection;
             Haptic.LightTaptic();
             RefreshStickmanAnimation(moving: false);
 
@@ -1785,13 +1852,18 @@ namespace CarryBlockJam
                     continue;
 
                 plate.transform.SetParent(attachRoot, false);
-                // Hold plates in front of the torso; stack upward without clipping the head.
-                Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * i);
-                // Slight forward bias on higher plates only.
-                stackOffset += Vector3.forward * (0.02f * i);
-                plate.transform.localPosition = carriedPlateBaseOffset + stackOffset;
+                plate.transform.localPosition = GetCarriedPlateLocalPosition(i);
                 plate.transform.localRotation = Quaternion.identity;
             }
+        }
+
+        private Vector3 GetCarriedPlateLocalPosition(int stackIndex)
+        {
+            // Hold plates in front of the torso; stack upward without clipping the head.
+            Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * stackIndex);
+            // Slight forward bias on higher plates only.
+            stackOffset += Vector3.forward * (0.02f * stackIndex);
+            return carriedPlateBaseOffset + stackOffset;
         }
 
         private Transform GetCarryAttachRoot()
@@ -1805,6 +1877,7 @@ namespace CarryBlockJam
 
         private List<CarryBlockJamBoardPiece> DetachCarriedPlates()
         {
+            CompletePlateCollectionAnimation();
             var detached = new List<CarryBlockJamBoardPiece>(_carriedPlates);
             _carriedPlates.Clear();
             return detached;
@@ -1812,6 +1885,7 @@ namespace CarryBlockJam
 
         private List<CarryBlockJamBoardPiece> DetachCarriedPlates(int count)
         {
+            CompletePlateCollectionAnimation();
             int resolvedCount = Mathf.Clamp(count, 0, _carriedPlates.Count);
             var detached = new List<CarryBlockJamBoardPiece>(resolvedCount);
             for (int i = 0; i < resolvedCount; i++)
@@ -1821,6 +1895,13 @@ namespace CarryBlockJam
                 _carriedPlates.RemoveRange(0, resolvedCount);
 
             return detached;
+        }
+
+        private void CompletePlateCollectionAnimation()
+        {
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Complete();
+            _plateCollectionTween = null;
         }
 
         private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
@@ -1885,6 +1966,9 @@ namespace CarryBlockJam
             _failTriggered = true;
             _trackingSwipe = false;
             ShowHighlights(false);
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Kill();
+            _plateCollectionTween = null;
 
             if (_failurePreparing)
                 return;
