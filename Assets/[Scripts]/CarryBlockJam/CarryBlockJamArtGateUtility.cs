@@ -17,6 +17,7 @@ namespace CarryBlockJam
         private static readonly string[] BottomGateNames = { "M_GateBottom", "M_GateBottom (1)" };
 
         private static readonly Dictionary<int, Vector3> GateBaseLocalPositions = new();
+        private static readonly Dictionary<int, Quaternion> GateBaseLocalRotations = new();
         private static readonly Dictionary<int, Vector3> GateBaseLocalScales = new();
 
         public static Transform FindGatesRoot(CarryBlockJamSimpleBoard board)
@@ -111,9 +112,10 @@ namespace CarryBlockJam
                 gateLocal = gatesRoot.InverseTransformPoint(world);
             }
 
-            Vector3 offset = settings != null
-                ? settings.GetGateModelOffset(IsUpGate(gate) || definition.side == BoardBorderSide.Top)
-                : Vector3.zero;
+            Vector3 offset = ResolveGateModelOffset(
+                settings,
+                definition.side,
+                IsUpGate(gate) || definition.side == BoardBorderSide.Top);
 
             // Cache current placement as the new base so later offset tweaks keep cell alignment.
             int id = gate.GetInstanceID();
@@ -199,10 +201,31 @@ namespace CarryBlockJam
                 GateBaseLocalPositions[id] = baseLocalPosition;
             }
 
-            Vector3 offset = settings != null
-                ? settings.GetGateModelOffset(IsUpGate(gate))
-                : Vector3.zero;
-            gate.localPosition = baseLocalPosition + offset;
+            CarryBlockJamExit exit = gate.GetComponent<CarryBlockJamExit>();
+            BoardBorderSide side = exit != null
+                ? exit.Side
+                : (IsUpGate(gate) ? BoardBorderSide.Top : BoardBorderSide.Bottom);
+            gate.localPosition = baseLocalPosition + ResolveGateModelOffset(settings, side, IsUpGate(gate));
+        }
+
+        /// <summary>
+        /// Left/Right fall back to the legacy top/bottom offset while unset,
+        /// so existing setups keep their gate placement.
+        /// </summary>
+        private static Vector3 ResolveGateModelOffset(
+            CarryBlockJamPrefabSettings settings,
+            BoardBorderSide side,
+            bool legacyIsUpGate)
+        {
+            if (settings == null)
+                return Vector3.zero;
+
+            Vector3 offset = settings.GetGateModelOffset(side);
+            bool isSideGate = side == BoardBorderSide.Left || side == BoardBorderSide.Right;
+            if (isSideGate && offset == Vector3.zero)
+                return settings.GetGateModelOffset(legacyIsUpGate);
+
+            return offset;
         }
 
         public static void ApplyGateModelScale(Transform gate, Vector3 modelScale)
@@ -223,6 +246,21 @@ namespace CarryBlockJam
             gate.localScale = Vector3.Scale(baseLocalScale, scale);
         }
 
+        public static void ApplyGateModelRotation(Transform gate, Vector3 rotation)
+        {
+            if (gate == null)
+                return;
+
+            int id = gate.GetInstanceID();
+            if (!GateBaseLocalRotations.TryGetValue(id, out Quaternion baseLocalRotation))
+            {
+                baseLocalRotation = gate.localRotation;
+                GateBaseLocalRotations[id] = baseLocalRotation;
+            }
+
+            gate.localRotation = baseLocalRotation * Quaternion.Euler(rotation);
+        }
+
         public static void BindExitToGate(
             Transform gate,
             CarryBlockJamExitDefinition definition,
@@ -238,6 +276,7 @@ namespace CarryBlockJam
             // Apply gate color before creating the goal label so TMP renderers
             // are not mixed into mesh material assignment.
             bool isUpGate = IsUpGate(gate);
+            ApplyGateModelRotation(gate, definition.rotation);
             ApplyGateModelScale(gate, definition.modelScale);
             exit.Configure(definition);
             exit.BindArtGate(isUpGate, null, labelSettings);

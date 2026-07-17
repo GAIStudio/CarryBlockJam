@@ -36,6 +36,13 @@ namespace CarryBlockJam.Editor
                 line.y += EditorGUIUtility.singleLineHeight + Spacing;
             }
 
+            SerializedProperty rotationProperty = property.FindPropertyRelative("rotation");
+            if (rotationProperty != null)
+            {
+                EditorGUI.PropertyField(line, rotationProperty, new GUIContent("Gate Rotation"));
+                line.y += EditorGUI.GetPropertyHeight(rotationProperty, true) + Spacing;
+            }
+
             SerializedProperty scaleProperty = property.FindPropertyRelative("modelScale");
             if (scaleProperty != null)
             {
@@ -64,6 +71,10 @@ namespace CarryBlockJam.Editor
                 return height;
 
             height += Spacing + EditorGUIUtility.singleLineHeight; // row/col
+            SerializedProperty rotationProperty = property.FindPropertyRelative("rotation");
+            if (rotationProperty != null)
+                height += Spacing + EditorGUI.GetPropertyHeight(rotationProperty, true);
+
             SerializedProperty scaleProperty = property.FindPropertyRelative("modelScale");
             if (scaleProperty != null)
                 height += Spacing + EditorGUI.GetPropertyHeight(scaleProperty, true);

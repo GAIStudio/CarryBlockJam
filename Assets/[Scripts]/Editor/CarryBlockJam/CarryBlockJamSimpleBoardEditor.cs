@@ -69,7 +69,7 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(
                 "Exit number text comes from Level Creator (required plate count per exit) and shows as x2, x3, …. " +
-                "These prefab settings control label font, size, scale, and separate top/bottom offsets. " +
+                "These prefab settings control label font, size, scale, and separate offsets for each gate side. " +
                 "Label color follows the active gate color.",
                 MessageType.None);
 
@@ -100,6 +100,8 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("scale"), new GUIContent("Scale"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("topOffset"), new GUIContent("Top Gate Offset"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("bottomOffset"), new GUIContent("Bottom Gate Offset"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("leftOffset"), new GUIContent("Left Gate Offset"));
+            EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("rightOffset"), new GUIContent("Right Gate Offset"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("bold"), new GUIContent("Bold"));
             EditorGUILayout.PropertyField(labelProperty.FindPropertyRelative("useOutline"), new GUIContent("Use Outline"));
             EditorGUILayout.HelpBox(
@@ -137,8 +139,10 @@ namespace CarryBlockJam.Editor
             Undo.RecordObject(settings, "Exit Model Offset");
             settings.topExitModelOffset = EditorGUILayout.Vector3Field("Top", settings.topExitModelOffset);
             settings.bottomExitModelOffset = EditorGUILayout.Vector3Field("Bottom", settings.bottomExitModelOffset);
+            settings.leftExitModelOffset = EditorGUILayout.Vector3Field("Left", settings.leftExitModelOffset);
+            settings.rightExitModelOffset = EditorGUILayout.Vector3Field("Right", settings.rightExitModelOffset);
             EditorGUILayout.HelpBox(
-                "Offsets apply to M_GateUp (Top) and M_GateBottom (Bottom) exit models.",
+                "Offsets apply according to each exit's authored border side.",
                 MessageType.None);
             EditorGUILayout.EndVertical();
         }

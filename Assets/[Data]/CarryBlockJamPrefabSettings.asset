@@ -66,6 +66,8 @@ MonoBehaviour:
     tintWithPieceColor: 0
   topExitModelOffset: {x: 0, y: 0, z: -0.58}
   bottomExitModelOffset: {x: 0, y: 0, z: 0.4}
+  leftExitModelOffset: {x: 0, y: 0, z: 0}
+  rightExitModelOffset: {x: 1.2, y: 0, z: 0}
   boardCellColor: 7
   wallColor: 7
   exitCarColor: 21
