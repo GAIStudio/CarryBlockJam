@@ -111,7 +111,7 @@ namespace GAITemplate
             if (_isFinishing) return;
             _isFinishing = true;
 
-            Haptic.HeavyTaptic();
+            Haptic.MediumTaptic();
             SetContinueInteractable(false);
 
             int amount = ResolveRewardAmount();

@@ -1,5 +1,7 @@
 using GAITemplate;
 using DG.Tweening;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -16,12 +18,29 @@ namespace CarryBlockJam
         [SerializeField] private float moveDurationPerCell = 0.09f;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
+        [SerializeField] private float gatePlateFlyDuration = 0.28f;
+        [SerializeField] private float gatePlateFlyHeight = 0.8f;
+        [SerializeField] private float tablePlateJumpDuration = 0.3f;
+        [SerializeField] private float tablePlateJumpHeight = 0.65f;
+        [SerializeField] private float tablePlateSettleDuration = 0.16f;
+        [SerializeField] private float tablePlateAnimationSpeed = 1.4f;
+        [SerializeField] private float pickupPlateBounceDuration = 0.42f;
+        [SerializeField] private float pickupPlateBounceHeight = 0.8f;
+        [SerializeField] private float pickupPlateStagger = 0.07f;
+        [SerializeField] private float pickupPlateSettleDuration = 0.2f;
+        [SerializeField] private float pickupPlateSettleScale = 0.22f;
+        [SerializeField] private float pickupPlateFrontClearance = 0.65f;
+        [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
         [SerializeField] private bool showSwipeHighlights;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.40f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
+        [SerializeField] private float failurePlateDropDuration = 0.35f;
+        [SerializeField] private float failurePlateFlyHeight = 1.25f;
+        [SerializeField] private float failurePlateSpreadStagger = 0.04f;
+        [SerializeField] private float failureUiDelay = 1.4f;
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -32,10 +51,12 @@ namespace CarryBlockJam
         private bool _isAnimating;
         private bool _successTriggered;
         private bool _failTriggered;
+        private bool _failurePreparing;
         private CarryBlockJamBoardPiece _cylinder;
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
+        private Tween _plateCollectionTween;
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
 
@@ -396,7 +417,7 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             RefreshStickmanAnimation(moving: true);
-            Haptic.LightTaptic();
+            Haptic.HeavyTaptic();
 
             ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
 
@@ -753,7 +774,7 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             RefreshStickmanAnimation(moving: true);
-            Haptic.LightTaptic();
+            Haptic.HeavyTaptic();
 
             if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
                 _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
@@ -870,7 +891,20 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece arrivingPlate = plate;
                 plate.transform.SetParent(GetPiecesRoot(), true);
                 Vector3 targetPosition = exitComponent.transform.position + Vector3.up * (0.05f * i);
-                sequence.Append(plate.transform.DOMove(targetPosition, exitPlateDeliveryDuration).SetEase(Ease.InQuad));
+                float flyDuration = Mathf.Max(exitPlateDeliveryDuration, gatePlateFlyDuration);
+                Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 360f, 0f);
+                sequence.Append(plate.transform.DOJump(
+                    targetPosition,
+                    Mathf.Max(0.01f, gatePlateFlyHeight),
+                    1,
+                    flyDuration).SetEase(Ease.InOutQuad));
+                sequence.Join(plate.transform.DORotate(
+                    spinTarget,
+                    flyDuration,
+                    RotateMode.FastBeyond360).SetEase(Ease.InOutQuad));
+                sequence.Join(plate.transform.DOScale(
+                    plate.transform.localScale * 0.35f,
+                    flyDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {
                     exitComponent.ConsumeOne(deliverColor);
@@ -923,38 +957,73 @@ namespace CarryBlockJam
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
             RefreshStickmanAnimation(moving: false);
             Haptic.MediumTaptic();
-            CarryBlockJamBoardPiece currentTop = GetTopStackPiece(targetBox);
-            Sequence sequence = DOTween.Sequence();
+            AnimateNextPlateToBox(plates, 0, targetBox, onComplete);
+        }
 
-            for (int i = 0; i < plates.Count; i++)
-            {
-                CarryBlockJamBoardPiece plate = plates[i];
-                CarryBlockJamBoardPiece basePiece = currentTop;
-                if (plate == null || basePiece == null)
-                    continue;
+        private void AnimateNextPlateToBox(
+            List<CarryBlockJamBoardPiece> plates,
+            int index,
+            CarryBlockJamBoardPiece targetBox,
+            TweenCallback onComplete)
+        {
+            while (index < plates.Count && plates[index] == null)
+                index++;
 
-                plate.ClearStackLinks();
-                plate.transform.SetParent(GetPiecesRoot(), true);
-                Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
-                    basePiece.GetStackAttachLocalPosition(plate));
-                sequence.Append(plate.transform.DOMove(stackWorldTarget, exitTravelDuration).SetEase(Ease.InQuad));
-                sequence.AppendCallback(() =>
-                {
-                    plate.StackOnPiece(basePiece);
-                    if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
-                        cell.Occupant = plate.gameObject;
-                });
-                currentTop = plate;
-            }
-
-            sequence.OnComplete(() =>
+            if (index >= plates.Count)
             {
                 _isAnimating = false;
                 if (onComplete != null)
                     onComplete.Invoke();
                 else
                     MaybeNotifyTutorialTableDrop(targetBox);
+                return;
+            }
+
+            CarryBlockJamBoardPiece plate = plates[index];
+            CarryBlockJamBoardPiece basePiece = GetTopStackPiece(targetBox);
+            if (basePiece == null)
+            {
+                AnimateNextPlateToBox(plates, index + 1, targetBox, onComplete);
+                return;
+            }
+
+            plate.ClearStackLinks();
+            plate.transform.SetParent(GetPiecesRoot(), true);
+            Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
+                basePiece.GetStackAttachLocalPosition(plate));
+            float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
+            float jumpDuration = Mathf.Max(
+                0.01f,
+                Mathf.Max(exitTravelDuration, tablePlateJumpDuration) / tableAnimationSpeed);
+            Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 270f, 0f);
+
+            Sequence landing = DOTween.Sequence();
+            landing.Append(plate.transform.DOJump(
+                stackWorldTarget,
+                Mathf.Max(0.01f, tablePlateJumpHeight),
+                1,
+                jumpDuration).SetEase(Ease.OutQuad));
+            landing.Join(plate.transform.DORotate(
+                spinTarget,
+                jumpDuration,
+                RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
+            landing.AppendCallback(() =>
+            {
+                plate.StackOnPiece(basePiece);
+                if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
+                    cell.Occupant = plate.gameObject;
             });
+
+            Vector3 settlePunch = plate.transform.localScale * 0.12f;
+            landing.Append(plate.transform.DOPunchScale(
+                settlePunch,
+                Mathf.Max(0.01f, tablePlateSettleDuration / tableAnimationSpeed),
+                6,
+                0.5f));
+
+            int nextIndex = index + 1;
+            landing.OnComplete(() =>
+                AnimateNextPlateToBox(plates, nextIndex, targetBox, onComplete));
         }
 
         private void MaybeNotifyTutorialTableDrop(CarryBlockJamBoardPiece targetBox)
@@ -1675,16 +1744,58 @@ namespace CarryBlockJam
         private PieceColorType CarriedColor =>
             HasCarriedPlates ? _carriedPlates[0].Color : PieceColorType.None;
 
-        private void AddPlateToCarryStack(CarryBlockJamBoardPiece plate)
+        private Tween AddPlateToCarryStack(CarryBlockJamBoardPiece plate, int pickupIndex)
         {
             if (plate == null)
-                return;
+                return null;
 
             plate.ClearStackLinks();
-            plate.transform.SetParent(GetCarryAttachRoot(), false);
+            Transform attachRoot = GetCarryAttachRoot();
+            plate.transform.SetParent(attachRoot, true);
             if (!_carriedPlates.Contains(plate))
                 _carriedPlates.Add(plate);
-            UpdateCarriedPlateVisuals();
+
+            int stackIndex = _carriedPlates.IndexOf(plate);
+            Vector3 targetPosition = GetCarriedPlateLocalPosition(stackIndex);
+            float animationSpeed = Mathf.Max(0.01f, pickupPlateAnimationSpeed);
+            float bounceDuration = Mathf.Max(0.01f, pickupPlateBounceDuration / animationSpeed);
+            float bounceHeight = Mathf.Max(0.01f, pickupPlateBounceHeight);
+            Vector3 startPosition = plate.transform.localPosition;
+            Vector3 horizontalFromStickman = new Vector3(startPosition.x, 0f, startPosition.z);
+            Vector3 outward = horizontalFromStickman.sqrMagnitude > 0.001f
+                ? horizontalFromStickman.normalized * 0.2f
+                : Vector3.right * (pickupIndex % 2 == 0 ? 0.2f : -0.2f);
+            Vector3 liftPosition = startPosition + Vector3.up * bounceHeight + outward;
+            Vector3 frontWaypoint = targetPosition +
+                Vector3.forward * Mathf.Max(0f, pickupPlateFrontClearance) +
+                Vector3.up * (bounceHeight * 0.45f);
+
+            Sequence bounce = DOTween.Sequence();
+            bounce.SetDelay(Mathf.Max(0f, pickupPlateStagger) * pickupIndex / animationSpeed);
+            bounce.Append(plate.transform.DOLocalMove(
+                liftPosition,
+                bounceDuration * 0.35f).SetEase(Ease.OutQuad));
+            bounce.Append(plate.transform.DOLocalPath(
+                new[] { frontWaypoint, targetPosition },
+                bounceDuration * 0.65f,
+                PathType.CatmullRom,
+                PathMode.Ignore).SetEase(Ease.InOutSine));
+            bounce.Insert(0f, plate.transform.DOLocalRotate(
+                Vector3.zero,
+                bounceDuration,
+                RotateMode.Fast).SetEase(Ease.OutQuad));
+            float settleDuration = Mathf.Max(0.01f, pickupPlateSettleDuration / animationSpeed);
+            bounce.Append(plate.transform.DOLocalJump(
+                targetPosition,
+                bounceHeight * 0.22f,
+                1,
+                settleDuration).SetEase(Ease.OutQuad));
+            bounce.Join(plate.transform.DOPunchScale(
+                plate.transform.localScale * Mathf.Max(0f, pickupPlateSettleScale),
+                settleDuration,
+                6,
+                0.5f));
+            return bounce;
         }
 
         private void AddPlatesToCarryStack(
@@ -1696,15 +1807,28 @@ namespace CarryBlockJam
             if (plates == null || plates.Count == 0)
                 return;
 
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Complete();
+
+            Sequence collection = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = plates[i];
-                AddPlateToCarryStack(plate);
+                Tween bounce = AddPlateToCarryStack(plate, i);
+                if (bounce != null)
+                    collection.Join(bounce);
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
             }
 
-            Haptic.MediumTaptic();
+            collection.OnComplete(() =>
+            {
+                if (!_failTriggered)
+                    UpdateCarriedPlateVisuals();
+                _plateCollectionTween = null;
+            });
+            _plateCollectionTween = collection;
+            Haptic.LightTaptic();
             RefreshStickmanAnimation(moving: false);
 
             // Tutorial stages advance only when the start→target move finishes, never from pickup alone.
@@ -1728,13 +1852,18 @@ namespace CarryBlockJam
                     continue;
 
                 plate.transform.SetParent(attachRoot, false);
-                // Hold plates in front of the torso; stack upward without clipping the head.
-                Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * i);
-                // Slight forward bias on higher plates only.
-                stackOffset += Vector3.forward * (0.02f * i);
-                plate.transform.localPosition = carriedPlateBaseOffset + stackOffset;
+                plate.transform.localPosition = GetCarriedPlateLocalPosition(i);
                 plate.transform.localRotation = Quaternion.identity;
             }
+        }
+
+        private Vector3 GetCarriedPlateLocalPosition(int stackIndex)
+        {
+            // Hold plates in front of the torso; stack upward without clipping the head.
+            Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * stackIndex);
+            // Slight forward bias on higher plates only.
+            stackOffset += Vector3.forward * (0.02f * stackIndex);
+            return carriedPlateBaseOffset + stackOffset;
         }
 
         private Transform GetCarryAttachRoot()
@@ -1748,6 +1877,7 @@ namespace CarryBlockJam
 
         private List<CarryBlockJamBoardPiece> DetachCarriedPlates()
         {
+            CompletePlateCollectionAnimation();
             var detached = new List<CarryBlockJamBoardPiece>(_carriedPlates);
             _carriedPlates.Clear();
             return detached;
@@ -1755,6 +1885,7 @@ namespace CarryBlockJam
 
         private List<CarryBlockJamBoardPiece> DetachCarriedPlates(int count)
         {
+            CompletePlateCollectionAnimation();
             int resolvedCount = Mathf.Clamp(count, 0, _carriedPlates.Count);
             var detached = new List<CarryBlockJamBoardPiece>(resolvedCount);
             for (int i = 0; i < resolvedCount; i++)
@@ -1764,6 +1895,13 @@ namespace CarryBlockJam
                 _carriedPlates.RemoveRange(0, resolvedCount);
 
             return detached;
+        }
+
+        private void CompletePlateCollectionAnimation()
+        {
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Complete();
+            _plateCollectionTween = null;
         }
 
         private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
@@ -1821,6 +1959,187 @@ namespace CarryBlockJam
                 current = current.StackedBelow;
 
             return current;
+        }
+
+        public void PrepareForFailure(Action completed)
+        {
+            _failTriggered = true;
+            _trackingSwipe = false;
+            ShowHighlights(false);
+            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
+                _plateCollectionTween.Kill();
+            _plateCollectionTween = null;
+
+            if (_failurePreparing)
+                return;
+
+            _failurePreparing = true;
+            StartCoroutine(PlayFailureSequence(completed));
+        }
+
+        private IEnumerator PlayFailureSequence(Action completed)
+        {
+            // Let an in-flight move or delivery finish so its occupancy and plate
+            // lists are not left half-updated.
+            while (_isAnimating)
+                yield return null;
+
+            ResolveGameplayReferences();
+            float sequenceStart = Time.realtimeSinceStartup;
+
+            Tween plateDrop = DropCarriedPlatesForFailure();
+            RefreshStickmanAnimation(moving: false);
+            _stickmanAnimator?.PlayFailure();
+
+            if (plateDrop != null && plateDrop.IsActive())
+                yield return plateDrop.WaitForCompletion();
+
+            float remainingDelay = Mathf.Max(
+                0f,
+                failureUiDelay - (Time.realtimeSinceStartup - sequenceStart));
+            if (remainingDelay > 0f)
+                yield return new WaitForSecondsRealtime(remainingDelay);
+
+            completed?.Invoke();
+        }
+
+        private Tween DropCarriedPlatesForFailure()
+        {
+            if (!HasCarriedPlates)
+                return null;
+
+            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            Transform piecesRoot = GetPiecesRoot();
+            List<Vector2Int> dropCells = FindFailureDropCells(plates.Count);
+            Vector3 visualFallbackCenter =
+                _cylinder != null && _grid != null && _grid.IsInside(_cylinder.Row, _cylinder.Column)
+                    ? _grid.GetWorldPosition(_cylinder.Row, _cylinder.Column)
+                    : transform.position;
+
+            Sequence sequence = DOTween.Sequence().SetUpdate(true);
+            for (int i = 0; i < plates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = plates[i];
+                if (plate == null)
+                    continue;
+
+                plate.ClearStackLinks();
+                plate.transform.SetParent(piecesRoot, true);
+
+                Vector3 target;
+                if (i < dropCells.Count)
+                {
+                    Vector2Int dropCell = dropCells[i];
+                    Vector3 gridTarget = _grid.GetWorldPosition(dropCell.x, dropCell.y);
+                    target = gridTarget + board.transform.TransformVector(plate.GridOffset);
+                }
+                else
+                {
+                    float angle = plates.Count > 1 ? i * Mathf.PI * 2f / plates.Count : 0f;
+                    target = visualFallbackCenter +
+                        board.transform.TransformVector(plate.GridOffset) +
+                        new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 0.65f;
+                }
+
+                Tween flyTween = plate.transform.DOJump(
+                    target,
+                    Mathf.Max(0.01f, failurePlateFlyHeight),
+                    1,
+                    Mathf.Max(0.01f, failurePlateDropDuration))
+                    .SetDelay(Mathf.Max(0f, failurePlateSpreadStagger) * i)
+                    .SetEase(Ease.OutQuad);
+                sequence.Join(flyTween);
+            }
+
+            sequence.OnComplete(() =>
+            {
+                int placedCount = Mathf.Min(plates.Count, dropCells.Count);
+                for (int i = 0; i < placedCount; i++)
+                {
+                    CarryBlockJamBoardPiece plate = plates[i];
+                    if (plate == null)
+                        continue;
+
+                    Vector2Int dropCell = dropCells[i];
+                    plate.PlaceOnGrid(_grid, piecesRoot, dropCell.x, dropCell.y);
+                    if (_grid.TryGetCell(dropCell.x, dropCell.y, out PuzzleCell cell) && cell != null)
+                        cell.Occupant = plate.gameObject;
+                }
+            });
+
+            return sequence;
+        }
+
+        private List<Vector2Int> FindFailureDropCells(int requestedCount)
+        {
+            var result = new List<Vector2Int>(Mathf.Max(0, requestedCount));
+            if (requestedCount <= 0)
+                return result;
+            if (_grid == null || _cylinder == null || !_grid.IsBuilt)
+                return result;
+
+            int startRow = _cylinder.Row;
+            int startColumn = _cylinder.Column;
+            if (!_grid.IsInside(startRow, startColumn))
+                return result;
+
+            int cellCount = _grid.Rows * _grid.Columns;
+            var visited = new bool[cellCount];
+            var queue = new Queue<Vector2Int>(cellCount);
+            queue.Enqueue(new Vector2Int(startRow, startColumn));
+            visited[startRow * _grid.Columns + startColumn] = true;
+
+            int[] rowOffsets = { -1, 1, 0, 0 };
+            int[] columnOffsets = { 0, 0, -1, 1 };
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                for (int i = 0; i < 4; i++)
+                {
+                    int nextRow = current.x + rowOffsets[i];
+                    int nextColumn = current.y + columnOffsets[i];
+                    if (!_grid.IsInside(nextRow, nextColumn))
+                        continue;
+
+                    int index = nextRow * _grid.Columns + nextColumn;
+                    if (visited[index])
+                        continue;
+                    visited[index] = true;
+
+                    if (!_grid.TryGetCell(nextRow, nextColumn, out PuzzleCell cell) || cell == null)
+                        continue;
+
+                    bool isEmptyGridCell =
+                        cell.Occupant == null &&
+                        !IsBoxOwnedCell(nextRow, nextColumn) &&
+                        !IsExitCell(nextRow, nextColumn);
+                    if (isEmptyGridCell)
+                    {
+                        result.Add(new Vector2Int(nextRow, nextColumn));
+                        if (result.Count >= requestedCount)
+                            return result;
+                    }
+
+                    // Keep expanding through empty cells so plates spread across
+                    // the nearest available part of the board.
+                    if (cell.Occupant == null || cell.Occupant == _cylinder.gameObject)
+                        queue.Enqueue(new Vector2Int(nextRow, nextColumn));
+                }
+            }
+
+            return result;
+        }
+
+        private bool IsExitCell(int row, int column)
+        {
+            CarryBlockJamExit[] exits = GetRuntimeExits();
+            for (int i = 0; i < exits.Length; i++)
+            {
+                if (exits[i] != null && IsCellOnExit(row, column, exits[i]))
+                    return true;
+            }
+
+            return false;
         }
 
         private void TryTriggerSuccess(List<CarryBlockJamBoardPiece> ignoredPlates = null)

@@ -62,7 +62,7 @@ namespace GAITemplate
         /// <summary>Mevcut değeri tersine çevirir. UI Button.OnClick'e bağlanır.</summary>
         public void Toggle()
         {
-            Haptic.HeavyTaptic();
+            Haptic.MediumTaptic();
             SetValue(!isOn);
         }
 

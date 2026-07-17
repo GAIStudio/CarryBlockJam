@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DG.Tweening;
 using GAITemplate;
 using TMPro;
 using UnityEngine;
@@ -20,6 +21,10 @@ namespace CarryBlockJam
         [SerializeField] private TMP_Text goalLabel;
         [SerializeField] private bool useArtGateMaterials;
         [SerializeField] private bool artGateIsUp = true;
+        [SerializeField] private float labelBounceDuration = 0.28f;
+        [SerializeField] private float labelBounceScale = 1.35f;
+
+        private Vector3 _goalLabelRestScale;
 
         public BoardBorderSide Side => side;
         public int StartIndex => startIndex;
@@ -68,6 +73,7 @@ namespace CarryBlockJam
             if (goalLabel != null && useArtGateMaterials)
                 CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
 
+            CaptureGoalLabelRestScale();
             RefreshVisuals();
         }
 
@@ -90,6 +96,7 @@ namespace CarryBlockJam
             if (goalLabel != null)
                 CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
 
+            CaptureGoalLabelRestScale();
             RefreshVisuals();
         }
 
@@ -138,6 +145,7 @@ namespace CarryBlockJam
             else
                 RefreshVisuals();
 
+            AnimateGoalLabelChange();
             return 1;
         }
 
@@ -213,7 +221,33 @@ namespace CarryBlockJam
                 CarryBlockJamExitLabelUtility.ApplyLabelSettings(goalLabel, labelSettings);
             }
 
+            CaptureGoalLabelRestScale();
             RefreshVisuals();
+        }
+
+        private void CaptureGoalLabelRestScale()
+        {
+            if (goalLabel != null)
+                _goalLabelRestScale = goalLabel.transform.localScale;
+        }
+
+        private void AnimateGoalLabelChange()
+        {
+            if (goalLabel == null || !goalLabel.gameObject.activeInHierarchy)
+                return;
+
+            Transform labelTransform = goalLabel.transform;
+            if (_goalLabelRestScale == Vector3.zero)
+                _goalLabelRestScale = labelTransform.localScale;
+
+            labelTransform.DOKill();
+            labelTransform.localScale = _goalLabelRestScale;
+
+            float duration = Mathf.Max(0.01f, labelBounceDuration);
+            Vector3 enlargedScale = _goalLabelRestScale * Mathf.Max(1f, labelBounceScale);
+            Sequence bounce = DOTween.Sequence().SetTarget(labelTransform);
+            bounce.Append(labelTransform.DOScale(enlargedScale, duration * 0.4f).SetEase(Ease.OutBack));
+            bounce.Append(labelTransform.DOScale(_goalLabelRestScale, duration * 0.6f).SetEase(Ease.OutBounce));
         }
     }
 }

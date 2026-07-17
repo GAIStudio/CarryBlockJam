@@ -224,7 +224,7 @@ namespace GAITemplate
 
         private void OnClickRestartButton()
         {
-            Haptic.HeavyTaptic();
+            Haptic.MediumTaptic();
             GameManager.instance.RestartScene();
         }
     }
