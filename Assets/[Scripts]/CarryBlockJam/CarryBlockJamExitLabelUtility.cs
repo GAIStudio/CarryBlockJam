@@ -160,7 +160,16 @@ namespace CarryBlockJam
                 return;
 
             BoardExitLabelSettings resolvedSettings = settings ?? BoardExitLabelSettings.CreateDefault();
-            labelTransform.localPosition = GetArtGateLabelLocalPosition(side) + resolvedSettings.GetOffsetForSide(side);
+            Vector3 offset = GetArtGateLabelLocalPosition(side) + resolvedSettings.GetOffsetForSide(side);
+
+            // Gates can be rotated per exit; keep the label offset board-aligned
+            // instead of following the gate's rotated local axes.
+            Transform gate = labelTransform.parent;
+            if (gate != null && gate.parent != null)
+                labelTransform.position = gate.position + gate.parent.TransformVector(offset);
+            else
+                labelTransform.localPosition = offset;
+
             labelTransform.localScale = resolvedSettings.scale;
             labelTransform.localRotation = Quaternion.identity;
             EnsureBillboard(labelTransform).Refresh();

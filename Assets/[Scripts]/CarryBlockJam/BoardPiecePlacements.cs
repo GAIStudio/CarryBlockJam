@@ -67,6 +67,8 @@ namespace CarryBlockJam
         public Vector3 scale = Vector3.one * 0.45f;
         public Vector3 topOffset;
         public Vector3 bottomOffset;
+        public Vector3 leftOffset;
+        public Vector3 rightOffset;
         public Color color = Color.white;
         public bool bold = true;
         public bool useOutline = true;
@@ -75,9 +77,15 @@ namespace CarryBlockJam
 
         public Vector3 GetOffsetForSide(BoardBorderSide side)
         {
-            return side == BoardBorderSide.Bottom || side == BoardBorderSide.Right
-                ? bottomOffset
-                : topOffset;
+            // Left/Right fall back to the legacy top/bottom mapping while unset,
+            // so existing scenes keep their label placement.
+            return side switch
+            {
+                BoardBorderSide.Bottom => bottomOffset,
+                BoardBorderSide.Left => leftOffset == Vector3.zero ? topOffset : leftOffset,
+                BoardBorderSide.Right => rightOffset == Vector3.zero ? bottomOffset : rightOffset,
+                _ => topOffset,
+            };
         }
     }
 

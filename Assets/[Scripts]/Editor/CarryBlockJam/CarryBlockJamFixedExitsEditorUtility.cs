@@ -76,6 +76,10 @@ namespace CarryBlockJam.Editor
                     EditorGUI.EndDisabledGroup();
                 }
 
+                SerializedProperty rotationProperty = exitProperty.FindPropertyRelative("rotation");
+                if (rotationProperty != null)
+                    EditorGUILayout.PropertyField(rotationProperty, new GUIContent("Gate Rotation"));
+
                 SerializedProperty scaleProperty = exitProperty.FindPropertyRelative("modelScale");
                 if (scaleProperty != null)
                 {
@@ -99,6 +103,7 @@ namespace CarryBlockJam.Editor
                 SerializedProperty exitProperty = exitsProperty.GetArrayElementAtIndex(index);
                 exitProperty.FindPropertyRelative("row").intValue = 0;
                 exitProperty.FindPropertyRelative("column").intValue = Mathf.Clamp(columns / 2, 0, Mathf.Max(0, columns - 1));
+                exitProperty.FindPropertyRelative("rotation").vector3Value = Vector3.zero;
                 exitProperty.FindPropertyRelative("modelScale").vector3Value = Vector3.one;
                 SerializedProperty goalsProperty = exitProperty.FindPropertyRelative("goals");
                 goalsProperty.arraySize = 1;
@@ -146,7 +151,6 @@ namespace CarryBlockJam.Editor
             SerializedProperty startIndexProperty = exitProperty.FindPropertyRelative("startIndex");
             SerializedProperty lengthProperty = exitProperty.FindPropertyRelative("length");
             SerializedProperty offsetProperty = exitProperty.FindPropertyRelative("positionOffset");
-            SerializedProperty rotationProperty = exitProperty.FindPropertyRelative("rotation");
             SerializedProperty scaleProperty = exitProperty.FindPropertyRelative("modelScale");
 
             int safeRows = Mathf.Max(1, rows);
@@ -235,8 +239,6 @@ namespace CarryBlockJam.Editor
                 lengthProperty.intValue = 1;
             if (offsetProperty != null)
                 offsetProperty.vector3Value = Vector3.zero;
-            if (rotationProperty != null)
-                rotationProperty.vector3Value = Vector3.zero;
             if (scaleProperty != null && scaleProperty.vector3Value == Vector3.zero)
                 scaleProperty.vector3Value = Vector3.one;
         }

@@ -16,6 +16,7 @@ namespace CarryBlockJam
         [SerializeField] private float moveDurationPerCell = 0.09f;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
+        [SerializeField] private bool showSwipeHighlights;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.85f, 0.40f);
@@ -1074,6 +1075,12 @@ namespace CarryBlockJam
 
         private void UpdateSwipePreview()
         {
+            if (!showSwipeHighlights)
+            {
+                ShowHighlights(false);
+                return;
+            }
+
             if (_cylinder == null)
                 ResolveGameplayReferences();
 

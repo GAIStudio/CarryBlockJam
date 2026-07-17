@@ -75,10 +75,28 @@ namespace CarryBlockJam
         [Tooltip("Local-position offset for bottom exit models (M_GateBottom).")]
         public Vector3 bottomExitModelOffset;
 
+        [Tooltip("Local-position offset for exits authored on the left side.")]
+        public Vector3 leftExitModelOffset;
+
+        [Tooltip("Local-position offset for exits authored on the right side.")]
+        public Vector3 rightExitModelOffset;
+
         public Vector3 GetExitModelOffset(bool isTopExit) =>
             isTopExit ? topExitModelOffset : bottomExitModelOffset;
 
+        public Vector3 GetExitModelOffset(BoardBorderSide side)
+        {
+            return side switch
+            {
+                BoardBorderSide.Bottom => bottomExitModelOffset,
+                BoardBorderSide.Left => leftExitModelOffset,
+                BoardBorderSide.Right => rightExitModelOffset,
+                _ => topExitModelOffset,
+            };
+        }
+
         public Vector3 GetGateModelOffset(bool isUpGate) => GetExitModelOffset(isUpGate);
+        public Vector3 GetGateModelOffset(BoardBorderSide side) => GetExitModelOffset(side);
 
         [Header("Fallback Colors")]
         public PieceColorType boardCellColor = PieceColorType.Grey;

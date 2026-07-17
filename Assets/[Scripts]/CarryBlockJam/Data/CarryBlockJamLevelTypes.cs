@@ -83,7 +83,9 @@ namespace CarryBlockJam
         [HideInInspector] [Min(0)] public int startIndex = 0;
         [HideInInspector] [Min(1)] public int length = 1;
         [HideInInspector] public Vector3 positionOffset;
-        [HideInInspector] public Vector3 rotation;
+
+        [Tooltip("Euler rotation offset applied to this gate's authored orientation.")]
+        public Vector3 rotation;
 
         [Tooltip("Local scale multiplier for this exit gate model.")]
         public Vector3 modelScale = Vector3.one;
@@ -111,7 +113,6 @@ namespace CarryBlockJam
 
             length = 1;
             positionOffset = Vector3.zero;
-            rotation = Vector3.zero;
 
             int safeRows = Mathf.Max(1, rows);
             int safeColumns = Mathf.Max(1, columns);
