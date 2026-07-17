@@ -18,7 +18,7 @@ MonoBehaviour:
   colorCells: []
   carryBlockJam:
     hasTimer: 1
-    timeLimitSeconds: 360
+    timeLimitSeconds: 30
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
     gridSpacingZ: 1
@@ -70,7 +70,7 @@ MonoBehaviour:
       startIndex: 6
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 90, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 1

@@ -12,6 +12,7 @@ namespace GAITemplate
         [HideInInspector] public EndGameEvent endGameEvent = new EndGameEvent();
 
         public LevelBase ActiveLevelBase { get; private set; }
+        private bool _endGameReserved;
 
         #region Singleton
         public static LevelManager instance = null;
@@ -83,6 +84,10 @@ namespace GAITemplate
 
         public void Success()
         {
+            if (_endGameReserved)
+                return;
+
+            _endGameReserved = true;
             PlayerPrefs.DeleteKey("Elephant");
             GameManager.instance.LevelUp();
             endGameEvent.Invoke(true);
@@ -90,8 +95,26 @@ namespace GAITemplate
 
         public void Fail()
         {
+            if (_endGameReserved)
+                return;
+
+            _endGameReserved = true;
             PlayerPrefs.DeleteKey("Elephant");
             Haptic.MediumTaptic();
+
+            CarryBlockJamSwipeController swipeController =
+                FindObjectOfType<CarryBlockJamSwipeController>();
+            if (swipeController != null)
+            {
+                swipeController.PrepareForFailure(CompleteFailure);
+                return;
+            }
+
+            CompleteFailure();
+        }
+
+        private void CompleteFailure()
+        {
             endGameEvent.Invoke(false);
         }
     }

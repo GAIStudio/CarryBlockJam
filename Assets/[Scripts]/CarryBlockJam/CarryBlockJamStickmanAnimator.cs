@@ -3,28 +3,32 @@ using UnityEngine;
 namespace CarryBlockJam
 {
     /// <summary>
-    /// Drives Stickman Animator states: empty walk, carrying idle, carry walk.
-    /// Also keeps Visual Y synced to clip/bind height so empty stop does not hop.
+    /// Drives Stickman idle, movement, carrying, and failure animation states.
     /// </summary>
     [DisallowMultipleComponent]
     public class CarryBlockJamStickmanAnimator : MonoBehaviour
     {
         public const string MovingParam = "IsMoving";
         public const string CarryingParam = "IsCarrying";
+        public const string FailedParam = "IsFailed";
         public const string ControllerAssetPath = "Assets/[Animations]/Stickman.controller";
-        public const string EmptyIdleStateName = "EmptyIdle";
+        public const string EmptyIdleStateName = "SadIdle";
+        public const string FailedStateName = "FallingDown";
 
         [SerializeField] private Animator animator;
         [SerializeField] private Vector3 animatedHeightOffset = new Vector3(0f, -0.7f, 0f);
 
         private static readonly int MovingId = Animator.StringToHash(MovingParam);
         private static readonly int CarryingId = Animator.StringToHash(CarryingParam);
+        private static readonly int FailedId = Animator.StringToHash(FailedParam);
 
         private bool _isMoving;
         private bool _isCarrying;
+        private bool _isFailed;
 
         public bool IsMoving => _isMoving;
         public bool IsCarrying => _isCarrying;
+        public bool IsFailed => _isFailed;
 
         private void Awake()
         {
@@ -36,9 +40,8 @@ namespace CarryBlockJam
             if (!EnsureAnimator())
                 return;
 
-            // EmptyIdle uses bind pose (taller). Walk/carry clips sit lower.
-            // Blend Visual offset with the same weights as the state transition
-            // so stopping does not hop when pose + offset fight each other.
+            // Every requested state uses a Mixamo clip. Apply the configured
+            // feet-height compensation consistently while transitions blend.
             transform.localPosition = animatedHeightOffset * ResolveAnimatedHeightFactor();
         }
 
@@ -49,6 +52,9 @@ namespace CarryBlockJam
 
         public void SetMoving(bool moving)
         {
+            if (_isFailed)
+                return;
+
             if (_isMoving == moving)
                 return;
 
@@ -59,6 +65,9 @@ namespace CarryBlockJam
 
         public void SetCarrying(bool carrying)
         {
+            if (_isFailed)
+                return;
+
             if (_isCarrying == carrying)
                 return;
 
@@ -69,8 +78,25 @@ namespace CarryBlockJam
 
         public void SetState(bool moving, bool carrying)
         {
+            if (_isFailed)
+                return;
+
             SetMoving(moving);
             SetCarrying(carrying);
+        }
+
+        public void PlayFailure()
+        {
+            if (_isFailed)
+                return;
+
+            _isFailed = true;
+            _isMoving = false;
+            if (!EnsureAnimator())
+                return;
+
+            animator.SetBool(MovingId, false);
+            animator.SetBool(FailedId, true);
         }
 
         public static CarryBlockJamStickmanAnimator EnsureOnCylinder(
@@ -85,19 +111,23 @@ namespace CarryBlockJam
                 visual = cylinderRoot;
 
             CarryBlockJamStickmanAnimator driver = visual.GetComponent<CarryBlockJamStickmanAnimator>();
+            bool created = driver == null;
             if (driver == null)
                 driver = visual.gameObject.AddComponent<CarryBlockJamStickmanAnimator>();
 
             driver.EnsureAnimator(controller);
-            driver.SetState(false, false);
+            if (created)
+            {
+                driver._isFailed = false;
+                if (driver.animator != null)
+                    driver.animator.SetBool(FailedId, false);
+                driver.SetState(false, false);
+            }
             return driver;
         }
 
         private float ResolveAnimatedHeightFactor()
         {
-            // EmptyIdle has no motion → clip weight 0 (bind pose).
-            // Walk/carry clips contribute weight; during transitions those weights
-            // already blend, so Visual Y tracks hips instead of hopping.
             float weight = SumClipWeights(animator.GetCurrentAnimatorClipInfo(0));
             if (animator.IsInTransition(0))
                 weight += SumClipWeights(animator.GetNextAnimatorClipInfo(0));
