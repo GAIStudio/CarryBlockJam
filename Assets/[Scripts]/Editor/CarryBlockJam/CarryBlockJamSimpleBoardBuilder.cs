@@ -13,10 +13,12 @@ namespace CarryBlockJam.Editor
         private const string ScenePath = "Assets/[Scenes]/SampleScene.unity";
         private const string CellPrefabPath = "Assets/[Models]/M_GridCell.fbx";
         private const string CellMaterialPath = "Assets/[Materials]/Mat_Gridcell.mat";
-        private const string GridWallPrefabPath = "Assets/[Models]/M_Gridwall.fbx";
+        private const string GridWallPrefabPath = "Assets/[Models]/M_Gridwall13x9.fbx";
         private const string GridPrefabPath = "Assets/[Models]/M_Grid.fbx";
-        private const string GridBottomPrefabPath = "Assets/[Models]/M_GridBottom.fbx";
-        private const string GridWallMaterialPath = "Assets/[Materials]/Mat_GridWall.mat";
+        private const string GridBottomPrefabPath = "Assets/[Models]/M_GridBottom13x9.fbx";
+        private const string GridWallMaterialPath = "Assets/[Materials]/Mat_GridWall13x9.mat";
+        private const string GridFrameMaterialPath = "Assets/[Materials]/Mat_GridWall.mat";
+        private const string GridBottomMaterialPath = "Assets/[Materials]/Mat_GridBottom13x9.mat";
         private const string GateUpPrefabPath = "Assets/[Models]/M_GateUp.fbx";
         private const string GateBottomPrefabPath = "Assets/[Models]/M_GateBottom.fbx";
         private const string GateLeftPrefabPath = "Assets/[Models]/M_GateLeft.fbx";
@@ -24,8 +26,9 @@ namespace CarryBlockJam.Editor
         private const string LevelConfigPath = "Assets/[LevelDatas]/LevelConfig.asset";
 
         /// <summary>
-        /// World position that centers the board on ArtScene's dark BG pit
-        /// (Art-Environment at (-2.5, 0.15, -9) + grid center local (2.5, 0, 4.5)).
+        /// World position that centers gameplay cells in ArtScene's 13x9 frame.
+        /// Art-Environment (-2.5, 0.15, -9) hosts art cells from local x=-1.5..6.5,
+        /// z=-1.5..10.5 (center 2.5, 4.5) → world center (0, _, -4.5).
         /// </summary>
         private static readonly Vector3 ArtGridBoardPosition = new Vector3(0f, 0.15f, -4.5f);
 
@@ -145,26 +148,24 @@ namespace CarryBlockJam.Editor
             if (gridRoot == null)
                 gridRoot = CreateChild(board.transform, "Grid");
 
-            // Local positions keep the same world placement as ArtScene's dark pit
-            // when the board is at ArtGridBoardPosition.
+            // Match ArtScene world poses while Grid stays under the board:
+            // Art wall world (-0.5,0,0), bottom (0,0.2,0). Board at ArtGridBoardPosition
+            // (0,0.15,-4.5) ⇒ wall local (-0.5,-0.15,4.5), bottom local (0,0.05,4.5).
+            DestroyChildIfExists(gridRoot, "M_Gridwall");
+            DestroyChildIfExists(gridRoot, "M_Grid");
+            DestroyChildIfExists(gridRoot, "M_GridBottom");
             EnsureArtModel(
                 gridRoot,
-                "M_Gridwall",
+                "M_Gridwall13x9",
                 GridWallPrefabPath,
                 GridWallMaterialPath,
                 new Vector3(-0.5f, -0.15f, 4.5f));
             EnsureArtModel(
                 gridRoot,
-                "M_Grid",
-                GridPrefabPath,
-                GridWallMaterialPath,
-                new Vector3(2.5f, -0.15f, 4.5f));
-            EnsureArtModel(
-                gridRoot,
-                "M_GridBottom",
+                "M_GridBottom13x9",
                 GridBottomPrefabPath,
-                CellMaterialPath,
-                new Vector3(0f, 0.24f, 4.5f));
+                GridBottomMaterialPath,
+                new Vector3(0f, 0.05f, 4.5f));
         }
 
         public static void EnsureBoardGates(CarryBlockJamSimpleBoard board)
@@ -661,6 +662,19 @@ namespace CarryBlockJam.Editor
         {
             for (int i = parent.childCount - 1; i >= 0; i--)
                 Object.DestroyImmediate(parent.GetChild(i).gameObject);
+        }
+
+        private static void DestroyChildIfExists(Transform parent, string name)
+        {
+            if (parent == null || string.IsNullOrEmpty(name))
+                return;
+
+            for (int i = parent.childCount - 1; i >= 0; i--)
+            {
+                Transform child = parent.GetChild(i);
+                if (child != null && child.name == name)
+                    Object.DestroyImmediate(child.gameObject);
+            }
         }
     }
 }

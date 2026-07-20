@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: HiddenTutorial_level 11
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -40,9 +40,9 @@ MonoBehaviour:
       goals:
       - color: 6
         requiredPlateCount: 1
-    - row: 9
+    - row: 0
       column: 3
-      side: 1
+      side: 0
       startIndex: 3
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -80,7 +80,7 @@ MonoBehaviour:
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 3
+      row: 0
       column: 3
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -7.5}
@@ -89,8 +89,8 @@ MonoBehaviour:
     instruction: ' Collect plates around hidden tables to reveal them '
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 3, y: 3}
-    targetCell: {x: 6, y: 3}
+    startCell: {x: 0, y: 3}
+    targetCell: {x: 0, y: 3}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
@@ -102,8 +102,8 @@ MonoBehaviour:
     instruction: ' Collect plates around hidden tables to reveal them '
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 6, y: 3}
-    targetCell: {x: 6, y: 1}
+    startCell: {x: 0, y: 3}
+    targetCell: {x: 0, y: 1}
     startPositionOffset: {x: 0, y: 0, z: 0}
     targetPositionOffset: {x: 0, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
@@ -115,8 +115,8 @@ MonoBehaviour:
     instruction: 
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 6, y: 1}
-    targetCell: {x: 5, y: 1}
+    startCell: {x: 0, y: 1}
+    targetCell: {x: 0, y: 1}
     startPositionOffset: {x: 0, y: 0, z: 0}
     targetPositionOffset: {x: 0, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}

@@ -11,9 +11,9 @@ namespace CarryBlockJam
     [DisallowMultipleComponent]
     public sealed class CarryBlockJamFrozenBox : MonoBehaviour
     {
-        private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
+        private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
         private const string FrozenBoxPrefabPath = "Assets/[Prefabs]/IceV01.prefab";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
 
         private CarryBlockJamBoardPiece _boxPiece;
         private Transform _boxVisualRoot;
@@ -394,6 +394,10 @@ namespace CarryBlockJam
 
             return AssetDatabase.LoadAssetAtPath<GameObject>(FrozenBoxPrefabPath);
 #else
+            GameObject iceModel = Resources.Load<GameObject>("M_Ice");
+            if (iceModel != null)
+                return iceModel;
+
             return Resources.Load<GameObject>("IceV01");
 #endif
         }

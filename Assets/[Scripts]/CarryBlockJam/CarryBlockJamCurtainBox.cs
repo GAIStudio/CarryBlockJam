@@ -93,16 +93,28 @@ namespace CarryBlockJam
 
         private void CreateCurtainOverlay()
         {
-            _curtainOverlay = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject modelPrefab = ResolveCurtainModel(_visualSettings);
+            if (modelPrefab != null)
+            {
+                _curtainOverlay = Instantiate(modelPrefab, transform, false);
+            }
+            else
+            {
+                _curtainOverlay = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Collider collider = _curtainOverlay.GetComponent<Collider>();
+                if (collider != null)
+                    Destroy(collider);
+            }
+
             _curtainOverlay.name = "CurtainOverlay";
             _curtainOverlay.transform.SetParent(transform, false);
             _curtainOverlay.transform.localRotation = Quaternion.identity;
             _curtainOverlay.transform.localScale = Vector3.one;
             _curtainOverlay.transform.localPosition = Vector3.zero;
 
-            Collider collider = _curtainOverlay.GetComponent<Collider>();
-            if (collider != null)
-                Destroy(collider);
+            Collider[] colliders = _curtainOverlay.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                Destroy(colliders[i]);
 
             ApplyCurtainMaterial(_curtainOverlay);
 
@@ -115,6 +127,18 @@ namespace CarryBlockJam
             }
 
             CreateColorCircle();
+        }
+
+        private static GameObject ResolveCurtainModel(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.model != null)
+                return settings.model;
+
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/[Models]/M_Box.fbx");
+#else
+            return Resources.Load<GameObject>("M_Box");
+#endif
         }
 
         private void CreateColorCircle()
@@ -219,17 +243,33 @@ namespace CarryBlockJam
 
         private void ApplyCurtainMaterial(GameObject overlay)
         {
-            Renderer renderer = overlay != null ? overlay.GetComponent<Renderer>() : null;
-            if (renderer == null)
+            if (overlay == null)
                 return;
 
-            if (_visualSettings.curtainMaterial != null)
+            Material material = ResolveCurtainMaterial(_visualSettings);
+            if (material == null)
+                material = CreateRuntimeColorMaterial(_visualSettings.curtainTint);
+
+            Renderer[] renderers = overlay.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
             {
-                renderer.sharedMaterial = _visualSettings.curtainMaterial;
-                return;
-            }
+                if (renderers[i] == null)
+                    continue;
 
-            renderer.sharedMaterial = CreateRuntimeColorMaterial(_visualSettings.curtainTint);
+                renderers[i].sharedMaterial = material;
+            }
+        }
+
+        private static Material ResolveCurtainMaterial(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.curtainMaterial != null)
+                return settings.curtainMaterial;
+
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/[Materials]/Mat_Box.mat");
+#else
+            return Resources.Load<Material>("Materials/Mat_Box");
+#endif
         }
 
         private static Material CreateRuntimeColorMaterial(Color color)

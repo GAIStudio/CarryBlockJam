@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Mat_Hidden
+  m_Name: Mat_HiddenTable
   m_Shader: {fileID: -6465566751694194690, guid: 3cdc7adc3d2744f29af93a391aca77bc,
     type: 3}
   m_Parent: {fileID: 0}

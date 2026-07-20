@@ -13,16 +13,17 @@ MonoBehaviour:
   m_Name: FrozenTutorial
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells:
-  - row: 4
-    column: 2
+  - row: 6
+    column: 4
     color: 10
     flag: 2
     flagValue: 3
     direction: 0
     tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 360
@@ -47,10 +48,10 @@ MonoBehaviour:
       goals:
       - color: 10
         requiredPlateCount: 3
-    - row: 9
-      column: 2
-      side: 1
-      startIndex: 2
+    - row: 0
+      column: 5
+      side: 0
+      startIndex: 5
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -64,7 +65,7 @@ MonoBehaviour:
     stickmanSpawnMode: 2
     fixedStickmanCell:
       row: 3
-      column: 3
+      column: 4
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -5}
   tutorialStages:

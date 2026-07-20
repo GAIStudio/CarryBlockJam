@@ -21,9 +21,16 @@ namespace CarryBlockJam
 
                 CarryBlockJamLevelController controller = board.GetComponent<CarryBlockJamLevelController>();
                 if (controller != null)
+                {
                     controller.EnsureGameplayFromLevel(levelData);
+                }
                 else
-                    board.ApplyLevelData(levelData, rebuildVisuals: false);
+                {
+                    int targetRows = Mathf.Max(1, levelData.gridRows);
+                    int targetColumns = Mathf.Max(1, levelData.gridColumns);
+                    bool sizeMismatch = board.Rows != targetRows || board.Columns != targetColumns;
+                    board.ApplyLevelData(levelData, rebuildVisuals: sizeMismatch);
+                }
 
                 appliedCount++;
             }
