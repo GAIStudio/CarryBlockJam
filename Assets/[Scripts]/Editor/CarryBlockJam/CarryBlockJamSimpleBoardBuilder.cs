@@ -19,6 +19,8 @@ namespace CarryBlockJam.Editor
         private const string GridWallMaterialPath = "Assets/[Materials]/Mat_GridWall.mat";
         private const string GateUpPrefabPath = "Assets/[Models]/M_GateUp.fbx";
         private const string GateBottomPrefabPath = "Assets/[Models]/M_GateBottom.fbx";
+        private const string GateLeftPrefabPath = "Assets/[Models]/M_GateLeft.fbx";
+        private const string GateRightPrefabPath = "Assets/[Models]/M_GateRight.fbx";
         private const string LevelConfigPath = "Assets/[LevelDatas]/LevelConfig.asset";
 
         /// <summary>
@@ -51,6 +53,29 @@ namespace CarryBlockJam.Editor
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
             }
+        }
+
+        [MenuItem("CarryBlockJam/Ensure Left/Right Art Gates On Open Boards")]
+        public static void EnsureSideGatesMenu()
+        {
+            CarryBlockJamSimpleBoard[] boards = Object.FindObjectsOfType<CarryBlockJamSimpleBoard>();
+            int count = 0;
+            for (int i = 0; i < boards.Length; i++)
+            {
+                CarryBlockJamSimpleBoard board = boards[i];
+                if (board == null || !board.gameObject.scene.IsValid())
+                    continue;
+
+                EnsureBoardGates(board);
+                EditorUtility.SetDirty(board);
+                EditorSceneManager.MarkSceneDirty(board.gameObject.scene);
+                count++;
+            }
+
+            Debug.Log(
+                count > 0
+                    ? $"[CarryBlockJam] Ensured Top/Bottom/Left/Right art gates on {count} board(s)."
+                    : "[CarryBlockJam] No open CarryBlockJam board found.");
         }
 
         public static void BuildBoard(CarryBlockJamSimpleBoard board)
@@ -142,7 +167,7 @@ namespace CarryBlockJam.Editor
                 new Vector3(0f, 0.24f, 4.5f));
         }
 
-        private static void EnsureBoardGates(CarryBlockJamSimpleBoard board)
+        public static void EnsureBoardGates(CarryBlockJamSimpleBoard board)
         {
             if (board == null)
                 return;
@@ -180,6 +205,34 @@ namespace CarryBlockJam.Editor
                 new Vector3(1.5f, 0.35f, -4.5f),
                 "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom.mat",
                 "Assets/[Materials]/-GateBottom Materials/Mat_GateBottom-Red.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateLeft",
+                GateLeftPrefabPath,
+                new Vector3(-4.5f, 0.35f, 1.5f),
+                "Assets/[Materials]/-GateLeft Materials/Mat_GateLeft.mat",
+                "Assets/[Materials]/-GateLeft Materials/Mat_GateLeft-Green.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateLeft (1)",
+                GateLeftPrefabPath,
+                new Vector3(-4.5f, 0.35f, -1.5f),
+                "Assets/[Materials]/-GateLeft Materials/Mat_GateLeft.mat",
+                "Assets/[Materials]/-GateLeft Materials/Mat_GateLeft-Purple.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateRight",
+                GateRightPrefabPath,
+                new Vector3(4.5f, 0.35f, 1.5f),
+                "Assets/[Materials]/-GateRight Materials/Mat_GateRight.mat",
+                "Assets/[Materials]/-GateRight Materials/Mat_GateRight-Blue.mat");
+            EnsureGateModel(
+                gatesRoot,
+                "M_GateRight (1)",
+                GateRightPrefabPath,
+                new Vector3(4.5f, 0.35f, -1.5f),
+                "Assets/[Materials]/-GateRight Materials/Mat_GateRight.mat",
+                "Assets/[Materials]/-GateRight Materials/Mat_GateRight-Red.mat");
         }
 
         private static void EnsureGateModel(
@@ -192,7 +245,7 @@ namespace CarryBlockJam.Editor
             if (parent == null)
                 return;
 
-            Transform existing = parent.Find(name);
+            Transform existing = FindChildIncludingInactive(parent, name);
             GameObject instance;
             if (existing != null)
             {
@@ -237,6 +290,21 @@ namespace CarryBlockJam.Editor
                 if (material != null)
                     renderer.sharedMaterial = material;
             }
+        }
+
+        private static Transform FindChildIncludingInactive(Transform parent, string name)
+        {
+            if (parent == null || string.IsNullOrEmpty(name))
+                return null;
+
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child != null && child.name == name)
+                    return child;
+            }
+
+            return null;
         }
 
         private static void EnsureArtModel(
@@ -425,6 +493,7 @@ namespace CarryBlockJam.Editor
         {
             if (CarryBlockJamArtGateUtility.HasArtGates(board))
             {
+                EnsureBoardGates(board);
                 CarryBlockJamArtGateUtility.BindExitsToArtGates(board, levelData);
                 return;
             }

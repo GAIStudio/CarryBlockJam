@@ -81,6 +81,19 @@ namespace CarryBlockJam
         [Tooltip("Local-position offset for exits authored on the right side.")]
         public Vector3 rightExitModelOffset;
 
+        [Header("Exit Model Scales")]
+        [Tooltip("Local-scale multiplier for top exit models (M_GateUp).")]
+        public Vector3 topExitModelScale = Vector3.one;
+
+        [Tooltip("Local-scale multiplier for bottom exit models (M_GateBottom).")]
+        public Vector3 bottomExitModelScale = Vector3.one;
+
+        [Tooltip("Local-scale multiplier for left exit models (M_GateLeft).")]
+        public Vector3 leftExitModelScale = Vector3.one;
+
+        [Tooltip("Local-scale multiplier for right exit models (M_GateRight).")]
+        public Vector3 rightExitModelScale = Vector3.one;
+
         public Vector3 GetExitModelOffset(bool isTopExit) =>
             isTopExit ? topExitModelOffset : bottomExitModelOffset;
 
@@ -95,8 +108,21 @@ namespace CarryBlockJam
             };
         }
 
+        public Vector3 GetExitModelScale(BoardBorderSide side)
+        {
+            Vector3 scale = side switch
+            {
+                BoardBorderSide.Bottom => bottomExitModelScale,
+                BoardBorderSide.Left => leftExitModelScale,
+                BoardBorderSide.Right => rightExitModelScale,
+                _ => topExitModelScale,
+            };
+            return scale == Vector3.zero ? Vector3.one : scale;
+        }
+
         public Vector3 GetGateModelOffset(bool isUpGate) => GetExitModelOffset(isUpGate);
         public Vector3 GetGateModelOffset(BoardBorderSide side) => GetExitModelOffset(side);
+        public Vector3 GetGateModelScale(BoardBorderSide side) => GetExitModelScale(side);
 
         [Header("Fallback Colors")]
         public PieceColorType boardCellColor = PieceColorType.Grey;
