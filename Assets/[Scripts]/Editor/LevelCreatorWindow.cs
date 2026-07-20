@@ -1,5 +1,7 @@
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using CarryBlockJam;
 using CarryBlockJam.Editor;
 
@@ -26,6 +28,8 @@ namespace GAITemplate.Editor
         private System.Collections.Generic.List<PieceColorType>[,] _cellTunnelPieces;
         private int _rows = 4;
         private int _columns = 4;
+        private const int MinGridSize = 1;
+        private const int MaxGridSize = 20;
 
         private CellTool _activeTool = CellTool.None;
 
@@ -98,8 +102,8 @@ namespace GAITemplate.Editor
             EditorGUILayout.EndScrollView();
 
             EditorGUILayout.HelpBox(
-                "Grid cell colors apply after Save. CarryBlockJam settings apply immediately. " +
-                "Use Apply To Scene to rebuild the open scene board from the current level data.",
+                "Grid size + cell colors Save to the Level Data asset and the open SampleScene board. " +
+                "CarryBlockJam settings apply immediately. Use Apply To Scene to rebuild without leaving Level Creator.",
                 MessageType.Info);
 
             GUILayout.BeginHorizontal();
@@ -150,8 +154,8 @@ namespace GAITemplate.Editor
             GUILayout.Label(sectionLabel, EditorStyles.boldLabel);
 
             EditorGUI.BeginChangeCheck();
-            int newRows = EditorGUILayout.IntSlider(rowsLabel, _rows, 1, 10);
-            int newColumns = EditorGUILayout.IntSlider(colsLabel, _columns, 1, 10);
+            int newRows = EditorGUILayout.IntSlider(rowsLabel, _rows, MinGridSize, MaxGridSize);
+            int newColumns = EditorGUILayout.IntSlider(colsLabel, _columns, MinGridSize, MaxGridSize);
             if (EditorGUI.EndChangeCheck())
             {
                 if (newRows != _rows || newColumns != _columns)
@@ -159,6 +163,9 @@ namespace GAITemplate.Editor
                     _rows = newRows;
                     _columns = newColumns;
                     ResizeGrids(_rows, _columns);
+                    SyncPreviewGridDimensions();
+                    EditorUtility.SetDirty(_levelData);
+                    RequestScenePreviewRefresh();
                 }
             }
 
@@ -1182,16 +1189,35 @@ namespace GAITemplate.Editor
             EditorUtility.SetDirty(_levelData);
             AssetDatabase.SaveAssets();
             RefreshCarryBlockJamScenePreview();
-            Debug.Log($"[Level Creator] Saved \"{_levelData.name}\".", _levelData);
+            SaveDirtyGameplayScenes();
+            Debug.Log(
+                $"[Level Creator] Saved \"{_levelData.name}\" ({_rows}x{_columns}) and scene board preview.",
+                _levelData);
         }
 
         private void ApplyToScene()
         {
             SyncPreviewGridDimensions();
+            EditorUtility.SetDirty(_levelData);
             if (CarryBlockJamSceneLevelApplicator.TryApply(_levelData, true, out string message))
+            {
+                SaveDirtyGameplayScenes();
                 Debug.Log($"[Level Creator] {message}", _levelData);
+            }
             else
                 Debug.LogWarning($"[Level Creator] {message}", _levelData);
+        }
+
+        private static void SaveDirtyGameplayScenes()
+        {
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (!scene.IsValid() || !scene.isLoaded || !scene.isDirty)
+                    continue;
+
+                EditorSceneManager.SaveScene(scene);
+            }
         }
 
         private void SyncPreviewGridDimensions()

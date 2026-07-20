@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: GameTutorial2
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -40,9 +40,9 @@ MonoBehaviour:
       goals:
       - color: 1
         requiredPlateCount: 3
-    - row: 9
+    - row: 0
       column: 3
-      side: 1
+      side: 0
       startIndex: 3
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -88,7 +88,7 @@ MonoBehaviour:
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 4
+      row: 0
       column: 4
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -7.5}
@@ -97,8 +97,8 @@ MonoBehaviour:
     instruction: Collect Plates
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 4, y: 4}
-    targetCell: {x: 7, y: 4}
+    startCell: {x: 0, y: 4}
+    targetCell: {x: 0, y: 4}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
@@ -110,8 +110,8 @@ MonoBehaviour:
     instruction: Collect Plates
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 7, y: 4}
-    targetCell: {x: 7, y: 1}
+    startCell: {x: 0, y: 4}
+    targetCell: {x: 0, y: 1}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
@@ -123,8 +123,8 @@ MonoBehaviour:
     instruction: Collect Plates
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 7, y: 1}
-    targetCell: {x: 4, y: 1}
+    startCell: {x: 0, y: 1}
+    targetCell: {x: 0, y: 1}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
@@ -136,8 +136,8 @@ MonoBehaviour:
     instruction: You can rest the plates on the table
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 4, y: 1}
-    targetCell: {x: 4, y: 3}
+    startCell: {x: 0, y: 1}
+    targetCell: {x: 0, y: 3}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}

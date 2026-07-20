@@ -44,7 +44,10 @@ namespace CarryBlockJam
             if (board == null || levelData == null)
                 return;
 
-            board.ApplyLevelData(levelData, rebuildVisuals: false);
+            int targetRows = Mathf.Max(1, levelData.gridRows);
+            int targetColumns = Mathf.Max(1, levelData.gridColumns);
+            bool sizeMismatch = board.Rows != targetRows || board.Columns != targetColumns;
+            board.ApplyLevelData(levelData, rebuildVisuals: sizeMismatch);
             EnsureRoots();
             EnsureExitGameplay(levelData);
         }

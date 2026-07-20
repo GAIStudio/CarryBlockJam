@@ -20,8 +20,10 @@ namespace CarryBlockJam
         private const string StickmanControllerPath = "Assets/[Animations]/Stickman.controller";
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
-        private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
+        private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
+        private const string CurtainBoxModelPath = "Assets/[Models]/M_Box.fbx";
+        private const string CurtainBoxMaterialPath = "Assets/[Materials]/Mat_Box.mat";
 
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
@@ -115,6 +117,7 @@ namespace CarryBlockJam
             EnsureTableVisualDefaults(tableVisual);
             EnsurePlateVisualDefaults(plateVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
+            EnsureCurtainTableVisualDefaults(curtainTableVisual);
 #endif
         }
 
@@ -148,6 +151,18 @@ namespace CarryBlockJam
             if (settings.material == null)
                 settings.material = AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
         }
+
+        private static void EnsureCurtainTableVisualDefaults(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            if (settings.model == null)
+                settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(CurtainBoxModelPath);
+
+            if (settings.curtainMaterial == null)
+                settings.curtainMaterial = AssetDatabase.LoadAssetAtPath<Material>(CurtainBoxMaterialPath);
+        }
 #endif
 
 #if UNITY_EDITOR
@@ -161,6 +176,7 @@ namespace CarryBlockJam
 
             EnsureTableVisualDefaults(tableVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
+            EnsureCurtainTableVisualDefaults(curtainTableVisual);
 
             if (plateVisual == null)
                 plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
@@ -439,6 +455,9 @@ namespace CarryBlockJam
                 if (placement.isHidden)
                 {
                     piece.SetColorHidden(true);
+                    if (visualObject != null)
+                        CarryBlockJamArtTableUtility.ApplyHiddenTableMaterial(visualObject.transform);
+
                     GamePiece visualPiece = visualObject != null ? visualObject.GetComponent<GamePiece>() : null;
                     if (visualPiece != null)
                         visualPiece.ApplyHidden(true);
@@ -1721,18 +1740,20 @@ namespace CarryBlockJam
                 if (!usedCells.Add(gridCell))
                     continue;
 
-                if (!PieceColorPalette.IsPaintable(cell.color))
+                PieceColorType color = cell.color;
+                if (!PieceColorPalette.IsPaintable(color))
                 {
+                    // Ice cells need a table color; fall back so M_Ice still spawns.
+                    color = PieceColorType.Pink;
                     Debug.LogWarning(
-                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] needs a color to spawn a frozen box.");
-                    usedCells.Remove(gridCell);
-                    continue;
+                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] had no color; " +
+                        "using Pink so the ice table can spawn. Set a color in Level Creator.");
                 }
 
                 placements.Add(BoardBoxPlacement.CreateFrozen(
                     cell.row,
                     cell.column,
-                    cell.color,
+                    color,
                     Mathf.Max(1, cell.flagValue)));
             }
         }

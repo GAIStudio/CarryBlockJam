@@ -13,11 +13,11 @@ MonoBehaviour:
   m_Name: CurtainTutorial
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells:
-  - row: 2
-    column: 2
+  - row: 4
+    column: 4
     color: 2
     flag: 8
     flagValue: 0
@@ -48,9 +48,9 @@ MonoBehaviour:
       goals:
       - color: 5
         requiredPlateCount: 2
-    - row: 9
+    - row: 0
       column: 2
-      side: 1
+      side: 0
       startIndex: 2
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -64,7 +64,7 @@ MonoBehaviour:
     platePlacements: []
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 5
+      row: 0
       column: 3
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -6}
