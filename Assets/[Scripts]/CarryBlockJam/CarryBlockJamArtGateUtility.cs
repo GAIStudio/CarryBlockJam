@@ -287,17 +287,31 @@ namespace CarryBlockJam
 
         public static void ApplyGateModelRotation(Transform gate, Vector3 rotation)
         {
+            ApplyGateModelRotation(gate, rotation, ResolveGateSideFromName(gate));
+        }
+
+        public static void ApplyGateModelRotation(Transform gate, Vector3 rotation, BoardBorderSide side)
+        {
             if (gate == null)
                 return;
 
             int id = gate.GetInstanceID();
-            if (!GateBaseLocalRotations.TryGetValue(id, out Quaternion baseLocalRotation))
+            // Side-specific FBXs (M_GateUp / Bottom / Left / Right) are authored facing
+            // outward already. Do not inherit a stale scene yaw (e.g. M_GateBottom (1)
+            // was left at 180° from an old side placement and sat on the board tiles).
+            if (!GateBaseLocalRotations.TryGetValue(id, out Quaternion baseLocalRotation) ||
+                !IsExpectedArtGateBaseRotation(baseLocalRotation))
             {
-                baseLocalRotation = gate.localRotation;
+                baseLocalRotation = Quaternion.identity;
                 GateBaseLocalRotations[id] = baseLocalRotation;
             }
 
             gate.localRotation = baseLocalRotation * Quaternion.Euler(rotation);
+        }
+
+        private static bool IsExpectedArtGateBaseRotation(Quaternion rotation)
+        {
+            return Quaternion.Angle(rotation, Quaternion.identity) < 0.5f;
         }
 
         public static void BindExitToGate(
@@ -315,7 +329,7 @@ namespace CarryBlockJam
 
             // Apply gate color before creating the goal label so TMP renderers
             // are not mixed into mesh material assignment.
-            ApplyGateModelRotation(gate, definition.rotation);
+            ApplyGateModelRotation(gate, definition.rotation, definition.side);
             ApplyGateModelScale(gate, definition.side, definition.modelScale, prefabSettings);
             exit.Configure(definition);
             exit.BindArtGate(definition.side, null, labelSettings);

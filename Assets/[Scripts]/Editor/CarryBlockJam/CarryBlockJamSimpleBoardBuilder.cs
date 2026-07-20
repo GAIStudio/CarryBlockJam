@@ -250,6 +250,15 @@ namespace CarryBlockJam.Editor
             if (existing != null)
             {
                 instance = existing.gameObject;
+                // Keep bottom/side art gates facing outward (identity). An old
+                // M_GateBottom (1) yaw of 180° made center-bottom exits sit on tiles.
+                if (name.StartsWith("M_GateBottom") ||
+                    name.StartsWith("M_GateLeft") ||
+                    name.StartsWith("M_GateRight") ||
+                    name.StartsWith("M_GateUp"))
+                {
+                    instance.transform.localRotation = Quaternion.identity;
+                }
             }
             else
             {
