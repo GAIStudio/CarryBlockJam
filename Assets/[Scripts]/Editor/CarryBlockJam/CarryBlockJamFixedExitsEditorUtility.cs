@@ -20,8 +20,9 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.LabelField("Exits (Optional Gates)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Exits are optional. Each gate covers one grid cell — Row / Col are 0-based (0 = first). " +
-                "Unused gate models are hidden. Gate color follows the current goal.",
+                "Choose Border Side to pick the art model: Top→M_GateUp, Bottom→M_GateBottom, " +
+                "Left→M_GateLeft, Right→M_GateRight. Prefab Settings control shared side offset/scale; " +
+                "rotation, per-exit scale, and goals are authored here.",
                 MessageType.Info);
 
             for (int i = 0; i < exitsProperty.arraySize; i++)
@@ -65,15 +66,28 @@ namespace CarryBlockJam.Editor
                     columnProperty.intValue = displayCol;
                     EditorGUILayout.EndHorizontal();
                     if (EditorGUI.EndChangeCheck())
-                        SyncLayoutToProperty(exitProperty, rows, columns);
+                    {
+                        // Moving the cell should pick the matching border model.
+                        // On corners prefer Left/Right so a top-right cell becomes Right,
+                        // not a 3rd Top that has no free M_GateUp slot.
+                        ResolveSideFromCellPreferVertical(exitProperty, rows, columns);
+                    }
                 }
 
                 SerializedProperty sideProperty = exitProperty.FindPropertyRelative("side");
                 if (sideProperty != null)
                 {
-                    EditorGUI.BeginDisabledGroup(true);
-                    EditorGUILayout.EnumPopup("Border Side", (BoardBorderSide)sideProperty.intValue);
-                    EditorGUI.EndDisabledGroup();
+                    EditorGUI.BeginChangeCheck();
+                    BoardBorderSide selectedSide = (BoardBorderSide)EditorGUILayout.EnumPopup(
+                        new GUIContent(
+                            "Border Side",
+                            "Top/Bottom use M_GateUp/M_GateBottom. Left/Right use M_GateLeft/M_GateRight."),
+                        (BoardBorderSide)sideProperty.intValue);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        sideProperty.intValue = (int)selectedSide;
+                        ApplySideToCell(exitProperty, selectedSide, rows, columns);
+                    }
                 }
 
                 SerializedProperty rotationProperty = exitProperty.FindPropertyRelative("rotation");
@@ -85,7 +99,11 @@ namespace CarryBlockJam.Editor
                 {
                     if (scaleProperty.vector3Value == Vector3.zero)
                         scaleProperty.vector3Value = Vector3.one;
-                    EditorGUILayout.PropertyField(scaleProperty, new GUIContent("Model Scale"));
+                    EditorGUILayout.PropertyField(
+                        scaleProperty,
+                        new GUIContent(
+                            "Model Scale",
+                            "Per-exit multiplier on top of Prefab Settings side scale."));
                 }
 
                 SerializedProperty goalsProperty = exitProperty.FindPropertyRelative("goals");
@@ -200,31 +218,52 @@ namespace CarryBlockJam.Editor
             int distRight = (safeColumns - 1) - column;
             int minEdge = Mathf.Min(Mathf.Min(distTop, distBottom), Mathf.Min(distLeft, distRight));
 
+            bool topTied = distTop == minEdge;
+            bool bottomTied = distBottom == minEdge;
+            bool leftTied = distLeft == minEdge;
+            bool rightTied = distRight == minEdge;
+
+            // Preserve an authored Left/Right (or Top/Bottom) choice on corners
+            // where two borders share the same distance.
             BoardBorderSide resolvedSide;
             int resolvedStart;
-            if (minEdge == distTop)
-            {
-                resolvedSide = BoardBorderSide.Top;
-                row = 0;
-                resolvedStart = column;
-            }
-            else if (minEdge == distBottom)
-            {
-                resolvedSide = BoardBorderSide.Bottom;
-                row = safeRows - 1;
-                resolvedStart = column;
-            }
-            else if (minEdge == distLeft)
+            if (side == BoardBorderSide.Left && leftTied)
             {
                 resolvedSide = BoardBorderSide.Left;
                 column = 0;
                 resolvedStart = row;
             }
-            else
+            else if (side == BoardBorderSide.Right && rightTied)
             {
                 resolvedSide = BoardBorderSide.Right;
                 column = safeColumns - 1;
                 resolvedStart = row;
+            }
+            else if (side == BoardBorderSide.Top && topTied)
+            {
+                resolvedSide = BoardBorderSide.Top;
+                row = 0;
+                resolvedStart = column;
+            }
+            else if (side == BoardBorderSide.Bottom && bottomTied)
+            {
+                resolvedSide = BoardBorderSide.Bottom;
+                row = safeRows - 1;
+                resolvedStart = column;
+            }
+            else
+            {
+                ResolveCornerPreferVertical(
+                    topTied,
+                    bottomTied,
+                    leftTied,
+                    rightTied,
+                    safeRows,
+                    safeColumns,
+                    ref row,
+                    ref column,
+                    out resolvedSide,
+                    out resolvedStart);
             }
 
             if (rowProperty != null)
@@ -241,6 +280,147 @@ namespace CarryBlockJam.Editor
                 offsetProperty.vector3Value = Vector3.zero;
             if (scaleProperty != null && scaleProperty.vector3Value == Vector3.zero)
                 scaleProperty.vector3Value = Vector3.one;
+        }
+
+        /// <summary>
+        /// After a row/col edit, always recompute Border Side from the cell.
+        /// Corner ties prefer Left/Right so side gates use M_GateLeft/Right.
+        /// </summary>
+        private static void ResolveSideFromCellPreferVertical(
+            SerializedProperty exitProperty,
+            int rows,
+            int columns)
+        {
+            if (exitProperty == null)
+                return;
+
+            SerializedProperty rowProperty = exitProperty.FindPropertyRelative("row");
+            SerializedProperty columnProperty = exitProperty.FindPropertyRelative("column");
+            SerializedProperty sideProperty = exitProperty.FindPropertyRelative("side");
+            SerializedProperty startIndexProperty = exitProperty.FindPropertyRelative("startIndex");
+            SerializedProperty lengthProperty = exitProperty.FindPropertyRelative("length");
+            if (rowProperty == null || columnProperty == null || sideProperty == null)
+                return;
+
+            int safeRows = Mathf.Max(1, rows);
+            int safeColumns = Mathf.Max(1, columns);
+            int row = Mathf.Clamp(rowProperty.intValue, 0, safeRows - 1);
+            int column = Mathf.Clamp(columnProperty.intValue, 0, safeColumns - 1);
+
+            int distTop = row;
+            int distBottom = (safeRows - 1) - row;
+            int distLeft = column;
+            int distRight = (safeColumns - 1) - column;
+            int minEdge = Mathf.Min(Mathf.Min(distTop, distBottom), Mathf.Min(distLeft, distRight));
+
+            bool topTied = distTop == minEdge;
+            bool bottomTied = distBottom == minEdge;
+            bool leftTied = distLeft == minEdge;
+            bool rightTied = distRight == minEdge;
+
+            ResolveCornerPreferVertical(
+                topTied,
+                bottomTied,
+                leftTied,
+                rightTied,
+                safeRows,
+                safeColumns,
+                ref row,
+                ref column,
+                out BoardBorderSide resolvedSide,
+                out int resolvedStart);
+
+            rowProperty.intValue = row;
+            columnProperty.intValue = column;
+            sideProperty.intValue = (int)resolvedSide;
+            if (startIndexProperty != null)
+                startIndexProperty.intValue = resolvedStart;
+            if (lengthProperty != null)
+                lengthProperty.intValue = 1;
+        }
+
+        private static void ResolveCornerPreferVertical(
+            bool topTied,
+            bool bottomTied,
+            bool leftTied,
+            bool rightTied,
+            int safeRows,
+            int safeColumns,
+            ref int row,
+            ref int column,
+            out BoardBorderSide resolvedSide,
+            out int resolvedStart)
+        {
+            // Prefer vertical borders on corners so Right/Left models are used.
+            if (leftTied)
+            {
+                resolvedSide = BoardBorderSide.Left;
+                column = 0;
+                resolvedStart = row;
+            }
+            else if (rightTied)
+            {
+                resolvedSide = BoardBorderSide.Right;
+                column = safeColumns - 1;
+                resolvedStart = row;
+            }
+            else if (topTied)
+            {
+                resolvedSide = BoardBorderSide.Top;
+                row = 0;
+                resolvedStart = column;
+            }
+            else
+            {
+                resolvedSide = BoardBorderSide.Bottom;
+                row = safeRows - 1;
+                resolvedStart = column;
+            }
+        }
+
+        private static void ApplySideToCell(
+            SerializedProperty exitProperty,
+            BoardBorderSide side,
+            int rows,
+            int columns)
+        {
+            if (exitProperty == null)
+                return;
+
+            SerializedProperty rowProperty = exitProperty.FindPropertyRelative("row");
+            SerializedProperty columnProperty = exitProperty.FindPropertyRelative("column");
+            SerializedProperty startIndexProperty = exitProperty.FindPropertyRelative("startIndex");
+            if (rowProperty == null || columnProperty == null)
+                return;
+
+            int safeRows = Mathf.Max(1, rows);
+            int safeColumns = Mathf.Max(1, columns);
+            int row = Mathf.Clamp(rowProperty.intValue, 0, safeRows - 1);
+            int column = Mathf.Clamp(columnProperty.intValue, 0, safeColumns - 1);
+
+            switch (side)
+            {
+                case BoardBorderSide.Top:
+                    row = 0;
+                    break;
+                case BoardBorderSide.Bottom:
+                    row = safeRows - 1;
+                    break;
+                case BoardBorderSide.Left:
+                    column = 0;
+                    break;
+                default:
+                    column = safeColumns - 1;
+                    break;
+            }
+
+            rowProperty.intValue = row;
+            columnProperty.intValue = column;
+            if (startIndexProperty != null)
+            {
+                startIndexProperty.intValue =
+                    side == BoardBorderSide.Top || side == BoardBorderSide.Bottom ? column : row;
+            }
         }
 
         private static void DrawGoals(SerializedProperty goalsProperty)

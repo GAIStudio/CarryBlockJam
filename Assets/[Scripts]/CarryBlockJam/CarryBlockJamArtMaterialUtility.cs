@@ -16,6 +16,30 @@ namespace CarryBlockJam
         public const string PlateMaterialsFolder = "Assets/[Materials]/-Plate Materials";
         public const string GateUpMaterialsFolder = "Assets/[Materials]/-GateUp Materials";
         public const string GateBottomMaterialsFolder = "Assets/[Materials]/-GateBottom Materials";
+        public const string GateLeftMaterialsFolder = "Assets/[Materials]/-GateLeft Materials";
+        public const string GateRightMaterialsFolder = "Assets/[Materials]/-GateRight Materials";
+
+        public static string GetGateMaterialsFolder(BoardBorderSide side)
+        {
+            return side switch
+            {
+                BoardBorderSide.Bottom => GateBottomMaterialsFolder,
+                BoardBorderSide.Left => GateLeftMaterialsFolder,
+                BoardBorderSide.Right => GateRightMaterialsFolder,
+                _ => GateUpMaterialsFolder,
+            };
+        }
+
+        public static string GetGateMaterialPrefix(BoardBorderSide side)
+        {
+            return side switch
+            {
+                BoardBorderSide.Bottom => "Mat_GateBottom",
+                BoardBorderSide.Left => "Mat_GateLeft",
+                BoardBorderSide.Right => "Mat_GateRight",
+                _ => "Mat_GateUp",
+            };
+        }
 
         private static readonly Dictionary<string, Material> MaterialCache = new();
 

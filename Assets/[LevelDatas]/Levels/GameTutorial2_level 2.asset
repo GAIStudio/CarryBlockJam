@@ -95,6 +95,7 @@ MonoBehaviour:
   tutorialStages:
   - stageName: 1
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
     startCell: {x: 4, y: 4}
     targetCell: {x: 7, y: 4}
@@ -107,6 +108,7 @@ MonoBehaviour:
     clickableCells: []
   - stageName: Stage 2
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
     startCell: {x: 7, y: 4}
     targetCell: {x: 7, y: 1}
@@ -119,6 +121,7 @@ MonoBehaviour:
     clickableCells: []
   - stageName: Stage 3
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
     startCell: {x: 7, y: 1}
     targetCell: {x: 4, y: 1}
@@ -131,6 +134,7 @@ MonoBehaviour:
     clickableCells: []
   - stageName: Stage 4
     instruction: You can rest the plates on the table
+    hideHand: 0
     useGridHandPath: 1
     startCell: {x: 4, y: 1}
     targetCell: {x: 4, y: 3}

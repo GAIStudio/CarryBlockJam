@@ -20,7 +20,8 @@ namespace CarryBlockJam
         [SerializeField] private GamePiece carVisual;
         [SerializeField] private TMP_Text goalLabel;
         [SerializeField] private bool useArtGateMaterials;
-        [SerializeField] private bool artGateIsUp = true;
+        [SerializeField] private BoardBorderSide artGateSide = BoardBorderSide.Top;
+        [SerializeField] private Vector3 modelScale = Vector3.one;
         [SerializeField] private float labelBounceDuration = 0.28f;
         [SerializeField] private float labelBounceScale = 1.35f;
 
@@ -31,6 +32,7 @@ namespace CarryBlockJam
         public int Length => length;
         public int Row => row;
         public int Column => column;
+        public Vector3 ModelScale => modelScale == Vector3.zero ? Vector3.one : modelScale;
         public PieceColorType CurrentColor =>
             currentGoalIndex >= 0 && currentGoalIndex < goals.Count
                 ? goals[currentGoalIndex].color
@@ -48,6 +50,7 @@ namespace CarryBlockJam
             length = Mathf.Max(1, definition.length);
             row = definition.row;
             column = definition.column;
+            modelScale = definition.modelScale == Vector3.zero ? Vector3.one : definition.modelScale;
             goals = new List<CarryBlockJamExitGoal>(definition.goals ?? new List<CarryBlockJamExitGoal>());
             currentGoalIndex = 0;
             remainingPlateCount = goals.Count > 0 ? Mathf.Max(0, goals[0].requiredPlateCount) : 0;
@@ -78,12 +81,12 @@ namespace CarryBlockJam
         }
 
         public void BindArtGate(
-            bool isUpGate,
+            BoardBorderSide gateSide,
             TMP_Text label,
             BoardExitLabelSettings labelSettings = null)
         {
             useArtGateMaterials = true;
-            artGateIsUp = isUpGate;
+            artGateSide = gateSide;
             gateVisual = null;
             carVisual = null;
             goalLabel = label;
@@ -98,6 +101,15 @@ namespace CarryBlockJam
 
             CaptureGoalLabelRestScale();
             RefreshVisuals();
+        }
+
+        // Legacy overload for older callers.
+        public void BindArtGate(
+            bool isUpGate,
+            TMP_Text label,
+            BoardExitLabelSettings labelSettings = null)
+        {
+            BindArtGate(isUpGate ? BoardBorderSide.Top : BoardBorderSide.Bottom, label, labelSettings);
         }
 
         public bool CanAccept(PieceColorType color) =>
@@ -169,7 +181,7 @@ namespace CarryBlockJam
             {
                 CarryBlockJamArtGateUtility.ApplyGateColor(
                     transform,
-                    artGateIsUp,
+                    artGateSide,
                     PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
             }
             else if (gateVisual != null)

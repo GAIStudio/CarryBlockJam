@@ -15,6 +15,8 @@ namespace CarryBlockJam
 
         private static readonly string[] TopGateNames = { "M_GateUp", "M_GateUp (1)" };
         private static readonly string[] BottomGateNames = { "M_GateBottom", "M_GateBottom (1)" };
+        private static readonly string[] LeftGateNames = { "M_GateLeft", "M_GateLeft (1)" };
+        private static readonly string[] RightGateNames = { "M_GateRight", "M_GateRight (1)" };
 
         private static readonly Dictionary<int, Vector3> GateBaseLocalPositions = new();
         private static readonly Dictionary<int, Quaternion> GateBaseLocalRotations = new();
@@ -85,7 +87,7 @@ namespace CarryBlockJam
                 usedGates.Add(gate);
                 gate.gameObject.SetActive(true);
                 PositionGateForExit(gate, gatesRoot, grid, board, definition, prefabSettings);
-                BindExitToGate(gate, definition, labelSettings);
+                BindExitToGate(gate, definition, labelSettings, prefabSettings);
             }
         }
 
@@ -112,10 +114,9 @@ namespace CarryBlockJam
                 gateLocal = gatesRoot.InverseTransformPoint(world);
             }
 
-            Vector3 offset = ResolveGateModelOffset(
-                settings,
-                definition.side,
-                IsUpGate(gate) || definition.side == BoardBorderSide.Top);
+            Vector3 offset = settings != null
+                ? settings.GetGateModelOffset(definition.side)
+                : Vector3.zero;
 
             // Cache current placement as the new base so later offset tweaks keep cell alignment.
             int id = gate.GetInstanceID();
@@ -204,8 +205,36 @@ namespace CarryBlockJam
             CarryBlockJamExit exit = gate.GetComponent<CarryBlockJamExit>();
             BoardBorderSide side = exit != null
                 ? exit.Side
-                : (IsUpGate(gate) ? BoardBorderSide.Top : BoardBorderSide.Bottom);
-            gate.localPosition = baseLocalPosition + ResolveGateModelOffset(settings, side, IsUpGate(gate));
+                : ResolveGateSideFromName(gate);
+            gate.localPosition = baseLocalPosition + ResolveGateModelOffset(
+                settings,
+                side,
+                IsUpGate(gate));
+        }
+
+        public static void ApplyGateModelScales(CarryBlockJamSimpleBoard board, Transform gatesRoot = null)
+        {
+            if (board == null)
+                return;
+
+            gatesRoot ??= FindGatesRoot(board);
+            if (gatesRoot == null)
+                return;
+
+            CarryBlockJamPrefabSettings settings = board.PrefabSettings;
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform gate = gatesRoot.GetChild(i);
+                if (gate == null || !gate.gameObject.activeSelf)
+                    continue;
+
+                CarryBlockJamExit exit = gate.GetComponent<CarryBlockJamExit>();
+                BoardBorderSide side = exit != null
+                    ? exit.Side
+                    : ResolveGateSideFromName(gate);
+                Vector3 exitScale = exit != null ? exit.ModelScale : Vector3.one;
+                ApplyGateModelScale(gate, side, exitScale, settings);
+            }
         }
 
         /// <summary>
@@ -228,7 +257,11 @@ namespace CarryBlockJam
             return offset;
         }
 
-        public static void ApplyGateModelScale(Transform gate, Vector3 modelScale)
+        public static void ApplyGateModelScale(
+            Transform gate,
+            BoardBorderSide side,
+            Vector3 exitModelScale,
+            CarryBlockJamPrefabSettings settings)
         {
             if (gate == null)
                 return;
@@ -242,29 +275,50 @@ namespace CarryBlockJam
                 GateBaseLocalScales[id] = baseLocalScale;
             }
 
-            Vector3 scale = modelScale == Vector3.zero ? Vector3.one : modelScale;
-            gate.localScale = Vector3.Scale(baseLocalScale, scale);
+            Vector3 sideScale = settings != null ? settings.GetGateModelScale(side) : Vector3.one;
+            Vector3 exitScale = exitModelScale == Vector3.zero ? Vector3.one : exitModelScale;
+            gate.localScale = Vector3.Scale(baseLocalScale, Vector3.Scale(sideScale, exitScale));
+        }
+
+        public static void ApplyGateModelScale(Transform gate, Vector3 modelScale)
+        {
+            ApplyGateModelScale(gate, ResolveGateSideFromName(gate), modelScale, settings: null);
         }
 
         public static void ApplyGateModelRotation(Transform gate, Vector3 rotation)
+        {
+            ApplyGateModelRotation(gate, rotation, ResolveGateSideFromName(gate));
+        }
+
+        public static void ApplyGateModelRotation(Transform gate, Vector3 rotation, BoardBorderSide side)
         {
             if (gate == null)
                 return;
 
             int id = gate.GetInstanceID();
-            if (!GateBaseLocalRotations.TryGetValue(id, out Quaternion baseLocalRotation))
+            // Side-specific FBXs (M_GateUp / Bottom / Left / Right) are authored facing
+            // outward already. Do not inherit a stale scene yaw (e.g. M_GateBottom (1)
+            // was left at 180° from an old side placement and sat on the board tiles).
+            if (!GateBaseLocalRotations.TryGetValue(id, out Quaternion baseLocalRotation) ||
+                !IsExpectedArtGateBaseRotation(baseLocalRotation))
             {
-                baseLocalRotation = gate.localRotation;
+                baseLocalRotation = Quaternion.identity;
                 GateBaseLocalRotations[id] = baseLocalRotation;
             }
 
             gate.localRotation = baseLocalRotation * Quaternion.Euler(rotation);
         }
 
+        private static bool IsExpectedArtGateBaseRotation(Quaternion rotation)
+        {
+            return Quaternion.Angle(rotation, Quaternion.identity) < 0.5f;
+        }
+
         public static void BindExitToGate(
             Transform gate,
             CarryBlockJamExitDefinition definition,
-            BoardExitLabelSettings labelSettings)
+            BoardExitLabelSettings labelSettings,
+            CarryBlockJamPrefabSettings prefabSettings = null)
         {
             if (gate == null || definition == null)
                 return;
@@ -275,11 +329,10 @@ namespace CarryBlockJam
 
             // Apply gate color before creating the goal label so TMP renderers
             // are not mixed into mesh material assignment.
-            bool isUpGate = IsUpGate(gate);
-            ApplyGateModelRotation(gate, definition.rotation);
-            ApplyGateModelScale(gate, definition.modelScale);
+            ApplyGateModelRotation(gate, definition.rotation, definition.side);
+            ApplyGateModelScale(gate, definition.side, definition.modelScale, prefabSettings);
             exit.Configure(definition);
-            exit.BindArtGate(isUpGate, null, labelSettings);
+            exit.BindArtGate(definition.side, null, labelSettings);
 
             TMP_Text label = CarryBlockJamExitLabelUtility.EnsureGoalLabel(
                 gate,
@@ -289,10 +342,15 @@ namespace CarryBlockJam
                 label != null ? label.transform : null,
                 definition.side,
                 labelSettings);
-            exit.BindArtGate(isUpGate, label, labelSettings);
+            exit.BindArtGate(definition.side, label, labelSettings);
         }
 
         public static void ApplyGateColor(Transform gate, bool isUpGate, PieceColorType color)
+        {
+            ApplyGateColor(gate, isUpGate ? BoardBorderSide.Top : BoardBorderSide.Bottom, color);
+        }
+
+        public static void ApplyGateColor(Transform gate, BoardBorderSide side, PieceColorType color)
         {
             if (gate == null)
                 return;
@@ -301,8 +359,9 @@ namespace CarryBlockJam
             if (gateRenderers.Count == 0)
                 return;
 
-            Material baseMaterial = LoadMaterial(isUpGate ? "Mat_GateUp" : "Mat_GateBottom");
-            Material colorMaterial = LoadColorMaterial(isUpGate, color);
+            string prefix = CarryBlockJamArtMaterialUtility.GetGateMaterialPrefix(side);
+            Material baseMaterial = LoadMaterial(prefix);
+            Material colorMaterial = LoadColorMaterial(side, color);
             if (colorMaterial == null)
                 colorMaterial = baseMaterial;
 
@@ -318,7 +377,9 @@ namespace CarryBlockJam
 
         public static Color GetGateTintColor(bool isUpGate, PieceColorType color)
         {
-            Material material = LoadColorMaterial(isUpGate, color);
+            Material material = LoadColorMaterial(
+                isUpGate ? BoardBorderSide.Top : BoardBorderSide.Bottom,
+                color);
             return ExtractMaterialTint(material, color);
         }
 
@@ -327,7 +388,7 @@ namespace CarryBlockJam
         /// </summary>
         public static Color GetGateUpLabelTintColor(PieceColorType color)
         {
-            Material material = LoadColorMaterial(isUpGate: true, color);
+            Material material = LoadColorMaterial(BoardBorderSide.Top, color);
             return ExtractMaterialTint(material, color);
         }
 
@@ -431,42 +492,50 @@ namespace CarryBlockJam
             if (gatesRoot == null || definition == null)
                 return null;
 
-            BoardBorderSide visualSide = ResolveVisualSide(definition.side, definition.startIndex, rows);
-            string[] preferredNames = visualSide == BoardBorderSide.Bottom ? BottomGateNames : TopGateNames;
+            BoardBorderSide side = definition.side;
+            string[] preferredNames = GetGateNamesForSide(side);
 
             Transform best = null;
             float bestScore = float.MaxValue;
             int targetColumn = definition.column >= 0 ? definition.column : definition.startIndex;
+            int targetRow = definition.row >= 0 ? definition.row : definition.startIndex;
+            bool scoreByRow = side == BoardBorderSide.Left || side == BoardBorderSide.Right;
 
-            for (int pass = 0; pass < 2; pass++)
+            // Left/Right exits must use M_GateLeft / M_GateRight only — never top/bottom stand-ins.
+            for (int i = 0; i < preferredNames.Length; i++)
             {
-                string[] names = pass == 0
-                    ? preferredNames
-                    : (visualSide == BoardBorderSide.Bottom ? TopGateNames : BottomGateNames);
+                Transform gate = FindGateChild(gatesRoot, preferredNames[i]);
+                if (gate == null)
+                    continue;
+                if (usedGates != null && usedGates.Contains(gate))
+                    continue;
 
-                for (int i = 0; i < names.Length; i++)
+                float halfPenalty;
+                float proximity;
+                if (scoreByRow)
                 {
-                    Transform gate = FindGateChild(gatesRoot, names[i]);
-                    if (gate == null)
-                        continue;
-                    if (usedGates != null && usedGates.Contains(gate))
-                        continue;
-
-                    // Prefer left/right art gate matching column half, then exact column proximity.
-                    float halfPenalty = (i == 0) == (targetColumn < columns * 0.5f) ? 0f : 10f;
-                    float score = halfPenalty + Mathf.Abs(EstimateGateColumn(gate, columns) - targetColumn);
-                    if (score < bestScore)
-                    {
-                        bestScore = score;
-                        best = gate;
-                    }
+                    halfPenalty = (i == 0) == (targetRow < rows * 0.5f) ? 0f : 10f;
+                    proximity = Mathf.Abs(EstimateGateRow(gate, rows) - targetRow);
+                }
+                else
+                {
+                    halfPenalty = (i == 0) == (targetColumn < columns * 0.5f) ? 0f : 10f;
+                    proximity = Mathf.Abs(EstimateGateColumn(gate, columns) - targetColumn);
                 }
 
-                if (best != null)
-                    return best;
+                float score = halfPenalty + proximity;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = gate;
+                }
             }
 
-            // Any unused child under Gates (includes inactive).
+            if (best != null)
+                return best;
+
+            // Same-side unused children only (name prefix match), never cross sides.
+            string sidePrefix = GetGateNamePrefix(side);
             for (int i = 0; i < gatesRoot.childCount; i++)
             {
                 Transform gate = gatesRoot.GetChild(i);
@@ -474,10 +543,54 @@ namespace CarryBlockJam
                     continue;
                 if (usedGates != null && usedGates.Contains(gate))
                     continue;
+                if (!gate.name.StartsWith(sidePrefix))
+                    continue;
                 return gate;
             }
 
+            // More exits on this side than named slots — clone an extra same-side model.
+            Transform clone = TryCloneExtraGate(gatesRoot, sidePrefix);
+            if (clone != null)
+                return clone;
+
+            Debug.LogWarning(
+                $"[CarryBlockJam] Missing {sidePrefix} art gate for exit side={side}. " +
+                "Apply the level in Level Creator / rebuild the board to spawn Left/Right models.");
             return null;
+        }
+
+        private static Transform TryCloneExtraGate(Transform gatesRoot, string sidePrefix)
+        {
+            if (gatesRoot == null || string.IsNullOrEmpty(sidePrefix))
+                return null;
+
+            Transform template = null;
+            int sameSideCount = 0;
+            for (int i = 0; i < gatesRoot.childCount; i++)
+            {
+                Transform child = gatesRoot.GetChild(i);
+                if (child == null || !child.name.StartsWith(sidePrefix))
+                    continue;
+
+                sameSideCount++;
+                if (template == null)
+                    template = child;
+            }
+
+            if (template == null)
+                return null;
+
+            GameObject clone = Object.Instantiate(template.gameObject, gatesRoot);
+            clone.name = $"{sidePrefix} ({sameSideCount})";
+            clone.SetActive(false);
+
+            // Fresh instance ids so base pose caches do not collide with the template.
+            RemoveGoalLabel(clone.transform);
+            CarryBlockJamExit existing = clone.GetComponent<CarryBlockJamExit>();
+            if (existing != null)
+                Object.DestroyImmediate(existing);
+
+            return clone.transform;
         }
 
         private static Transform FindGateChild(Transform gatesRoot, string name)
@@ -508,30 +621,58 @@ namespace CarryBlockJam
             return columns * 0.25f;
         }
 
-        private static BoardBorderSide ResolveVisualSide(BoardBorderSide side, int startIndex, int rows)
+        private static float EstimateGateRow(Transform gate, int rows)
         {
-            switch (side)
+            if (gate == null)
+                return rows * 0.5f;
+
+            // Side gates: first name → upper rows, "(1)" → lower rows.
+            string name = gate.name;
+            if (name.IndexOf("(1)", System.StringComparison.Ordinal) >= 0)
+                return rows * 0.75f;
+            return rows * 0.25f;
+        }
+
+        private static string[] GetGateNamesForSide(BoardBorderSide side)
+        {
+            return side switch
             {
-                case BoardBorderSide.Top:
-                case BoardBorderSide.Bottom:
-                    return side;
-                case BoardBorderSide.Left:
-                case BoardBorderSide.Right:
-                    // Side exits map onto the nearer top/bottom art gate row.
-                    int mid = Mathf.Max(1, rows) / 2;
-                    return startIndex < mid ? BoardBorderSide.Top : BoardBorderSide.Bottom;
-                default:
-                    return BoardBorderSide.Top;
-            }
+                BoardBorderSide.Bottom => BottomGateNames,
+                BoardBorderSide.Left => LeftGateNames,
+                BoardBorderSide.Right => RightGateNames,
+                _ => TopGateNames,
+            };
+        }
+
+        private static string GetGateNamePrefix(BoardBorderSide side)
+        {
+            return side switch
+            {
+                BoardBorderSide.Bottom => "M_GateBottom",
+                BoardBorderSide.Left => "M_GateLeft",
+                BoardBorderSide.Right => "M_GateRight",
+                _ => "M_GateUp",
+            };
+        }
+
+        private static BoardBorderSide ResolveGateSideFromName(Transform gate)
+        {
+            if (gate == null)
+                return BoardBorderSide.Top;
+
+            string name = gate.name;
+            if (name.StartsWith("M_GateBottom"))
+                return BoardBorderSide.Bottom;
+            if (name.StartsWith("M_GateLeft"))
+                return BoardBorderSide.Left;
+            if (name.StartsWith("M_GateRight"))
+                return BoardBorderSide.Right;
+            return BoardBorderSide.Top;
         }
 
         private static bool IsUpGate(Transform gate)
         {
-            if (gate == null)
-                return true;
-
-            string name = gate.name;
-            return name.StartsWith("M_GateUp");
+            return ResolveGateSideFromName(gate) == BoardBorderSide.Top;
         }
 
         private static void ClearExitComponents(Transform gatesRoot)
@@ -576,12 +717,10 @@ namespace CarryBlockJam
             }
         }
 
-        private static Material LoadColorMaterial(bool isUpGate, PieceColorType color)
+        private static Material LoadColorMaterial(BoardBorderSide side, PieceColorType color)
         {
-            string prefix = isUpGate ? "Mat_GateUp" : "Mat_GateBottom";
-            string folder = isUpGate
-                ? CarryBlockJamArtMaterialUtility.GateUpMaterialsFolder
-                : CarryBlockJamArtMaterialUtility.GateBottomMaterialsFolder;
+            string prefix = CarryBlockJamArtMaterialUtility.GetGateMaterialPrefix(side);
+            string folder = CarryBlockJamArtMaterialUtility.GetGateMaterialsFolder(side);
 
             if (!PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey)
                 return CarryBlockJamArtMaterialUtility.LoadMaterial(folder, prefix, "Materials/Gates");
@@ -595,10 +734,18 @@ namespace CarryBlockJam
 
         private static Material LoadMaterial(string materialName)
         {
-            bool isUpGate = materialName != null && materialName.StartsWith("Mat_GateUp");
-            string folder = isUpGate
-                ? CarryBlockJamArtMaterialUtility.GateUpMaterialsFolder
-                : CarryBlockJamArtMaterialUtility.GateBottomMaterialsFolder;
+            BoardBorderSide side = BoardBorderSide.Top;
+            if (materialName != null)
+            {
+                if (materialName.StartsWith("Mat_GateBottom"))
+                    side = BoardBorderSide.Bottom;
+                else if (materialName.StartsWith("Mat_GateLeft"))
+                    side = BoardBorderSide.Left;
+                else if (materialName.StartsWith("Mat_GateRight"))
+                    side = BoardBorderSide.Right;
+            }
+
+            string folder = CarryBlockJamArtMaterialUtility.GetGateMaterialsFolder(side);
             return CarryBlockJamArtMaterialUtility.LoadMaterial(folder, materialName, "Materials/Gates");
         }
     }

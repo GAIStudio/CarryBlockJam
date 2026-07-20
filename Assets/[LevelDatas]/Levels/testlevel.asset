@@ -64,17 +64,17 @@ MonoBehaviour:
       goals:
       - color: 6
         requiredPlateCount: 2
-    - row: 6
+    - row: 4
       column: 5
       side: 3
-      startIndex: 6
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 90, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
-      - color: 1
-        requiredPlateCount: 2
+      - color: 4
+        requiredPlateCount: 3
     disableAutoTables: 0
     tablePlacements: []
     platePlacements: []
