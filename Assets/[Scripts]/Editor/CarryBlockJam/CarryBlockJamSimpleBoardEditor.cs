@@ -53,6 +53,7 @@ namespace CarryBlockJam.Editor
                 if (EditorGUI.EndChangeCheck() && target is CarryBlockJamSimpleBoard boardForGates)
                 {
                     CarryBlockJamArtGateUtility.ApplyGateModelOffsets(boardForGates);
+                    CarryBlockJamArtGateUtility.ApplyGateModelScales(boardForGates);
                     EditorUtility.SetDirty(boardForGates);
                     if (_prefabSettings.objectReferenceValue != null)
                         EditorUtility.SetDirty(_prefabSettings.objectReferenceValue);
@@ -134,17 +135,42 @@ namespace CarryBlockJam.Editor
                 return;
 
             EditorGUILayout.Space(4f);
-            EditorGUILayout.LabelField("Exit Model Offset", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Exit Model Offset / Scale", EditorStyles.boldLabel);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            Undo.RecordObject(settings, "Exit Model Offset");
-            settings.topExitModelOffset = EditorGUILayout.Vector3Field("Top", settings.topExitModelOffset);
-            settings.bottomExitModelOffset = EditorGUILayout.Vector3Field("Bottom", settings.bottomExitModelOffset);
-            settings.leftExitModelOffset = EditorGUILayout.Vector3Field("Left", settings.leftExitModelOffset);
-            settings.rightExitModelOffset = EditorGUILayout.Vector3Field("Right", settings.rightExitModelOffset);
+            Undo.RecordObject(settings, "Exit Model Offset / Scale");
+
+            DrawSideOffsetAndScale(
+                "Top",
+                ref settings.topExitModelOffset,
+                ref settings.topExitModelScale);
+            DrawSideOffsetAndScale(
+                "Bottom",
+                ref settings.bottomExitModelOffset,
+                ref settings.bottomExitModelScale);
+            DrawSideOffsetAndScale(
+                "Left",
+                ref settings.leftExitModelOffset,
+                ref settings.leftExitModelScale);
+            DrawSideOffsetAndScale(
+                "Right",
+                ref settings.rightExitModelOffset,
+                ref settings.rightExitModelScale);
+
             EditorGUILayout.HelpBox(
-                "Offsets apply according to each exit's authored border side.",
+                "Prefab offsets and scales apply by exit border side (Top / Bottom / Left / Right). " +
+                "Per-exit rotation, model scale multiplier, and goals stay in Level Creator.",
                 MessageType.None);
             EditorGUILayout.EndVertical();
+        }
+
+        private static void DrawSideOffsetAndScale(string label, ref Vector3 offset, ref Vector3 scale)
+        {
+            EditorGUILayout.LabelField(label, EditorStyles.miniBoldLabel);
+            offset = EditorGUILayout.Vector3Field("Offset", offset);
+            if (scale == Vector3.zero)
+                scale = Vector3.one;
+            scale = EditorGUILayout.Vector3Field("Scale", scale);
+            EditorGUILayout.Space(2f);
         }
     }
 }

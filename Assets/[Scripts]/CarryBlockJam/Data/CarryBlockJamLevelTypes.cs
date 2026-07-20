@@ -149,29 +149,60 @@ namespace CarryBlockJam
             int distRight = (safeColumns - 1) - column;
 
             int minEdge = Mathf.Min(Mathf.Min(distTop, distBottom), Mathf.Min(distLeft, distRight));
-            if (minEdge == distTop)
-            {
-                side = BoardBorderSide.Top;
-                row = 0;
-                startIndex = column;
-            }
-            else if (minEdge == distBottom)
-            {
-                side = BoardBorderSide.Bottom;
-                row = safeRows - 1;
-                startIndex = column;
-            }
-            else if (minEdge == distLeft)
+            bool topTied = distTop == minEdge;
+            bool bottomTied = distBottom == minEdge;
+            bool leftTied = distLeft == minEdge;
+            bool rightTied = distRight == minEdge;
+
+            // Keep an explicit Left/Right (or Top/Bottom) choice when the cell sits on a corner.
+            if (side == BoardBorderSide.Left && leftTied)
             {
                 side = BoardBorderSide.Left;
                 column = 0;
                 startIndex = row;
             }
-            else
+            else if (side == BoardBorderSide.Right && rightTied)
             {
                 side = BoardBorderSide.Right;
                 column = safeColumns - 1;
                 startIndex = row;
+            }
+            else if (side == BoardBorderSide.Top && topTied)
+            {
+                side = BoardBorderSide.Top;
+                row = 0;
+                startIndex = column;
+            }
+            else if (side == BoardBorderSide.Bottom && bottomTied)
+            {
+                side = BoardBorderSide.Bottom;
+                row = safeRows - 1;
+                startIndex = column;
+            }
+            else if (leftTied)
+            {
+                // Corner ties prefer Left/Right so side art gates are used.
+                side = BoardBorderSide.Left;
+                column = 0;
+                startIndex = row;
+            }
+            else if (rightTied)
+            {
+                side = BoardBorderSide.Right;
+                column = safeColumns - 1;
+                startIndex = row;
+            }
+            else if (topTied)
+            {
+                side = BoardBorderSide.Top;
+                row = 0;
+                startIndex = column;
+            }
+            else
+            {
+                side = BoardBorderSide.Bottom;
+                row = safeRows - 1;
+                startIndex = column;
             }
 
             length = 1;

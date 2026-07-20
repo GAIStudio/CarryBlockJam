@@ -65,9 +65,13 @@ MonoBehaviour:
     localRotation: {x: 0, y: 0, z: 0}
     tintWithPieceColor: 0
   topExitModelOffset: {x: 0, y: 0, z: -0.58}
-  bottomExitModelOffset: {x: 0, y: 0, z: 0.4}
+  bottomExitModelOffset: {x: 0, y: 0, z: 0.58}
   leftExitModelOffset: {x: 0, y: 0, z: 0}
-  rightExitModelOffset: {x: -0.6, y: 0, z: 0}
+  rightExitModelOffset: {x: -0.5, y: 0, z: 0}
+  topExitModelScale: {x: 1, y: 1, z: 1}
+  bottomExitModelScale: {x: 1, y: 1, z: 1}
+  leftExitModelScale: {x: 1, y: 1, z: 1}
+  rightExitModelScale: {x: 1, y: 1, z: 1}
   boardCellColor: 7
   wallColor: 7
   exitCarColor: 21
