@@ -29,9 +29,9 @@ MonoBehaviour:
       minPlateStacks: 1
       maxPlateStacks: 2
     exits:
-    - row: 0
+    - row: 12
       column: 4
-      side: 0
+      side: 1
       startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -44,9 +44,9 @@ MonoBehaviour:
         requiredPlateCount: 3
       - color: 3
         requiredPlateCount: 3
-    - row: 0
+    - row: 12
       column: 1
-      side: 0
+      side: 1
       startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
