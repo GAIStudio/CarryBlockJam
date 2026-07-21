@@ -365,21 +365,78 @@ namespace CarryBlockJam
             if (colorMaterial == null)
                 colorMaterial = baseMaterial;
 
-            ResolveBaseAndColorRenderers(gateRenderers, out Renderer baseRenderer, out Renderer colorRenderer);
+            bool appliedColorSlot = false;
+            for (int i = 0; i < gateRenderers.Count; i++)
+            {
+                Renderer renderer = gateRenderers[i];
+                if (renderer == null)
+                    continue;
 
-            if (baseRenderer != null && baseMaterial != null)
-                baseRenderer.sharedMaterial = baseMaterial;
-            if (colorRenderer != null && colorMaterial != null)
-                colorRenderer.sharedMaterial = colorMaterial;
-            else if (gateRenderers.Count == 1 && colorMaterial != null)
-                gateRenderers[0].sharedMaterial = colorMaterial;
+                Material[] materials = renderer.sharedMaterials;
+                bool rendererIsColor =
+                    renderer.gameObject.name.IndexOf(
+                        "-Color",
+                        System.StringComparison.OrdinalIgnoreCase) >= 0;
+                bool changed = false;
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    Material current = materials[materialIndex];
+                    string materialName = current != null ? current.name : string.Empty;
+                    bool materialIsColor =
+                        materialName.StartsWith(
+                            prefix + "-",
+                            System.StringComparison.OrdinalIgnoreCase);
+                    bool materialIsBase =
+                        materialName.Equals(
+                            prefix,
+                            System.StringComparison.OrdinalIgnoreCase);
+
+                    if ((rendererIsColor || materialIsColor) && colorMaterial != null)
+                    {
+                        materials[materialIndex] = colorMaterial;
+                        appliedColorSlot = true;
+                        changed = true;
+                    }
+                    else if (materialIsBase && baseMaterial != null)
+                    {
+                        materials[materialIndex] = baseMaterial;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                    renderer.sharedMaterials = materials;
+            }
+
+            // Legacy gate meshes may not preserve recognizable material names.
+            if (!appliedColorSlot)
+            {
+                ResolveBaseAndColorRenderers(
+                    gateRenderers,
+                    out Renderer baseRenderer,
+                    out Renderer colorRenderer);
+
+                if (baseRenderer != null && baseMaterial != null)
+                    baseRenderer.sharedMaterial = baseMaterial;
+                if (colorRenderer != null && colorMaterial != null)
+                    colorRenderer.sharedMaterial = colorMaterial;
+                else if (gateRenderers.Count == 1 && colorMaterial != null)
+                    gateRenderers[0].sharedMaterial = colorMaterial;
+            }
         }
 
         public static Color GetGateTintColor(bool isUpGate, PieceColorType color)
         {
-            Material material = LoadColorMaterial(
+            return GetGateTintColor(
                 isUpGate ? BoardBorderSide.Top : BoardBorderSide.Bottom,
                 color);
+        }
+
+        public static Color GetGateTintColor(
+            BoardBorderSide side,
+            PieceColorType color)
+        {
+            Material material = LoadColorMaterial(side, color);
             return ExtractMaterialTint(material, color);
         }
 

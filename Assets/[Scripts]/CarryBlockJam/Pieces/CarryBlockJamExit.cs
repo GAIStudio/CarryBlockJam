@@ -201,8 +201,9 @@ namespace CarryBlockJam
                 PieceColorType labelColor = PieceColorPalette.IsPaintable(CurrentColor)
                     ? CurrentColor
                     : PieceColorType.White;
-                // Label color always comes from -GateUp Materials (Mat_GateUp-{Color}).
-                goalLabel.color = CarryBlockJamArtGateUtility.GetGateUpLabelTintColor(labelColor);
+                goalLabel.color = useArtGateMaterials
+                    ? CarryBlockJamArtGateUtility.GetGateTintColor(artGateSide, labelColor)
+                    : PieceColorPalette.GetColor(labelColor);
 
                 if (goalLabel.font != null && goalLabel.font.material != null)
                     goalLabel.ForceMeshUpdate(true);
