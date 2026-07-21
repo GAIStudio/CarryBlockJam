@@ -9,7 +9,7 @@ namespace CarryBlockJam
     {
         private const int CircleTextureSize = 64;
         private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
-        private const float BadgeSurfaceClearance = 0.12f;
+        private const float BadgeSurfaceClearance = 0.02f;
 
         private static Sprite _cachedCircleSprite;
 
@@ -26,6 +26,24 @@ namespace CarryBlockJam
         public bool IsOpen => _isOpen;
         public PieceColorType CurtainColor => _curtainColor;
         public int RemainingRequiredDeliveries => _remainingRequiredDeliveries;
+
+        public void RefreshVisualSettings(BoardCurtainBoxVisualSettings visualSettings)
+        {
+            _visualSettings =
+                visualSettings ?? BoardCurtainBoxVisualSettings.CreateDefault();
+            if (_isOpen)
+                return;
+
+            if (_curtainOverlay != null)
+                Destroy(_curtainOverlay);
+            if (_colorCircle != null)
+                Destroy(_colorCircle);
+
+            _curtainOverlay = null;
+            _colorCircle = null;
+            CreateCurtainOverlay();
+            HideBoxVisual();
+        }
 
         public void Bind(
             CarryBlockJamBoardPiece boxPiece,
