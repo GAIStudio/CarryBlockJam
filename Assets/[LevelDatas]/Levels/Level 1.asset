@@ -54,9 +54,9 @@ MonoBehaviour:
       - color: 3
         requiredPlateCount: 2
     - row: 0
-      column: 1
+      column: 7
       side: 0
-      startIndex: 1
+      startIndex: 7
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}

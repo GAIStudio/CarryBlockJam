@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Level 13
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -42,9 +42,9 @@ MonoBehaviour:
         requiredPlateCount: 4
       - color: 6
         requiredPlateCount: 2
-    - row: 9
+    - row: 0
       column: 4
-      side: 1
+      side: 0
       startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -142,7 +142,7 @@ MonoBehaviour:
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 1
+      row: 0
       column: 3
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Level 24
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -44,9 +44,9 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 1
         requiredPlateCount: 3
-    - row: 9
+    - row: 0
       column: 1
-      side: 1
+      side: 0
       startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
@@ -74,9 +74,9 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 2
         requiredPlateCount: 3
-    - row: 9
+    - row: 0
       column: 4
-      side: 1
+      side: 0
       startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}

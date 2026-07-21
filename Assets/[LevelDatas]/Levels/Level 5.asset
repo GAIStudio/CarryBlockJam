@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Level 5
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -41,9 +41,9 @@ MonoBehaviour:
       - color: 1
         requiredPlateCount: 3
     - row: 0
-      column: 4
+      column: 7
       side: 0
-      startIndex: 4
+      startIndex: 7
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -51,10 +51,10 @@ MonoBehaviour:
       goals:
       - color: 2
         requiredPlateCount: 3
-    - row: 9
-      column: 1
-      side: 1
-      startIndex: 1
+    - row: 0
+      column: 4
+      side: 0
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -83,7 +83,7 @@ MonoBehaviour:
     platePlacements: []
     stickmanSpawnMode: 0
     fixedStickmanCell:
-      row: 2
+      row: 0
       column: 3
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
