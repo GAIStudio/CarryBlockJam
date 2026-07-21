@@ -67,7 +67,7 @@ MonoBehaviour:
       row: 3
       column: 4
   hasTutorial: 1
-  tutorialTextWorldPosition: {x: 0, y: 0, z: -5}
+  tutorialTextWorldPosition: {x: 0, y: 0, z: -7}
   tutorialStages:
   - stageName: 1
     instruction: 'Finish an order to unlock frozen tables  '

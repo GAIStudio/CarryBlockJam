@@ -1819,7 +1819,7 @@ Transform:
   m_GameObject: {fileID: 93445580}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0.41, z: -4.7}
+  m_LocalPosition: {x: 0, y: 0.41, z: -4.24}
   m_LocalScale: {x: 1.454509, y: 1.454509, z: 1.454509}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7403,6 +7403,12 @@ PrefabInstance:
       propertyPath: m_Materials.Array.data[0]
       value: 
       objectReference: {fileID: 2100000, guid: 97bf623b3cd0b407d841fa3ee6910005, type: 2}
+    - target: {fileID: -5754084199372789682, guid: 4342f81e856ca4b0fb51de4f5226d1a9,
+        type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: -7060095301798056272, guid: 86c06233a2371440cadcd42937207672,
+        type: 3}
     - target: {fileID: 919132149155446097, guid: 4342f81e856ca4b0fb51de4f5226d1a9,
         type: 3}
       propertyPath: m_Name
@@ -7435,7 +7441,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 8daead5563478459bb13688bfc727926,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.75
+      value: 0.276
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8daead5563478459bb13688bfc727926,
         type: 3}
@@ -11037,7 +11043,7 @@ Transform:
   m_GameObject: {fileID: 934152508}
   serializedVersion: 2
   m_LocalRotation: {x: 0.5735764, y: 0, z: 0, w: 0.8191521}
-  m_LocalPosition: {x: 0, y: 26.03, z: -19.55}
+  m_LocalPosition: {x: 0, y: 27.433, z: -19.979}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -14216,6 +14222,11 @@ PrefabInstance:
       propertyPath: m_Materials.Array.data[0]
       value: 
       objectReference: {fileID: 2100000, guid: 2e62f8c8ae56f478e9ee47af19665b95, type: 2}
+    - target: {fileID: 2622753384463669962, guid: b4210578d30c84662b753e47f4b6c302,
+        type: 3}
+      propertyPath: m_Materials.Array.data[1]
+      value: 
+      objectReference: {fileID: 2100000, guid: 0080265c67dd546fe8ec441d74b6b388, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

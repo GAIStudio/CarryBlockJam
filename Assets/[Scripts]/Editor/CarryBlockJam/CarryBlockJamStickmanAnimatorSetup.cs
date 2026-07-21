@@ -12,7 +12,7 @@ namespace CarryBlockJam.Editor
     {
         private const string ControllerPath = "Assets/[Animations]/Stickman.controller";
         private const string StickmanModelPath = "Assets/[Models]/Stickman.fbx";
-        private const string SadIdlePath = "Assets/[Animations]/Sad Idle.fbx";
+        private const string IdlePath = "Assets/[Animations]/Idle.fbx";
         private const string SlowRunPath = "Assets/[Animations]/Slow Run.fbx";
         private const string BoxIdlePath = "Assets/[Animations]/Box Idle.fbx";
         private const string BoxWalkPath = "Assets/[Animations]/Box Walk Arc.fbx";
@@ -51,29 +51,29 @@ namespace CarryBlockJam.Editor
         [MenuItem("CarryBlockJam/Setup Stickman Animator Controller")]
         public static void Setup()
         {
-            ConfigureHumanoidClip(SadIdlePath, loop: true);
+            ConfigureHumanoidClip(IdlePath, loop: true);
             ConfigureHumanoidClip(SlowRunPath, loop: true);
             ConfigureHumanoidClip(BoxIdlePath, loop: true);
             ConfigureHumanoidClip(BoxWalkPath, loop: true);
             ConfigureHumanoidClip(FallingDownPath, loop: false);
 
-            AnimationClip sadIdle = LoadFirstClip(SadIdlePath);
+            AnimationClip idle = LoadFirstClip(IdlePath);
             AnimationClip slowRun = LoadFirstClip(SlowRunPath);
             AnimationClip boxIdle = LoadFirstClip(BoxIdlePath);
             AnimationClip boxWalk = LoadFirstClip(BoxWalkPath);
             AnimationClip fallingDown = LoadFirstClip(FallingDownPath);
 
-            if (sadIdle == null || slowRun == null || boxIdle == null ||
+            if (idle == null || slowRun == null || boxIdle == null ||
                 boxWalk == null || fallingDown == null)
             {
                 Debug.LogError(
                     "[CarryBlockJam] Missing Stickman animation clips. Expected:\n" +
-                    SadIdlePath + "\n" + SlowRunPath + "\n" + BoxIdlePath + "\n" +
+                    IdlePath + "\n" + SlowRunPath + "\n" + BoxIdlePath + "\n" +
                     BoxWalkPath + "\n" + FallingDownPath);
                 return;
             }
 
-            EnsureLoopAndFeetBake(sadIdle, loop: true);
+            EnsureLoopAndFeetBake(idle, loop: true);
             EnsureLoopAndFeetBake(slowRun, loop: true);
             EnsureLoopAndFeetBake(boxIdle, loop: true);
             EnsureLoopAndFeetBake(boxWalk, loop: true);
@@ -105,7 +105,7 @@ namespace CarryBlockJam.Editor
             stateMachine.anyStateTransitions = System.Array.Empty<AnimatorStateTransition>();
             stateMachine.entryTransitions = System.Array.Empty<AnimatorTransition>();
 
-            AnimatorState sadIdleState = stateMachine.AddState(
+            AnimatorState idleState = stateMachine.AddState(
                 CarryBlockJamStickmanAnimator.EmptyIdleStateName,
                 new Vector3(200f, 0f, 0f));
             AnimatorState slowRunState = stateMachine.AddState("SlowRun", new Vector3(450f, -80f, 0f));
@@ -115,29 +115,29 @@ namespace CarryBlockJam.Editor
                 CarryBlockJamStickmanAnimator.FailedStateName,
                 new Vector3(450f, 220f, 0f));
 
-            sadIdleState.motion = sadIdle;
+            idleState.motion = idle;
             slowRunState.motion = slowRun;
             boxIdleState.motion = boxIdle;
             boxWalkState.motion = boxWalk;
             fallingState.motion = fallingDown;
 
-            stateMachine.defaultState = sadIdleState;
+            stateMachine.defaultState = idleState;
 
-            AddBoolTransition(sadIdleState, slowRunState, moving: true, carrying: false);
-            AddBoolTransition(sadIdleState, boxIdleState, moving: false, carrying: true);
-            AddBoolTransition(sadIdleState, boxWalkState, moving: true, carrying: true);
+            AddBoolTransition(idleState, slowRunState, moving: true, carrying: false);
+            AddBoolTransition(idleState, boxIdleState, moving: false, carrying: true);
+            AddBoolTransition(idleState, boxWalkState, moving: true, carrying: true);
 
-            AddBoolTransition(slowRunState, sadIdleState, moving: false, carrying: false);
+            AddBoolTransition(slowRunState, idleState, moving: false, carrying: false);
             AddBoolTransition(slowRunState, boxWalkState, moving: true, carrying: true);
             AddBoolTransition(slowRunState, boxIdleState, moving: false, carrying: true);
 
-            AddBoolTransition(boxIdleState, sadIdleState, moving: false, carrying: false);
+            AddBoolTransition(boxIdleState, idleState, moving: false, carrying: false);
             AddBoolTransition(boxIdleState, boxWalkState, moving: true, carrying: true);
             AddBoolTransition(boxIdleState, slowRunState, moving: true, carrying: false);
 
             AddBoolTransition(boxWalkState, boxIdleState, moving: false, carrying: true);
             AddBoolTransition(boxWalkState, slowRunState, moving: true, carrying: false);
-            AddBoolTransition(boxWalkState, sadIdleState, moving: false, carrying: false);
+            AddBoolTransition(boxWalkState, idleState, moving: false, carrying: false);
 
             AnimatorStateTransition failTransition = stateMachine.AddAnyStateTransition(fallingState);
             failTransition.hasExitTime = false;
@@ -174,7 +174,7 @@ namespace CarryBlockJam.Editor
         [MenuItem("CarryBlockJam/Bake Stickman Clip Feet Height")]
         public static void BakeFeetHeightMenu()
         {
-            ConfigureHumanoidClip(SadIdlePath, loop: true);
+            ConfigureHumanoidClip(IdlePath, loop: true);
             ConfigureHumanoidClip(SlowRunPath, loop: true);
             ConfigureHumanoidClip(BoxIdlePath, loop: true);
             ConfigureHumanoidClip(BoxWalkPath, loop: true);
@@ -220,14 +220,27 @@ namespace CarryBlockJam.Editor
                 return false;
 
             ChildAnimatorState[] states = controller.layers[0].stateMachine.states;
+            bool hasCurrentIdle = false;
+            bool hasFailure = false;
             for (int i = 0; i < states.Length; i++)
             {
-                if (states[i].state != null &&
-                    states[i].state.name == CarryBlockJamStickmanAnimator.FailedStateName)
-                    return true;
+                AnimatorState state = states[i].state;
+                if (state == null)
+                    continue;
+
+                if (state.name == CarryBlockJamStickmanAnimator.EmptyIdleStateName)
+                {
+                    string motionPath = state.motion != null
+                        ? AssetDatabase.GetAssetPath(state.motion)
+                        : string.Empty;
+                    hasCurrentIdle = motionPath == IdlePath;
+                }
+
+                if (state.name == CarryBlockJamStickmanAnimator.FailedStateName)
+                    hasFailure = true;
             }
 
-            return false;
+            return hasCurrentIdle && hasFailure;
         }
 
         private static AnimationClip LoadFirstClip(string assetPath)
