@@ -31,6 +31,10 @@ namespace CarryBlockJam
         [SerializeField] private float pickupPlateSettleScale = 0.22f;
         [SerializeField] private float pickupPlateFrontClearance = 0.65f;
         [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
+        [SerializeField] private float dragCornerTransitionDuration = 0.06f;
+        [SerializeField] private float dragTurnThresholdCells = 0.4f;
+        [SerializeField] private float dragTurnProbeResetCells = 0.2f;
+        [SerializeField] private float dragTurnDominance = 1.35f;
         [SerializeField] private float charTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
@@ -54,8 +58,13 @@ namespace CarryBlockJam
         private int _lockedDragAxis;
         private int _dragActiveAxis;
         private Vector3 _dragSegmentBoardLocalPoint;
+        private Vector3 _dragTurnProbeBoardLocalPoint;
         private readonly List<Vector2Int> _dragRouteCorners =
             new List<Vector2Int>();
+        private bool _dragCornerTransitionActive;
+        private float _dragCornerTransitionElapsed;
+        private Vector3 _dragCornerTransitionStart;
+        private Vector3 _dragCornerTransitionTarget;
         private bool _trackingSwipe;
         private bool _commitDraggedMovementInstantly;
         private bool _isAnimating;
@@ -185,9 +194,12 @@ namespace CarryBlockJam
             _lockedDragAxis = 0;
             _dragActiveAxis = 0;
             _dragSegmentBoardLocalPoint = _dragStartBoardLocalPoint;
+            _dragTurnProbeBoardLocalPoint = _dragStartBoardLocalPoint;
             _dragRouteCorners.Clear();
             _dragRouteCorners.Add(
                 new Vector2Int(_swipeStartRow, _swipeStartColumn));
+            _dragCornerTransitionActive = false;
+            _dragCornerTransitionElapsed = 0f;
             _trackingSwipe = true;
             EnsureHighlightRoot();
             ShowHighlights(false);
@@ -289,6 +301,7 @@ namespace CarryBlockJam
 
                 _dragActiveAxis = _lockedDragAxis;
                 _dragSegmentBoardLocalPoint = _dragStartBoardLocalPoint;
+                _dragTurnProbeBoardLocalPoint = _dragStartBoardLocalPoint;
             }
 
             bool reachedRouteEnd = true;
@@ -339,6 +352,8 @@ namespace CarryBlockJam
             _lockedDragAxis = 0;
             _dragActiveAxis = 0;
             _dragRouteCorners.Clear();
+            _dragCornerTransitionActive = false;
+            _dragCornerTransitionElapsed = 0f;
         }
 
         private void ExecuteDirectDragSegment(
@@ -1466,6 +1481,9 @@ namespace CarryBlockJam
 
         private void UpdateOrthogonalDrag(Vector2 screenPosition)
         {
+            if (UpdateDragCornerTransition())
+                return;
+
             if (_dragActiveAxis == 0)
             {
                 if (!TryGetSwipeIntent(
@@ -1486,6 +1504,11 @@ namespace CarryBlockJam
             Vector2Int segmentStart = _dragRouteCorners.Count > 0
                 ? _dragRouteCorners[_dragRouteCorners.Count - 1]
                 : new Vector2Int(_swipeStartRow, _swipeStartColumn);
+            if (TryCommitOrthogonalTurn(
+                    screenPosition,
+                    segmentStart))
+                return;
+
             if (!TryGetActiveSegmentIntent(
                     screenPosition,
                     segmentStart.x,
@@ -1510,13 +1533,6 @@ namespace CarryBlockJam
                 columnStep,
                 requestedSteps);
             List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(previewPath);
-            if (TryCommitOrthogonalTurn(
-                    screenPosition,
-                    rowStep,
-                    columnStep,
-                    movablePath))
-                return;
-
             UpdateDraggedCylinderPosition(
                 screenPosition,
                 rowStep,
@@ -1527,38 +1543,92 @@ namespace CarryBlockJam
                 _dragSegmentBoardLocalPoint);
         }
 
+        private bool UpdateDragCornerTransition()
+        {
+            if (!_dragCornerTransitionActive || _cylinder == null)
+                return false;
+
+            float duration = Mathf.Max(
+                0.01f,
+                dragCornerTransitionDuration);
+            _dragCornerTransitionElapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(
+                _dragCornerTransitionElapsed / duration);
+            float easedProgress = progress * progress * (3f - 2f * progress);
+            _cylinder.transform.localPosition = Vector3.LerpUnclamped(
+                _dragCornerTransitionStart,
+                _dragCornerTransitionTarget,
+                easedProgress);
+            RefreshStickmanAnimation(moving: true);
+
+            if (progress < 1f)
+                return true;
+
+            _dragCornerTransitionActive = false;
+            _dragCornerTransitionElapsed = 0f;
+            return false;
+        }
+
         private bool TryCommitOrthogonalTurn(
             Vector2 screenPosition,
-            int rowStep,
-            int columnStep,
-            List<Vector2Int> activePath)
+            Vector2Int segmentStart)
         {
-            if (activePath == null || activePath.Count == 0 ||
-                !TryProjectPointerToBoardLocal(
+            if (!TryProjectPointerToBoardLocal(
                     screenPosition,
                     out Vector3 pointerLocal))
                 return false;
 
-            Vector3 pointerDelta =
-                pointerLocal - _dragSegmentBoardLocalPoint;
-            float rowCells =
-                -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ);
-            float columnCells =
-                pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
-            float activeProgress = rowStep != 0
-                ? rowCells * rowStep
-                : columnCells * columnStep;
-            float perpendicularProgress = _dragActiveAxis == 1
-                ? Mathf.Abs(columnCells)
-                : Mathf.Abs(rowCells);
-            if (activeProgress < 0.5f || perpendicularProgress < 0.35f)
+            Vector3 probeDelta =
+                pointerLocal - _dragTurnProbeBoardLocalPoint;
+            float probeRowCells =
+                -probeDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ);
+            float probeColumnCells =
+                probeDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            float recentActiveMovement = Mathf.Abs(
+                _dragActiveAxis == 1
+                    ? probeRowCells
+                    : probeColumnCells);
+            float recentPerpendicularMovement = Mathf.Abs(
+                _dragActiveAxis == 1
+                    ? probeColumnCells
+                    : probeRowCells);
+            float dominance = Mathf.Max(1f, dragTurnDominance);
+
+            // Keep moving the probe forward during a straight drag so small
+            // perpendicular drift cannot accumulate into a false turn.
+            if (recentActiveMovement >= Mathf.Max(
+                    0.05f,
+                    dragTurnProbeResetCells) &&
+                recentActiveMovement * dominance >=
+                recentPerpendicularMovement)
+            {
+                _dragTurnProbeBoardLocalPoint = pointerLocal;
+                return false;
+            }
+
+            if (recentPerpendicularMovement < Mathf.Max(
+                    0.1f,
+                    dragTurnThresholdCells) ||
+                recentPerpendicularMovement <
+                recentActiveMovement * dominance)
                 return false;
 
-            int reachedSteps = Mathf.Clamp(
-                Mathf.RoundToInt(activeProgress),
-                1,
-                activePath.Count);
-            Vector2Int corner = activePath[reachedSteps - 1];
+            Vector3 gridLocalPosition =
+                _cylinder.transform.localPosition - _cylinder.GridOffset;
+            int cornerColumn = Mathf.RoundToInt(
+                gridLocalPosition.x / _grid.GridSpacingX +
+                (_grid.Columns - 1) * 0.5f);
+            int cornerRow = Mathf.RoundToInt(
+                (_grid.Rows - 1) * 0.5f -
+                gridLocalPosition.z / _grid.GridSpacingZ);
+            if (_dragActiveAxis == 1)
+                cornerColumn = segmentStart.y;
+            else
+                cornerRow = segmentStart.x;
+
+            var corner = new Vector2Int(
+                Mathf.Clamp(cornerRow, 0, _grid.Rows - 1),
+                Mathf.Clamp(cornerColumn, 0, _grid.Columns - 1));
             if (!_grid.TryGetCell(
                     corner.x,
                     corner.y,
@@ -1573,10 +1643,22 @@ namespace CarryBlockJam
             if (corner != previousCorner)
                 _dragRouteCorners.Add(corner);
 
-            _dragActiveAxis = _dragActiveAxis == 1 ? 2 : 1;
+            int nextAxis = _dragActiveAxis == 1 ? 2 : 1;
+            Vector3 nextSegmentOrigin = pointerLocal;
+            if (nextAxis == 1)
+                nextSegmentOrigin.z = _dragSegmentBoardLocalPoint.z;
+            else
+                nextSegmentOrigin.x = _dragSegmentBoardLocalPoint.x;
+
+            _dragActiveAxis = nextAxis;
             _lockedDragAxis = _dragActiveAxis;
-            _dragSegmentBoardLocalPoint = pointerLocal;
-            _cylinder.transform.localPosition =
+            _dragSegmentBoardLocalPoint = nextSegmentOrigin;
+            _dragTurnProbeBoardLocalPoint = pointerLocal;
+            _dragCornerTransitionActive = true;
+            _dragCornerTransitionElapsed = 0f;
+            _dragCornerTransitionStart =
+                _cylinder.transform.localPosition;
+            _dragCornerTransitionTarget =
                 GetPieceLocalPosition(_cylinder, corner.x, corner.y);
             RefreshStickmanAnimation(moving: true);
             return true;
