@@ -107,6 +107,19 @@ namespace CarryBlockJam
             SpawnPieces();
         }
 
+        public void RefreshCurtainVisuals()
+        {
+            BoardCurtainBoxVisualSettings settings =
+                ResolveCurtainBoxVisualSettings();
+            CarryBlockJamCurtainBox[] curtainBoxes =
+                GetComponentsInChildren<CarryBlockJamCurtainBox>(true);
+            for (int i = 0; i < curtainBoxes.Length; i++)
+            {
+                if (curtainBoxes[i] != null)
+                    curtainBoxes[i].RefreshVisualSettings(settings);
+            }
+        }
+
         private void EnsureRuntimeAssets()
         {
 #if UNITY_EDITOR

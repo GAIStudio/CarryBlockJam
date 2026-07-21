@@ -81,7 +81,13 @@ namespace CarryBlockJam.Editor
                 EditorGUI.indentLevel--;
             }
 
-            serializedObject.ApplyModifiedProperties();
+            bool changed = serializedObject.ApplyModifiedProperties();
+            if (changed && target is CarryBlockJamRuntimePieceSpawner spawner)
+            {
+                if (Application.isPlaying)
+                    spawner.RefreshCurtainVisuals();
+                EditorUtility.SetDirty(spawner);
+            }
         }
 
         private static void DrawVisualSettings(string title, SerializedProperty visualProperty)

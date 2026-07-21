@@ -83,7 +83,7 @@ MonoBehaviour:
       row: 4
       column: 4
   hasTutorial: 1
-  tutorialTextWorldPosition: {x: 0, y: 0, z: -6}
+  tutorialTextWorldPosition: {x: 0, y: 0, z: -7}
   tutorialStages:
   - stageName: 1
     instruction: 'Clear plates of a certain color to unlock clothed tables '

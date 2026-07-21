@@ -52,6 +52,10 @@ namespace CarryBlockJam
         private int _swipeStartColumn;
         private Vector3 _dragStartBoardLocalPoint;
         private int _lockedDragAxis;
+        private int _dragActiveAxis;
+        private Vector3 _dragSegmentBoardLocalPoint;
+        private readonly List<Vector2Int> _dragRouteCorners =
+            new List<Vector2Int>();
         private bool _trackingSwipe;
         private bool _commitDraggedMovementInstantly;
         private bool _isAnimating;
@@ -179,6 +183,11 @@ namespace CarryBlockJam
             _swipeStartColumn = _cylinder.Column;
             TryProjectPointerToBoardLocal(screenPosition, out _dragStartBoardLocalPoint);
             _lockedDragAxis = 0;
+            _dragActiveAxis = 0;
+            _dragSegmentBoardLocalPoint = _dragStartBoardLocalPoint;
+            _dragRouteCorners.Clear();
+            _dragRouteCorners.Add(
+                new Vector2Int(_swipeStartRow, _swipeStartColumn));
             _trackingSwipe = true;
             EnsureHighlightRoot();
             ShowHighlights(false);
@@ -200,6 +209,16 @@ namespace CarryBlockJam
                 return;
             }
 
+            bool tutorialPathLocked =
+                TutorialManager.Instance != null &&
+                TutorialManager.Instance.IsActive &&
+                TutorialManager.Instance.IsStagePathLocked;
+            if (!tutorialPathLocked)
+            {
+                FinishOrthogonalDrag(screenPosition);
+                return;
+            }
+
             bool hasIntent = TryGetSwipeIntent(
                 screenPosition,
                 out int rowStep,
@@ -214,9 +233,7 @@ namespace CarryBlockJam
             }
 
             _commitDraggedMovementInstantly = true;
-            if (TutorialManager.Instance != null &&
-                TutorialManager.Instance.IsActive &&
-                TutorialManager.Instance.IsStagePathLocked)
+            if (tutorialPathLocked)
             {
                 if (!TutorialManager.Instance.TryEngageStagePathLock(
                         _cylinder.Row,
@@ -254,10 +271,96 @@ namespace CarryBlockJam
             CompleteUnconsumedDirectDrag();
         }
 
+        private void FinishOrthogonalDrag(Vector2 screenPosition)
+        {
+            if (_dragActiveAxis == 0)
+            {
+                if (!TryGetSwipeIntent(
+                        screenPosition,
+                        out _,
+                        out _,
+                        out _))
+                {
+                    ResetOrthogonalDrag();
+                    SnapCylinderToLogicalCell();
+                    RefreshStickmanAnimation(moving: false);
+                    return;
+                }
+
+                _dragActiveAxis = _lockedDragAxis;
+                _dragSegmentBoardLocalPoint = _dragStartBoardLocalPoint;
+            }
+
+            bool reachedRouteEnd = true;
+            for (int i = 1; i < _dragRouteCorners.Count; i++)
+            {
+                Vector2Int corner = _dragRouteCorners[i];
+                int rowDelta = corner.x - _cylinder.Row;
+                int columnDelta = corner.y - _cylinder.Column;
+                int steps = Mathf.Abs(rowDelta) + Mathf.Abs(columnDelta);
+                ExecuteDirectDragSegment(
+                    Math.Sign(rowDelta),
+                    Math.Sign(columnDelta),
+                    steps);
+
+                if (_cylinder.Row != corner.x ||
+                    _cylinder.Column != corner.y)
+                {
+                    reachedRouteEnd = false;
+                    break;
+                }
+            }
+
+            Vector2Int activeStart = _dragRouteCorners.Count > 0
+                ? _dragRouteCorners[_dragRouteCorners.Count - 1]
+                : new Vector2Int(_swipeStartRow, _swipeStartColumn);
+            if (reachedRouteEnd &&
+                TryGetActiveSegmentIntent(
+                    screenPosition,
+                    activeStart.x,
+                    activeStart.y,
+                    out int rowStep,
+                    out int columnStep,
+                    out int requestedSteps))
+            {
+                ExecuteDirectDragSegment(
+                    rowStep,
+                    columnStep,
+                    requestedSteps);
+            }
+
+            ResetOrthogonalDrag();
+            CompleteUnconsumedDirectDrag();
+            RefreshStickmanAnimation(moving: false);
+        }
+
+        private void ResetOrthogonalDrag()
+        {
+            _lockedDragAxis = 0;
+            _dragActiveAxis = 0;
+            _dragRouteCorners.Clear();
+        }
+
+        private void ExecuteDirectDragSegment(
+            int rowStep,
+            int columnStep,
+            int requestedSteps)
+        {
+            if (requestedSteps <= 0)
+                return;
+
+            _commitDraggedMovementInstantly = true;
+            if (HasCarriedPlates)
+                ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
+            else
+                ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+            CompleteUnconsumedDirectDrag();
+        }
+
         private void CancelSwipe()
         {
             _trackingSwipe = false;
-            _lockedDragAxis = 0;
+            ResetOrthogonalDrag();
             ShowHighlights(false);
             SnapCylinderToLogicalCell();
             RefreshStickmanAnimation(moving: false);
@@ -1304,6 +1407,16 @@ namespace CarryBlockJam
                 ? Input.GetTouch(0).position
                 : (Vector2)Input.mousePosition;
 
+            bool tutorialPathLocked =
+                TutorialManager.Instance != null &&
+                TutorialManager.Instance.IsActive &&
+                TutorialManager.Instance.IsStagePathLocked;
+            if (!tutorialPathLocked)
+            {
+                UpdateOrthogonalDrag(currentScreenPosition);
+                return;
+            }
+
             if (!TryGetSwipeIntent(currentScreenPosition, out int rowStep, out int columnStep, out int requestedSteps))
             {
                 SnapCylinderToLogicalCell();
@@ -1311,9 +1424,7 @@ namespace CarryBlockJam
                 return;
             }
 
-            if (TutorialManager.Instance != null &&
-                TutorialManager.Instance.IsActive &&
-                TutorialManager.Instance.IsStagePathLocked)
+            if (tutorialPathLocked)
             {
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
@@ -1351,14 +1462,182 @@ namespace CarryBlockJam
                     previewPath);
                 return;
             }
+        }
 
-            List<Vector2Int> freePreviewPath = BuildPreviewPath(rowStep, columnStep, requestedSteps);
-            List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(freePreviewPath);
-            UpdateDraggedCylinderPosition(
-                currentScreenPosition,
+        private void UpdateOrthogonalDrag(Vector2 screenPosition)
+        {
+            if (_dragActiveAxis == 0)
+            {
+                if (!TryGetSwipeIntent(
+                        screenPosition,
+                        out _,
+                        out _,
+                        out _))
+                {
+                    SnapCylinderToLogicalCell();
+                    RefreshStickmanAnimation(moving: false);
+                    return;
+                }
+
+                _dragActiveAxis = _lockedDragAxis;
+                _dragSegmentBoardLocalPoint = _dragStartBoardLocalPoint;
+            }
+
+            Vector2Int segmentStart = _dragRouteCorners.Count > 0
+                ? _dragRouteCorners[_dragRouteCorners.Count - 1]
+                : new Vector2Int(_swipeStartRow, _swipeStartColumn);
+            if (!TryGetActiveSegmentIntent(
+                    screenPosition,
+                    segmentStart.x,
+                    segmentStart.y,
+                    out int rowStep,
+                    out int columnStep,
+                    out int requestedSteps))
+            {
+                _cylinder.transform.localPosition =
+                    GetPieceLocalPosition(
+                        _cylinder,
+                        segmentStart.x,
+                        segmentStart.y);
+                RefreshStickmanAnimation(moving: false);
+                return;
+            }
+
+            List<Vector2Int> previewPath = BuildPreviewPath(
+                segmentStart.x,
+                segmentStart.y,
                 rowStep,
                 columnStep,
-                movablePath);
+                requestedSteps);
+            List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(previewPath);
+            if (TryCommitOrthogonalTurn(
+                    screenPosition,
+                    rowStep,
+                    columnStep,
+                    movablePath))
+                return;
+
+            UpdateDraggedCylinderPosition(
+                screenPosition,
+                rowStep,
+                columnStep,
+                movablePath,
+                segmentStart.x,
+                segmentStart.y,
+                _dragSegmentBoardLocalPoint);
+        }
+
+        private bool TryCommitOrthogonalTurn(
+            Vector2 screenPosition,
+            int rowStep,
+            int columnStep,
+            List<Vector2Int> activePath)
+        {
+            if (activePath == null || activePath.Count == 0 ||
+                !TryProjectPointerToBoardLocal(
+                    screenPosition,
+                    out Vector3 pointerLocal))
+                return false;
+
+            Vector3 pointerDelta =
+                pointerLocal - _dragSegmentBoardLocalPoint;
+            float rowCells =
+                -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ);
+            float columnCells =
+                pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            float activeProgress = rowStep != 0
+                ? rowCells * rowStep
+                : columnCells * columnStep;
+            float perpendicularProgress = _dragActiveAxis == 1
+                ? Mathf.Abs(columnCells)
+                : Mathf.Abs(rowCells);
+            if (activeProgress < 0.5f || perpendicularProgress < 0.35f)
+                return false;
+
+            int reachedSteps = Mathf.Clamp(
+                Mathf.RoundToInt(activeProgress),
+                1,
+                activePath.Count);
+            Vector2Int corner = activePath[reachedSteps - 1];
+            if (!_grid.TryGetCell(
+                    corner.x,
+                    corner.y,
+                    out PuzzleCell cornerCell) ||
+                cornerCell == null ||
+                (cornerCell.Occupant != null &&
+                 cornerCell.Occupant != _cylinder.gameObject))
+                return false;
+
+            Vector2Int previousCorner =
+                _dragRouteCorners[_dragRouteCorners.Count - 1];
+            if (corner != previousCorner)
+                _dragRouteCorners.Add(corner);
+
+            _dragActiveAxis = _dragActiveAxis == 1 ? 2 : 1;
+            _lockedDragAxis = _dragActiveAxis;
+            _dragSegmentBoardLocalPoint = pointerLocal;
+            _cylinder.transform.localPosition =
+                GetPieceLocalPosition(_cylinder, corner.x, corner.y);
+            RefreshStickmanAnimation(moving: true);
+            return true;
+        }
+
+        private bool TryGetActiveSegmentIntent(
+            Vector2 screenPosition,
+            int startRow,
+            int startColumn,
+            out int rowStep,
+            out int columnStep,
+            out int requestedSteps)
+        {
+            rowStep = 0;
+            columnStep = 0;
+            requestedSteps = 0;
+            if (_dragActiveAxis == 0 ||
+                !TryProjectPointerToBoardLocal(
+                    screenPosition,
+                    out Vector3 pointerLocal))
+                return false;
+
+            Vector3 pointerDelta =
+                pointerLocal - _dragSegmentBoardLocalPoint;
+            float cells;
+            if (_dragActiveAxis == 1)
+            {
+                cells = -pointerDelta.z /
+                    Mathf.Max(0.0001f, _grid.GridSpacingZ);
+                if (Mathf.Abs(cells) < 0.35f)
+                    return false;
+
+                rowStep = cells > 0f ? 1 : -1;
+                requestedSteps = Mathf.Max(
+                    1,
+                    Mathf.RoundToInt(Mathf.Abs(cells)));
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    rowStep > 0
+                        ? _grid.Rows - 1 - startRow
+                        : startRow);
+            }
+            else
+            {
+                cells = pointerDelta.x /
+                    Mathf.Max(0.0001f, _grid.GridSpacingX);
+                if (Mathf.Abs(cells) < 0.35f)
+                    return false;
+
+                columnStep = cells > 0f ? 1 : -1;
+                requestedSteps = Mathf.Max(
+                    1,
+                    Mathf.RoundToInt(Mathf.Abs(cells)));
+                requestedSteps = Mathf.Min(
+                    requestedSteps,
+                    columnStep > 0
+                        ? _grid.Columns - 1 - startColumn
+                        : startColumn);
+            }
+
+            return requestedSteps > 0;
         }
 
         private void UpdateDraggedCylinderPosition(
@@ -1367,15 +1646,40 @@ namespace CarryBlockJam
             int columnStep,
             List<Vector2Int> path)
         {
+            UpdateDraggedCylinderPosition(
+                screenPosition,
+                rowStep,
+                columnStep,
+                path,
+                _swipeStartRow,
+                _swipeStartColumn,
+                _dragStartBoardLocalPoint);
+        }
+
+        private void UpdateDraggedCylinderPosition(
+            Vector2 screenPosition,
+            int rowStep,
+            int columnStep,
+            List<Vector2Int> path,
+            int startRow,
+            int startColumn,
+            Vector3 pointerOrigin)
+        {
             if (_cylinder == null || path == null || path.Count == 0 ||
                 !TryProjectPointerToBoardLocal(screenPosition, out Vector3 pointerLocal))
             {
-                SnapCylinderToLogicalCell();
+                if (_cylinder != null &&
+                    _grid != null &&
+                    _grid.IsInside(startRow, startColumn))
+                {
+                    _cylinder.transform.localPosition =
+                        GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                }
                 RefreshStickmanAnimation(moving: false);
                 return;
             }
 
-            Vector3 pointerDelta = pointerLocal - _dragStartBoardLocalPoint;
+            Vector3 pointerDelta = pointerLocal - pointerOrigin;
             float draggedCells = rowStep != 0
                 ? -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
                 : pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
@@ -1385,7 +1689,7 @@ namespace CarryBlockJam
             float clampedProgress = Mathf.Min(directedProgress, path.Count);
 
             Vector3 startPosition =
-                GetPieceLocalPosition(_cylinder, _swipeStartRow, _swipeStartColumn);
+                GetPieceLocalPosition(_cylinder, startRow, startColumn);
             Vector2Int endCell = path[path.Count - 1];
             Vector3 endPosition =
                 GetPieceLocalPosition(_cylinder, endCell.x, endCell.y);
@@ -1401,9 +1705,24 @@ namespace CarryBlockJam
 
         private List<Vector2Int> BuildPreviewPath(int rowStep, int columnStep, int requestedSteps)
         {
+            return BuildPreviewPath(
+                _cylinder.Row,
+                _cylinder.Column,
+                rowStep,
+                columnStep,
+                requestedSteps);
+        }
+
+        private List<Vector2Int> BuildPreviewPath(
+            int startRow,
+            int startColumn,
+            int rowStep,
+            int columnStep,
+            int requestedSteps)
+        {
             var path = new List<Vector2Int>();
-            int row = _cylinder.Row;
-            int column = _cylinder.Column;
+            int row = startRow;
+            int column = startColumn;
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
             {
