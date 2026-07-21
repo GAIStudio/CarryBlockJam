@@ -30,9 +30,9 @@ MonoBehaviour:
       maxPlateStacks: 2
     exits:
     - row: 0
-      column: 1
+      column: 2
       side: 0
-      startIndex: 1
+      startIndex: 2
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
