@@ -31,10 +31,13 @@ namespace CarryBlockJam
         [SerializeField] private float pickupPlateSettleScale = 0.22f;
         [SerializeField] private float pickupPlateFrontClearance = 0.65f;
         [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
-        [SerializeField] private bool showSwipeHighlights;
+        [SerializeField] private float charTablePickupDuration = 0.16f;
+        [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
+        [SerializeField] private float charTablePickupLift = 0.18f;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.9f, 0.40f);
+        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 1.3f, 0f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
         [SerializeField] private float failurePlateDropDuration = 0.35f;
@@ -47,11 +50,16 @@ namespace CarryBlockJam
         private Vector2 _swipeStartScreen;
         private int _swipeStartRow;
         private int _swipeStartColumn;
+        private Vector3 _dragStartBoardLocalPoint;
+        private int _lockedDragAxis;
         private bool _trackingSwipe;
+        private bool _commitDraggedMovementInstantly;
         private bool _isAnimating;
         private bool _successTriggered;
         private bool _failTriggered;
         private bool _failurePreparing;
+        private int _failureOriginRow = -1;
+        private int _failureOriginColumn = -1;
         private CarryBlockJamBoardPiece _cylinder;
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
@@ -108,9 +116,11 @@ namespace CarryBlockJam
                     TryStartSwipe(touch.position);
                     break;
                 case TouchPhase.Ended:
-                case TouchPhase.Canceled:
                     if (_trackingSwipe)
                         FinishSwipe(touch.position);
+                    break;
+                case TouchPhase.Canceled:
+                    CancelSwipe();
                     break;
             }
         }
@@ -156,11 +166,9 @@ namespace CarryBlockJam
             if (_cylinder == null)
                 return;
 
-            // Confirm the gesture is over the board, but movement always originates
-            // from the stickman's cell. Raycasting the finger onto the floor near a
-            // tall stickman (especially on the top rows) often hits the cell behind
-            // him, which made "swipe up into row 0" look like a zero-length move.
-            if (!TryGetNearestGridCell(screenPosition, out _, out _))
+            // Movement starts only when the player selects the character/table visual.
+            // Runtime FBX colliders are removed, so selection uses renderer bounds.
+            if (!IsPointerOverCylinder(screenPosition))
                 return;
 
             // Text-only tutorial tip: hide instruction on first press.
@@ -169,9 +177,12 @@ namespace CarryBlockJam
             _swipeStartScreen = screenPosition;
             _swipeStartRow = _cylinder.Row;
             _swipeStartColumn = _cylinder.Column;
+            TryProjectPointerToBoardLocal(screenPosition, out _dragStartBoardLocalPoint);
+            _lockedDragAxis = 0;
             _trackingSwipe = true;
             EnsureHighlightRoot();
             ShowHighlights(false);
+            RefreshStickmanAnimation(moving: false);
         }
 
         private void FinishSwipe(Vector2 screenPosition)
@@ -184,11 +195,25 @@ namespace CarryBlockJam
                 return;
 
             if (_failTriggered)
+            {
+                SnapCylinderToLogicalCell();
                 return;
+            }
 
-            if (!TryGetSwipeIntent(screenPosition, out int rowStep, out int columnStep, out int requestedSteps))
+            bool hasIntent = TryGetSwipeIntent(
+                screenPosition,
+                out int rowStep,
+                out int columnStep,
+                out int requestedSteps);
+            _lockedDragAxis = 0;
+            if (!hasIntent)
+            {
+                SnapCylinderToLogicalCell();
+                RefreshStickmanAnimation(moving: false);
                 return;
+            }
 
+            _commitDraggedMovementInstantly = true;
             if (TutorialManager.Instance != null &&
                 TutorialManager.Instance.IsActive &&
                 TutorialManager.Instance.IsStagePathLocked)
@@ -198,7 +223,11 @@ namespace CarryBlockJam
                         _cylinder.Column,
                         rowStep,
                         columnStep))
+                {
+                    CompleteUnconsumedDirectDrag();
+                    RefreshStickmanAnimation(moving: false);
                     return;
+                }
 
                 if (!TutorialManager.Instance.TryClampSwipeToAuthoredPath(
                         _cylinder.Row,
@@ -206,9 +235,14 @@ namespace CarryBlockJam
                         ref rowStep,
                         ref columnStep,
                         ref requestedSteps))
+                {
+                    CompleteUnconsumedDirectDrag();
+                    RefreshStickmanAnimation(moving: false);
                     return;
+                }
 
                 TryExecuteTutorialTravelSwipe(requestedSteps);
+                CompleteUnconsumedDirectDrag();
                 return;
             }
 
@@ -216,6 +250,38 @@ namespace CarryBlockJam
                 ExecuteCarrySwipe(rowStep, columnStep, requestedSteps);
             else
                 ExecuteTravelSwipe(rowStep, columnStep, requestedSteps);
+
+            CompleteUnconsumedDirectDrag();
+        }
+
+        private void CancelSwipe()
+        {
+            _trackingSwipe = false;
+            _lockedDragAxis = 0;
+            ShowHighlights(false);
+            SnapCylinderToLogicalCell();
+            RefreshStickmanAnimation(moving: false);
+        }
+
+        private void CompleteUnconsumedDirectDrag()
+        {
+            if (!_commitDraggedMovementInstantly)
+                return;
+
+            _commitDraggedMovementInstantly = false;
+            SnapCylinderToLogicalCell();
+        }
+
+        private void SnapCylinderToLogicalCell()
+        {
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+
+            if (!_grid.IsInside(_cylinder.Row, _cylinder.Column))
+                return;
+
+            _cylinder.transform.localPosition =
+                GetPieceLocalPosition(_cylinder, _cylinder.Row, _cylinder.Column);
         }
 
         /// <summary>
@@ -409,6 +475,12 @@ namespace CarryBlockJam
         /// </summary>
         private void AnimateTutorialCylinderTravel(List<Vector2Int> path, TweenCallback onComplete = null)
         {
+            if (TryCompleteDraggedMovementInstantly(
+                    path,
+                    allowBoxOwnedDestination: true,
+                    onComplete: onComplete))
+                return;
+
             if (_cylinder == null || path == null || path.Count == 0)
             {
                 onComplete?.Invoke();
@@ -766,6 +838,12 @@ namespace CarryBlockJam
 
         private void AnimateCylinderTravel(List<Vector2Int> path, TweenCallback onComplete = null)
         {
+            if (TryCompleteDraggedMovementInstantly(
+                    path,
+                    allowBoxOwnedDestination: false,
+                    onComplete: onComplete))
+                return;
+
             if (_cylinder == null || path == null || path.Count == 0)
             {
                 onComplete?.Invoke();
@@ -810,6 +888,47 @@ namespace CarryBlockJam
                 RefreshStickmanAnimation(moving: false);
                 onComplete?.Invoke();
             });
+        }
+
+        private bool TryCompleteDraggedMovementInstantly(
+            List<Vector2Int> path,
+            bool allowBoxOwnedDestination,
+            TweenCallback onComplete)
+        {
+            if (!_commitDraggedMovementInstantly)
+                return false;
+
+            _commitDraggedMovementInstantly = false;
+            if (_cylinder == null || path == null || path.Count == 0)
+            {
+                SnapCylinderToLogicalCell();
+                RefreshStickmanAnimation(moving: false);
+                onComplete?.Invoke();
+                return true;
+            }
+
+            int finalIndex = path.Count - 1;
+            if (!allowBoxOwnedDestination)
+            {
+                while (finalIndex >= 0 &&
+                       IsBoxOwnedCell(path[finalIndex].x, path[finalIndex].y))
+                    finalIndex--;
+            }
+
+            if (finalIndex < 0)
+            {
+                SnapCylinderToLogicalCell();
+                RefreshStickmanAnimation(moving: false);
+                onComplete?.Invoke();
+                return true;
+            }
+
+            Vector2Int destination = path[finalIndex];
+            Haptic.HeavyTaptic();
+            PlaceStickmanOnCell(destination.x, destination.y);
+            RefreshStickmanAnimation(moving: false);
+            onComplete?.Invoke();
+            return true;
         }
 
         private List<Vector2Int> TrimPathBeforeBoxBlocker(List<Vector2Int> path)
@@ -992,6 +1111,17 @@ namespace CarryBlockJam
             Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
                 basePiece.GetStackAttachLocalPosition(plate));
             float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner != null && spawner.UsesCharTableCylinderVisual)
+            {
+                CarryBlockJamPrefabSettings settings =
+                    board != null ? board.PrefabSettings : null;
+                float charTableSpeed = settings != null
+                    ? settings.charTableDropAnimationSpeed
+                    : 3f;
+                tableAnimationSpeed *= Mathf.Max(0.01f, charTableSpeed);
+            }
             float jumpDuration = Mathf.Max(
                 0.01f,
                 Mathf.Max(exitTravelDuration, tablePlateJumpDuration) / tableAnimationSpeed);
@@ -1076,6 +1206,14 @@ namespace CarryBlockJam
                 return;
             }
 
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner != null && spawner.UsesCharTableCylinderVisual)
+            {
+                _stickmanAnimator = null;
+                return;
+            }
+
             if (_stickmanAnimator != null && _stickmanAnimator.transform.IsChildOf(_cylinder.transform))
             {
                 SyncStickmanWalkHeightOffset();
@@ -1083,7 +1221,6 @@ namespace CarryBlockJam
             }
 
             RuntimeAnimatorController controller = null;
-            CarryBlockJamRuntimePieceSpawner spawner = GetComponent<CarryBlockJamRuntimePieceSpawner>();
             if (spawner != null)
                 controller = spawner.StickmanAnimatorController;
 
@@ -1099,7 +1236,11 @@ namespace CarryBlockJam
 
             _stickmanMoving = moving;
             SyncStickmanWalkHeightOffset();
-            _stickmanAnimator?.SetState(moving, HasCarriedPlates);
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            bool usesCarryPose = HasCarriedPlates ||
+                                 (spawner != null && spawner.UsesCharTableCylinderVisual);
+            _stickmanAnimator?.SetState(moving, usesCarryPose);
         }
 
         private void SyncStickmanWalkHeightOffset()
@@ -1131,6 +1272,11 @@ namespace CarryBlockJam
             if (_cylinder == null)
                 return;
 
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner != null && spawner.UsesCharTableCylinderVisual)
+                return;
+
             Vector3 flatDelta = localTarget - _cylinder.transform.localPosition;
             flatDelta.y = 0f;
             if (flatDelta.sqrMagnitude < 0.0001f)
@@ -1144,12 +1290,6 @@ namespace CarryBlockJam
 
         private void UpdateSwipePreview()
         {
-            if (!showSwipeHighlights)
-            {
-                ShowHighlights(false);
-                return;
-            }
-
             if (_cylinder == null)
                 ResolveGameplayReferences();
 
@@ -1159,13 +1299,15 @@ namespace CarryBlockJam
                 return;
             }
 
+            ShowHighlights(false);
             Vector2 currentScreenPosition = Input.touchCount > 0
                 ? Input.GetTouch(0).position
                 : (Vector2)Input.mousePosition;
 
             if (!TryGetSwipeIntent(currentScreenPosition, out int rowStep, out int columnStep, out int requestedSteps))
             {
-                ShowHighlights(false);
+                SnapCylinderToLogicalCell();
+                RefreshStickmanAnimation(moving: false);
                 return;
             }
 
@@ -1180,7 +1322,8 @@ namespace CarryBlockJam
                         ref columnStep,
                         ref requestedSteps))
                 {
-                    ShowHighlights(false);
+                    SnapCylinderToLogicalCell();
+                    RefreshStickmanAnimation(moving: false);
                     return;
                 }
 
@@ -1190,19 +1333,70 @@ namespace CarryBlockJam
                         _cylinder.Column,
                         previewPath))
                 {
-                    ShowHighlights(false);
+                    SnapCylinderToLogicalCell();
+                    RefreshStickmanAnimation(moving: false);
                     return;
                 }
 
                 if (TutorialManager.Instance.TryGetActivePath(out _, out Vector2Int previewTarget))
                     TrimTutorialPathBeforeTableDrop(previewPath, previewTarget);
 
-                DrawHighlights(previewPath);
+                if (previewPath.Count > requestedSteps)
+                    previewPath.RemoveRange(requestedSteps, previewPath.Count - requestedSteps);
+
+                UpdateDraggedCylinderPosition(
+                    currentScreenPosition,
+                    rowStep,
+                    columnStep,
+                    previewPath);
                 return;
             }
 
             List<Vector2Int> freePreviewPath = BuildPreviewPath(rowStep, columnStep, requestedSteps);
-            DrawHighlights(freePreviewPath);
+            List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(freePreviewPath);
+            UpdateDraggedCylinderPosition(
+                currentScreenPosition,
+                rowStep,
+                columnStep,
+                movablePath);
+        }
+
+        private void UpdateDraggedCylinderPosition(
+            Vector2 screenPosition,
+            int rowStep,
+            int columnStep,
+            List<Vector2Int> path)
+        {
+            if (_cylinder == null || path == null || path.Count == 0 ||
+                !TryProjectPointerToBoardLocal(screenPosition, out Vector3 pointerLocal))
+            {
+                SnapCylinderToLogicalCell();
+                RefreshStickmanAnimation(moving: false);
+                return;
+            }
+
+            Vector3 pointerDelta = pointerLocal - _dragStartBoardLocalPoint;
+            float draggedCells = rowStep != 0
+                ? -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
+                : pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            float directedProgress = Mathf.Max(
+                0f,
+                draggedCells * (rowStep != 0 ? rowStep : columnStep));
+            float clampedProgress = Mathf.Min(directedProgress, path.Count);
+
+            Vector3 startPosition =
+                GetPieceLocalPosition(_cylinder, _swipeStartRow, _swipeStartColumn);
+            Vector2Int endCell = path[path.Count - 1];
+            Vector3 endPosition =
+                GetPieceLocalPosition(_cylinder, endCell.x, endCell.y);
+            float pathProgress = path.Count > 0
+                ? clampedProgress / path.Count
+                : 0f;
+
+            _cylinder.transform.localPosition =
+                Vector3.LerpUnclamped(startPosition, endPosition, pathProgress);
+            FaceStickmanToward(endPosition);
+            RefreshStickmanAnimation(moving: clampedProgress > 0.01f);
         }
 
         private List<Vector2Int> BuildPreviewPath(int rowStep, int columnStep, int requestedSteps)
@@ -1329,7 +1523,10 @@ namespace CarryBlockJam
                 ? Vector2.Dot(screenDelta, columnAxisScreen) / columnAxisSqr
                 : 0f;
 
-            if (Mathf.Abs(columnCells) > Mathf.Abs(rowCells))
+            if (_lockedDragAxis == 0)
+                _lockedDragAxis = Mathf.Abs(columnCells) > Mathf.Abs(rowCells) ? 2 : 1;
+
+            if (_lockedDragAxis == 2)
             {
                 if (Mathf.Abs(columnCells) < 0.35f)
                     return false;
@@ -1411,6 +1608,82 @@ namespace CarryBlockJam
         {
             Vector3 screen = _gameplayCamera.WorldToScreenPoint(worldPosition);
             return new Vector2(screen.x, screen.y);
+        }
+
+        private bool IsPointerOverCylinder(Vector2 screenPosition)
+        {
+            if (_cylinder == null)
+                return false;
+
+            if (_gameplayCamera == null)
+                ResolveGameplayReferences();
+
+            if (_gameplayCamera == null)
+                return false;
+
+            Renderer[] renderers = _cylinder.GetComponentsInChildren<Renderer>(true);
+            bool hasBounds = false;
+            Bounds worldBounds = default;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                    continue;
+
+                if (!hasBounds)
+                {
+                    worldBounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    worldBounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            if (!hasBounds)
+            {
+                return TryGetNearestGridCell(screenPosition, out int row, out int column) &&
+                       row == _cylinder.Row &&
+                       column == _cylinder.Column;
+            }
+
+            Vector3 center = worldBounds.center;
+            Vector3 extents = worldBounds.extents;
+            float minX = float.PositiveInfinity;
+            float minY = float.PositiveInfinity;
+            float maxX = float.NegativeInfinity;
+            float maxY = float.NegativeInfinity;
+            bool hasVisibleCorner = false;
+
+            for (int x = -1; x <= 1; x += 2)
+            {
+                for (int y = -1; y <= 1; y += 2)
+                {
+                    for (int z = -1; z <= 1; z += 2)
+                    {
+                        Vector3 corner = center + Vector3.Scale(
+                            extents,
+                            new Vector3(x, y, z));
+                        Vector3 projected = _gameplayCamera.WorldToScreenPoint(corner);
+                        if (projected.z <= 0f)
+                            continue;
+
+                        hasVisibleCorner = true;
+                        minX = Mathf.Min(minX, projected.x);
+                        minY = Mathf.Min(minY, projected.y);
+                        maxX = Mathf.Max(maxX, projected.x);
+                        maxY = Mathf.Max(maxY, projected.y);
+                    }
+                }
+            }
+
+            const float selectionPaddingPixels = 18f;
+            return hasVisibleCorner &&
+                   screenPosition.x >= minX - selectionPaddingPixels &&
+                   screenPosition.x <= maxX + selectionPaddingPixels &&
+                   screenPosition.y >= minY - selectionPaddingPixels &&
+                   screenPosition.y <= maxY + selectionPaddingPixels;
         }
 
         private bool TryResolveExit(int rowStep, int columnStep, int row, int column, out CarryBlockJamExit exitComponent)
@@ -1548,10 +1821,26 @@ namespace CarryBlockJam
             row = -1;
             column = -1;
 
+            if (!TryProjectPointerToBoardLocal(screenPosition, out Vector3 localPos))
+                return false;
+
+            column = Mathf.RoundToInt(localPos.x / _grid.GridSpacingX + (_grid.Columns - 1) * 0.5f);
+            row = Mathf.RoundToInt((_grid.Rows - 1) * 0.5f - localPos.z / _grid.GridSpacingZ);
+
+            row = Mathf.Clamp(row, 0, _grid.Rows - 1);
+            column = Mathf.Clamp(column, 0, _grid.Columns - 1);
+            return true;
+        }
+
+        private bool TryProjectPointerToBoardLocal(
+            Vector2 screenPosition,
+            out Vector3 localPosition)
+        {
+            localPosition = default;
             if (_gameplayCamera == null)
                 ResolveGameplayReferences();
 
-            if (_gameplayCamera == null)
+            if (_gameplayCamera == null || board == null)
                 return false;
 
             Ray ray = _gameplayCamera.ScreenPointToRay(screenPosition);
@@ -1560,13 +1849,7 @@ namespace CarryBlockJam
                 return false;
 
             Vector3 worldPoint = ray.GetPoint(distance);
-            Vector3 localPos = board.transform.InverseTransformPoint(worldPoint);
-
-            column = Mathf.RoundToInt(localPos.x / _grid.GridSpacingX + (_grid.Columns - 1) * 0.5f);
-            row = Mathf.RoundToInt((_grid.Rows - 1) * 0.5f - localPos.z / _grid.GridSpacingZ);
-
-            row = Mathf.Clamp(row, 0, _grid.Rows - 1);
-            column = Mathf.Clamp(column, 0, _grid.Columns - 1);
+            localPosition = board.transform.InverseTransformPoint(worldPoint);
             return true;
         }
 
@@ -1757,10 +2040,21 @@ namespace CarryBlockJam
 
             int stackIndex = _carriedPlates.IndexOf(plate);
             Vector3 targetPosition = GetCarriedPlateLocalPosition(stackIndex);
+            Vector3 startPosition = plate.transform.localPosition;
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner != null && spawner.UsesCharTableCylinderVisual)
+            {
+                return AnimatePlateOntoCharTable(
+                    plate,
+                    pickupIndex,
+                    startPosition,
+                    targetPosition);
+            }
+
             float animationSpeed = Mathf.Max(0.01f, pickupPlateAnimationSpeed);
             float bounceDuration = Mathf.Max(0.01f, pickupPlateBounceDuration / animationSpeed);
             float bounceHeight = Mathf.Max(0.01f, pickupPlateBounceHeight);
-            Vector3 startPosition = plate.transform.localPosition;
             Vector3 horizontalFromStickman = new Vector3(startPosition.x, 0f, startPosition.z);
             Vector3 outward = horizontalFromStickman.sqrMagnitude > 0.001f
                 ? horizontalFromStickman.normalized * 0.2f
@@ -1796,6 +2090,57 @@ namespace CarryBlockJam
                 6,
                 0.5f));
             return bounce;
+        }
+
+        private Tween AnimatePlateOntoCharTable(
+            CarryBlockJamBoardPiece plate,
+            int pickupIndex,
+            Vector3 startPosition,
+            Vector3 targetPosition)
+        {
+            CarryBlockJamPrefabSettings settings =
+                board != null ? board.PrefabSettings : null;
+            float outsideDistance = settings != null
+                ? settings.charTablePickupOutsideDistance
+                : charTablePickupOutsideDistance;
+            float pickupLift = settings != null
+                ? settings.charTablePickupLift
+                : charTablePickupLift;
+            float pickupDuration = settings != null
+                ? settings.charTablePickupDuration
+                : charTablePickupDuration;
+
+            Vector3 outsideDirection = startPosition - targetPosition;
+            outsideDirection.y = 0f;
+            if (outsideDirection.sqrMagnitude < 0.001f)
+                outsideDirection = pickupIndex % 2 == 0 ? Vector3.right : Vector3.left;
+            else
+                outsideDirection.Normalize();
+
+            Vector3 outsidePosition =
+                targetPosition +
+                outsideDirection * Mathf.Max(0.05f, outsideDistance) +
+                Vector3.up * Mathf.Max(0.02f, pickupLift);
+            float duration = Mathf.Max(0.04f, pickupDuration);
+
+            Sequence placement = DOTween.Sequence();
+            placement.SetDelay(0.015f * pickupIndex);
+            placement.Append(plate.transform.DOLocalMove(
+                outsidePosition,
+                duration * 0.55f).SetEase(Ease.OutQuad));
+            placement.Append(plate.transform.DOLocalMove(
+                targetPosition,
+                duration * 0.45f).SetEase(Ease.InQuad));
+            placement.Insert(0f, plate.transform.DOLocalRotate(
+                Vector3.zero,
+                duration,
+                RotateMode.Fast).SetEase(Ease.OutQuad));
+            placement.Join(plate.transform.DOPunchScale(
+                plate.transform.localScale * 0.08f,
+                0.06f,
+                4,
+                0.4f));
+            return placement;
         }
 
         private void AddPlatesToCarryStack(
@@ -1859,11 +2204,22 @@ namespace CarryBlockJam
 
         private Vector3 GetCarriedPlateLocalPosition(int stackIndex)
         {
-            // Hold plates in front of the torso; stack upward without clipping the head.
-            Vector3 stackOffset = Vector3.up * (carriedPlateStackStep * stackIndex);
-            // Slight forward bias on higher plates only.
-            stackOffset += Vector3.forward * (0.02f * stackIndex);
-            return carriedPlateBaseOffset + stackOffset;
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
+            CarryBlockJamPrefabSettings settings =
+                board != null ? board.PrefabSettings : null;
+            Vector3 baseOffset = usesCharTable
+                ? settings != null
+                    ? settings.charTablePlateOffset
+                    : charTablePlateBaseOffset
+                : carriedPlateBaseOffset;
+            float stackStep = usesCharTable && settings != null
+                ? settings.charTablePlateStackStep
+                : carriedPlateStackStep;
+
+            // Keep every plate on the same X/Z center and change only stack height.
+            return baseOffset + Vector3.up * (stackStep * stackIndex);
         }
 
         private Transform GetCarryAttachRoot()
@@ -1963,6 +2319,7 @@ namespace CarryBlockJam
 
         public void PrepareForFailure(Action completed)
         {
+            CaptureFailureOriginCell();
             _failTriggered = true;
             _trackingSwipe = false;
             ShowHighlights(false);
@@ -1977,6 +2334,38 @@ namespace CarryBlockJam
             StartCoroutine(PlayFailureSequence(completed));
         }
 
+        private void CaptureFailureOriginCell()
+        {
+            ResolveGameplayReferences();
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+
+            Vector3 gridLocalPosition =
+                _cylinder.transform.localPosition - _cylinder.GridOffset;
+            int column = Mathf.RoundToInt(
+                gridLocalPosition.x / _grid.GridSpacingX +
+                (_grid.Columns - 1) * 0.5f);
+            int row = Mathf.RoundToInt(
+                (_grid.Rows - 1) * 0.5f -
+                gridLocalPosition.z / _grid.GridSpacingZ);
+
+            _failureOriginRow = Mathf.Clamp(row, 0, _grid.Rows - 1);
+            _failureOriginColumn = Mathf.Clamp(column, 0, _grid.Columns - 1);
+        }
+
+        private void GetFailureOriginCell(out int row, out int column)
+        {
+            if (_failureOriginRow >= 0 && _failureOriginColumn >= 0)
+            {
+                row = _failureOriginRow;
+                column = _failureOriginColumn;
+                return;
+            }
+
+            row = _cylinder != null ? _cylinder.Row : -1;
+            column = _cylinder != null ? _cylinder.Column : -1;
+        }
+
         private IEnumerator PlayFailureSequence(Action completed)
         {
             // Let an in-flight move or delivery finish so its occupancy and plate
@@ -1987,9 +2376,18 @@ namespace CarryBlockJam
             ResolveGameplayReferences();
             float sequenceStart = Time.realtimeSinceStartup;
 
-            Tween plateDrop = DropCarriedPlatesForFailure();
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            bool usesCharTable =
+                spawner != null && spawner.UsesCharTableCylinderVisual;
+            Vector2Int? excludedDropCell = null;
+            if (usesCharTable &&
+                TryGetCharTableFailureFaceCell(out Vector2Int faceCell))
+                excludedDropCell = faceCell;
+            Tween plateDrop = DropCarriedPlatesForFailure(excludedDropCell);
             RefreshStickmanAnimation(moving: false);
             _stickmanAnimator?.PlayFailure();
+            PlayCharTableFailureRotation();
 
             if (plateDrop != null && plateDrop.IsActive())
                 yield return plateDrop.WaitForCompletion();
@@ -2003,17 +2401,96 @@ namespace CarryBlockJam
             completed?.Invoke();
         }
 
-        private Tween DropCarriedPlatesForFailure()
+        private bool TryGetCharTableFailureFaceCell(out Vector2Int cell)
+        {
+            cell = default;
+            if (_cylinder == null || _grid == null || board == null)
+                return false;
+
+            Transform visual = GetStickmanVisual();
+            if (visual == null || visual.parent == null)
+                return false;
+
+            CarryBlockJamPrefabSettings settings =
+                board.PrefabSettings;
+            Vector3 failureRotation = settings != null
+                ? settings.charTableFailureRotation
+                : new Vector3(-90f, 0f, 0f);
+            Quaternion fallenLocalRotation =
+                Quaternion.Euler(visual.localEulerAngles + failureRotation);
+            Vector3 faceWorldDirection = visual.parent.TransformDirection(
+                fallenLocalRotation * Vector3.up);
+            Vector3 faceBoardDirection =
+                board.transform.InverseTransformDirection(faceWorldDirection);
+
+            int rowOffset = 0;
+            int columnOffset = 0;
+            if (Mathf.Abs(faceBoardDirection.x) > Mathf.Abs(faceBoardDirection.z))
+                columnOffset = faceBoardDirection.x >= 0f ? 1 : -1;
+            else
+                rowOffset = faceBoardDirection.z >= 0f ? -1 : 1;
+
+            GetFailureOriginCell(out int originRow, out int originColumn);
+            int row = originRow + rowOffset;
+            int column = originColumn + columnOffset;
+            if (!_grid.IsInside(row, column))
+                return false;
+
+            cell = new Vector2Int(row, column);
+            return true;
+        }
+
+        private void PlayCharTableFailureRotation()
+        {
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            if (spawner == null || !spawner.UsesCharTableCylinderVisual)
+                return;
+
+            Transform visual = GetStickmanVisual();
+            if (visual == null)
+                return;
+
+            CarryBlockJamPrefabSettings settings =
+                board != null ? board.PrefabSettings : null;
+            Vector3 addedRotation = settings != null
+                ? settings.charTableFailureRotation
+                : new Vector3(90f, 0f, 0f);
+            Vector3 addedOffset = settings != null
+                ? settings.charTableFailureOffset
+                : new Vector3(0f, 0.25f, 0f);
+            float duration = settings != null
+                ? settings.charTableFailureDuration
+                : 0.35f;
+
+            visual.DOKill();
+            visual.DOLocalMove(
+                    visual.localPosition + addedOffset,
+                    Mathf.Max(0.01f, duration))
+                .SetEase(Ease.OutQuad)
+                .SetUpdate(true);
+            visual.DOLocalRotate(
+                    visual.localEulerAngles + addedRotation,
+                    Mathf.Max(0.01f, duration),
+                    RotateMode.Fast)
+                .SetEase(Ease.OutQuad)
+                .SetUpdate(true);
+        }
+
+        private Tween DropCarriedPlatesForFailure(Vector2Int? excludedCell = null)
         {
             if (!HasCarriedPlates)
                 return null;
 
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
             Transform piecesRoot = GetPiecesRoot();
-            List<Vector2Int> dropCells = FindFailureDropCells(plates.Count);
+            List<Vector2Int> dropCells = FindFailureDropCells(
+                plates.Count,
+                excludedCell);
+            GetFailureOriginCell(out int failureRow, out int failureColumn);
             Vector3 visualFallbackCenter =
-                _cylinder != null && _grid != null && _grid.IsInside(_cylinder.Row, _cylinder.Column)
-                    ? _grid.GetWorldPosition(_cylinder.Row, _cylinder.Column)
+                _grid != null && _grid.IsInside(failureRow, failureColumn)
+                    ? _grid.GetWorldPosition(failureRow, failureColumn)
                     : transform.position;
 
             Sequence sequence = DOTween.Sequence().SetUpdate(true);
@@ -2070,7 +2547,9 @@ namespace CarryBlockJam
             return sequence;
         }
 
-        private List<Vector2Int> FindFailureDropCells(int requestedCount)
+        private List<Vector2Int> FindFailureDropCells(
+            int requestedCount,
+            Vector2Int? excludedCell = null)
         {
             var result = new List<Vector2Int>(Mathf.Max(0, requestedCount));
             if (requestedCount <= 0)
@@ -2078,8 +2557,7 @@ namespace CarryBlockJam
             if (_grid == null || _cylinder == null || !_grid.IsBuilt)
                 return result;
 
-            int startRow = _cylinder.Row;
-            int startColumn = _cylinder.Column;
+            GetFailureOriginCell(out int startRow, out int startColumn);
             if (!_grid.IsInside(startRow, startColumn))
                 return result;
 
@@ -2109,7 +2587,12 @@ namespace CarryBlockJam
                     if (!_grid.TryGetCell(nextRow, nextColumn, out PuzzleCell cell) || cell == null)
                         continue;
 
+                    bool isExcluded =
+                        excludedCell.HasValue &&
+                        excludedCell.Value.x == nextRow &&
+                        excludedCell.Value.y == nextColumn;
                     bool isEmptyGridCell =
+                        !isExcluded &&
                         cell.Occupant == null &&
                         !IsBoxOwnedCell(nextRow, nextColumn) &&
                         !IsExitCell(nextRow, nextColumn);

@@ -39,6 +39,43 @@ namespace CarryBlockJam
         [Tooltip("Local euler rotation applied to the stickman visual. Y=180 faces the camera.")]
         public Vector3 stickmanRotation = new Vector3(0f, 180f, 0f);
 
+        [Header("CharTable")]
+        [Tooltip("Grid offset applied when M_CharTable is used as the movable player.")]
+        public Vector3 charTableOffset = new Vector3(0f, 1.3f, 0f);
+
+        [Tooltip("Local euler rotation applied to M_CharTable.")]
+        public Vector3 charTableRotation = new Vector3(0f, 180f, 0f);
+
+        [Tooltip("Local scale applied to M_CharTable.")]
+        public Vector3 charTableScale = Vector3.one;
+
+        [Tooltip("Local position of the first carried plate on the CharTable tabletop.")]
+        public Vector3 charTablePlateOffset = new Vector3(0f, 0.45f, 0f);
+
+        [Tooltip("Vertical distance between plates stacked on CharTable.")]
+        public float charTablePlateStackStep = 0.18f;
+
+        [Tooltip("Total time for a collected plate to reach CharTable.")]
+        public float charTablePickupDuration = 0.16f;
+
+        [Tooltip("Distance from the tabletop edge used by the plate approach animation.")]
+        public float charTablePickupOutsideDistance = 0.5f;
+
+        [Tooltip("Height of the plate immediately before it lands on CharTable.")]
+        public float charTablePickupLift = 0.18f;
+
+        [Tooltip("Speed multiplier when plates leave CharTable for a normal table.")]
+        public float charTableDropAnimationSpeed = 3f;
+
+        [Tooltip("Euler rotation added to CharTable during the failure animation.")]
+        public Vector3 charTableFailureRotation = new Vector3(90f, 0f, 0f);
+
+        [Tooltip("Duration of the CharTable failure rotation.")]
+        public float charTableFailureDuration = 0.35f;
+
+        [Tooltip("Local-position offset added while CharTable falls.")]
+        public Vector3 charTableFailureOffset = new Vector3(0f, 0.25f, 0f);
+
         [FormerlySerializedAs("boxVisual")]
         public CarryBlockJamPrimitiveVisualSettings tableVisual = new CarryBlockJamPrimitiveVisualSettings
         {
