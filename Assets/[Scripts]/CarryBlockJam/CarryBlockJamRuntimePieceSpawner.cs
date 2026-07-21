@@ -35,6 +35,9 @@ namespace CarryBlockJam
         [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
 
         public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
+        public bool UsesCharTableCylinderVisual =>
+            cylinderVisualPrefab != null &&
+            cylinderVisualPrefab.name.IndexOf("CharTable", StringComparison.OrdinalIgnoreCase) >= 0;
 
         [Header("Frozen Table Visual (All Levels)")]
         [FormerlySerializedAs("frozenBoxVisual")]
@@ -310,7 +313,9 @@ namespace CarryBlockJam
         {
             CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
             if (settings != null)
-                return settings.stickmanOffset;
+                return UsesCharTableCylinderVisual
+                    ? settings.charTableOffset
+                    : settings.stickmanOffset;
 
             if (cylinder != null)
                 return cylinder.positionOffset;
@@ -322,7 +327,9 @@ namespace CarryBlockJam
         {
             CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
             if (settings != null)
-                return settings.stickmanRotation;
+                return UsesCharTableCylinderVisual
+                    ? settings.charTableRotation
+                    : settings.stickmanRotation;
 
             return new Vector3(0f, 180f, 0f);
         }
@@ -336,13 +343,32 @@ namespace CarryBlockJam
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.Euler(ResolveStickmanRotation());
-            visual.transform.localScale = cylinder.localScale == Vector3.zero
-                ? Vector3.one
-                : cylinder.localScale;
+            CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
+            if (UsesCharTableCylinderVisual && settings != null)
+            {
+                visual.transform.localScale = settings.charTableScale == Vector3.zero
+                    ? Vector3.one
+                    : settings.charTableScale;
+            }
+            else
+            {
+                visual.transform.localScale = cylinder.localScale == Vector3.zero
+                    ? Vector3.one
+                    : cylinder.localScale;
+            }
             // Do not GroundVisualToParent here: SkinnedMeshRenderer.bounds are unreliable at
             // instantiate. Height comes from Prefab Settings → Stickman Offset.
             ApplyStickmanMaterial(visual);
-            SetupStickmanAnimator(visual);
+            if (UsesCharTableCylinderVisual)
+            {
+                Animator[] animators = visual.GetComponentsInChildren<Animator>(true);
+                for (int i = 0; i < animators.Length; i++)
+                    animators[i].enabled = false;
+            }
+            else
+            {
+                SetupStickmanAnimator(visual);
+            }
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)

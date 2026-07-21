@@ -42,13 +42,14 @@ namespace CarryBlockJam.Editor
             if (_prefabSettings.objectReferenceValue == null)
             {
                 EditorGUILayout.HelpBox(
-                    "Assign a CarryBlockJam Prefab Settings asset to edit Stickman Offset and Exit Model offsets.",
+                    "Assign a CarryBlockJam Prefab Settings asset to edit Stickman, CharTable, and Exit Model properties.",
                     MessageType.None);
             }
             else
             {
                 EditorGUI.BeginChangeCheck();
                 DrawStickmanOffset(_prefabSettings.objectReferenceValue as CarryBlockJamPrefabSettings);
+                DrawCharTableSettings(_prefabSettings.objectReferenceValue as CarryBlockJamPrefabSettings);
                 DrawGateModelOffsets(_prefabSettings.objectReferenceValue as CarryBlockJamPrefabSettings);
                 if (EditorGUI.EndChangeCheck() && target is CarryBlockJamSimpleBoard boardForGates)
                 {
@@ -159,6 +160,47 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.HelpBox(
                 "Prefab offsets and scales apply by exit border side (Top / Bottom / Left / Right). " +
                 "Per-exit rotation, model scale multiplier, and goals stay in Level Creator.",
+                MessageType.None);
+            EditorGUILayout.EndVertical();
+        }
+
+        private static void DrawCharTableSettings(CarryBlockJamPrefabSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField("CharTable", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            Undo.RecordObject(settings, "CharTable Properties");
+            settings.charTableOffset =
+                EditorGUILayout.Vector3Field("Offset", settings.charTableOffset);
+            settings.charTableRotation =
+                EditorGUILayout.Vector3Field("Rotation", settings.charTableRotation);
+            if (settings.charTableScale == Vector3.zero)
+                settings.charTableScale = Vector3.one;
+            settings.charTableScale =
+                EditorGUILayout.Vector3Field("Scale", settings.charTableScale);
+            settings.charTablePlateOffset =
+                EditorGUILayout.Vector3Field("Plate Offset", settings.charTablePlateOffset);
+            settings.charTablePlateStackStep =
+                EditorGUILayout.FloatField("Plate Stack Step", settings.charTablePlateStackStep);
+            settings.charTablePickupDuration =
+                EditorGUILayout.FloatField("Plate Pickup Duration", settings.charTablePickupDuration);
+            settings.charTablePickupOutsideDistance =
+                EditorGUILayout.FloatField("Plate Outside Distance", settings.charTablePickupOutsideDistance);
+            settings.charTablePickupLift =
+                EditorGUILayout.FloatField("Plate Pickup Lift", settings.charTablePickupLift);
+            settings.charTableDropAnimationSpeed =
+                EditorGUILayout.FloatField("Plate Drop Speed", settings.charTableDropAnimationSpeed);
+            settings.charTableFailureRotation =
+                EditorGUILayout.Vector3Field("Failure Rotation", settings.charTableFailureRotation);
+            settings.charTableFailureOffset =
+                EditorGUILayout.Vector3Field("Failure Offset", settings.charTableFailureOffset);
+            settings.charTableFailureDuration =
+                EditorGUILayout.FloatField("Failure Duration", settings.charTableFailureDuration);
+            EditorGUILayout.HelpBox(
+                "Controls M_CharTable transform, tabletop plate placement, stacking, and pickup motion for all levels.",
                 MessageType.None);
             EditorGUILayout.EndVertical();
         }
