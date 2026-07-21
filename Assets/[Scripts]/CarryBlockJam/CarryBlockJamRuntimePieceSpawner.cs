@@ -17,6 +17,7 @@ namespace CarryBlockJam
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
         private const string StickmanMaterialPath = "Assets/[Materials]/Mat_Stickman.mat";
+        private const string StickmanBowtieMaterialPath = "Assets/[Materials]/Mat_Bowtie.mat";
         private const string StickmanControllerPath = "Assets/[Animations]/Stickman.controller";
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
@@ -29,6 +30,7 @@ namespace CarryBlockJam
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
         [SerializeField] private Material stickmanMaterial;
+        [SerializeField] private Material stickmanBowtieMaterial;
         [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
 
         public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
@@ -110,6 +112,10 @@ namespace CarryBlockJam
             if (stickmanMaterial == null)
                 stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
 
+            if (stickmanBowtieMaterial == null)
+                stickmanBowtieMaterial =
+                    AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
+
             if (stickmanAnimatorController == null)
                 stickmanAnimatorController =
                     AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(StickmanControllerPath);
@@ -170,6 +176,13 @@ namespace CarryBlockJam
         {
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
+
+            if (stickmanMaterial == null)
+                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+
+            if (stickmanBowtieMaterial == null)
+                stickmanBowtieMaterial =
+                    AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
 
             if (tableVisual == null)
                 tableVisual = BoardPieceVisualSettings.CreateTableDefault();
@@ -374,7 +387,17 @@ namespace CarryBlockJam
                 }
 
                 for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
-                    materials[materialIndex] = stickmanMaterial;
+                {
+                    Material sourceMaterial = materials[materialIndex];
+                    bool isBowtie = sourceMaterial != null &&
+                                    sourceMaterial.name.IndexOf(
+                                        "bowtie",
+                                        StringComparison.OrdinalIgnoreCase) >= 0;
+                    materials[materialIndex] =
+                        isBowtie && stickmanBowtieMaterial != null
+                            ? stickmanBowtieMaterial
+                            : stickmanMaterial;
+                }
                 renderer.sharedMaterials = materials;
             }
         }
