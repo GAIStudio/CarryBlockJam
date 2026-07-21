@@ -25,6 +25,7 @@ namespace CarryBlockJam
         private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
         private const string CurtainBoxModelPath = "Assets/[Models]/M_Box.fbx";
         private const string CurtainBoxMaterialPath = "Assets/[Materials]/Mat_Box.mat";
+        private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
 
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
@@ -168,6 +169,9 @@ namespace CarryBlockJam
 
             if (settings.curtainMaterial == null)
                 settings.curtainMaterial = AssetDatabase.LoadAssetAtPath<Material>(CurtainBoxMaterialPath);
+
+            if (settings.colorSprite == null)
+                settings.colorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
         }
 #endif
 

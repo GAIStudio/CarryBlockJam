@@ -8,6 +8,8 @@ namespace CarryBlockJam
     public sealed class CarryBlockJamCurtainBox : MonoBehaviour
     {
         private const int CircleTextureSize = 64;
+        private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
+        private const float BadgeSurfaceClearance = 0.12f;
 
         private static Sprite _cachedCircleSprite;
 
@@ -150,14 +152,35 @@ namespace CarryBlockJam
             _colorCircle.transform.SetParent(transform, false);
             _colorCircle.transform.localPosition = GetColorCircleLocalPosition();
             _colorCircle.transform.localRotation = Quaternion.Euler(GetResolvedBadgeRotation());
-            _colorCircle.transform.localScale = _visualSettings.GetResolvedBadgeScale();
 
             SpriteRenderer spriteRenderer = _colorCircle.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = _visualSettings.colorSprite != null
-                ? _visualSettings.colorSprite
-                : GetOrCreateCircleSprite();
+            spriteRenderer.sprite = ResolveColorCircleSprite(_visualSettings);
             spriteRenderer.color = PieceColorPalette.GetColor(_curtainColor);
             spriteRenderer.sortingOrder = 50;
+            _colorCircle.transform.localScale = GetNormalizedBadgeScale(spriteRenderer.sprite);
+        }
+
+        private Vector3 GetNormalizedBadgeScale(Sprite sprite)
+        {
+            Vector3 badgeScale = _visualSettings.GetResolvedBadgeScale();
+            if (sprite == null)
+                return badgeScale;
+
+            float spriteSize = Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y);
+            return spriteSize > 0.0001f ? badgeScale / spriteSize : badgeScale;
+        }
+
+        private static Sprite ResolveColorCircleSprite(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.colorSprite != null)
+                return settings.colorSprite;
+
+#if UNITY_EDITOR
+            Sprite sprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
+            if (sprite != null)
+                return sprite;
+#endif
+            return GetOrCreateCircleSprite();
         }
 
         private Vector3 GetResolvedBadgeRotation()
@@ -182,7 +205,7 @@ namespace CarryBlockJam
             {
                 return new Vector3(
                     curtainBounds.center.x,
-                    curtainBounds.max.y + 0.04f,
+                    curtainBounds.max.y + BadgeSurfaceClearance,
                     curtainBounds.center.z) + offset;
             }
 
@@ -256,6 +279,7 @@ namespace CarryBlockJam
                 if (renderers[i] == null)
                     continue;
 
+                renderers[i].enabled = true;
                 renderers[i].sharedMaterial = material;
             }
         }
