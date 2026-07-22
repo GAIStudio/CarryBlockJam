@@ -77,6 +77,7 @@ namespace CarryBlockJam
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
+        private PieceColorType _dragCollectColor = PieceColorType.None;
         private Tween _plateCollectionTween;
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
@@ -200,6 +201,7 @@ namespace CarryBlockJam
                 new Vector2Int(_swipeStartRow, _swipeStartColumn));
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
+            _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
             _trackingSwipe = true;
             EnsureHighlightRoot();
             ShowHighlights(false);
@@ -345,6 +347,8 @@ namespace CarryBlockJam
             ResetOrthogonalDrag();
             CompleteUnconsumedDirectDrag();
             RefreshStickmanAnimation(moving: false);
+            if (HasCarriedPlates)
+                EvaluateCarriedPlateDeadlock();
         }
 
         private void ResetOrthogonalDrag()
@@ -354,6 +358,8 @@ namespace CarryBlockJam
             _dragRouteCorners.Clear();
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
+            if (!_trackingSwipe && !HasCarriedPlates)
+                _dragCollectColor = PieceColorType.None;
         }
 
         private void ExecuteDirectDragSegment(
@@ -376,6 +382,8 @@ namespace CarryBlockJam
         {
             _trackingSwipe = false;
             ResetOrthogonalDrag();
+            if (!HasCarriedPlates)
+                _dragCollectColor = PieceColorType.None;
             ShowHighlights(false);
             SnapCylinderToLogicalCell();
             RefreshStickmanAnimation(moving: false);
@@ -641,6 +649,14 @@ namespace CarryBlockJam
             if (_cylinder == null || _grid == null)
                 return;
 
+            // Never claim a table cell as CharTable occupant — that orphans stacked plates.
+            if (IsBoxOwnedCell(row, column))
+            {
+                ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
+                _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), row, column);
+                return;
+            }
+
             ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
             _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), row, column);
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
@@ -655,7 +671,99 @@ namespace CarryBlockJam
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) &&
                 cell != null &&
                 cell.Occupant == _cylinder.gameObject)
+            {
                 cell.Occupant = null;
+                RestoreStackOccupantAtCell(row, column);
+            }
+        }
+
+        private void RestoreStackOccupantAtCell(int row, int column)
+        {
+            if (_grid == null ||
+                !_grid.TryGetCell(row, column, out PuzzleCell cell) ||
+                cell == null ||
+                cell.Occupant != null)
+                return;
+
+            CarryBlockJamBoardPiece box = FindBoxAtCell(row, column);
+            if (box == null)
+                return;
+
+            CarryBlockJamBoardPiece top = GetTopStackPiece(box);
+            cell.Occupant = top != null ? top.gameObject : box.gameObject;
+        }
+
+        private CarryBlockJamBoardPiece FindBoxAtCell(int row, int column)
+        {
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Kind != CarryBlockJamPieceKind.Box)
+                    continue;
+
+                if (piece.Row == row && piece.Column == column)
+                    return piece;
+            }
+
+            return null;
+        }
+
+        private CarryBlockJamBoardPiece GetCellBoardPiece(int row, int column)
+        {
+            if (_grid == null ||
+                !_grid.TryGetCell(row, column, out PuzzleCell cell) ||
+                cell == null)
+                return null;
+
+            CarryBlockJamBoardPiece piece = null;
+            if (cell.Occupant != null)
+                piece = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+
+            if (piece == _cylinder)
+                piece = null;
+
+            if (piece != null)
+                return piece;
+
+            return FindBoxAtCell(row, column);
+        }
+
+        private bool TryResolveCollectiblePlate(
+            CarryBlockJamBoardPiece occupant,
+            int row,
+            int column,
+            PieceColorType requiredColor,
+            out CarryBlockJamBoardPiece plate)
+        {
+            plate = null;
+            CarryBlockJamBoardPiece root = occupant ?? FindBoxAtCell(row, column);
+            if (root == null)
+                return false;
+
+            CarryBlockJamBoardPiece current = GetPickupBasePiece(root);
+            while (current != null)
+            {
+                if (IsCollectiblePlate(current, row, column, requiredColor))
+                {
+                    plate = current;
+                    return true;
+                }
+
+                current = current.StackedAbove;
+            }
+
+            return false;
+        }
+
+        private bool HasCollectiblePlateAt(int row, int column, PieceColorType requiredColor)
+        {
+            return TryResolveCollectiblePlate(
+                GetCellBoardPiece(row, column),
+                row,
+                column,
+                requiredColor,
+                out _);
         }
 
         /// <summary>
@@ -688,9 +796,7 @@ namespace CarryBlockJam
             int row = _cylinder.Row;
             int column = _cylinder.Column;
             var path = new List<Vector2Int>();
-            List<CarryBlockJamBoardPiece> pickupPieces = null;
-            int pickupRow = -1;
-            int pickupColumn = -1;
+            var pickupPieces = new List<CarryBlockJamBoardPiece>();
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
             {
@@ -701,11 +807,7 @@ namespace CarryBlockJam
                     nextCell == null)
                     break;
 
-                CarryBlockJamBoardPiece nextPiece = nextCell.Occupant != null
-                    ? nextCell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
-                    : null;
-                if (nextPiece == _cylinder)
-                    nextPiece = null;
+                CarryBlockJamBoardPiece nextPiece = GetCellBoardPiece(nextRow, nextColumn);
 
                 if (nextPiece == null)
                 {
@@ -715,44 +817,32 @@ namespace CarryBlockJam
                     continue;
                 }
 
-                if (IsBoxCellBlocker(nextPiece))
+                if (TryCollectPlatesFromOccupant(nextPiece, nextRow, nextColumn, pickupPieces))
                 {
-                    if (CanPickUpPiece(nextPiece, nextRow, nextColumn))
+                    if (IsBoxCellBlocker(nextPiece) || IsBoxOwnedCell(nextRow, nextColumn))
                     {
-                        bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
-                        pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
-                        pickupRow = nextRow;
-                        pickupColumn = nextColumn;
-                        if (!pickupFromPreviousCell)
-                            path.Add(new Vector2Int(nextRow, nextColumn));
-
-                        MoveConnectedCylinder(path, () =>
-                        {
-                            AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
-                        });
-                        return;
+                        // Pass through table cells without standing on them.
+                        row = nextRow;
+                        column = nextColumn;
+                        continue;
                     }
 
-                    break;
-                }
-
-                if (CanPickUpPiece(nextPiece, nextRow, nextColumn))
-                {
-                    bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
-                    pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
-                    pickupRow = nextRow;
-                    pickupColumn = nextColumn;
-                    if (!pickupFromPreviousCell)
-                        path.Add(new Vector2Int(nextRow, nextColumn));
-
-                    MoveConnectedCylinder(path, () =>
-                    {
-                        AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn);
-                    });
-                    return;
+                    row = nextRow;
+                    column = nextColumn;
+                    path.Add(new Vector2Int(nextRow, nextColumn));
+                    continue;
                 }
 
                 break;
+            }
+
+            if (pickupPieces.Count > 0)
+            {
+                MoveConnectedCylinder(path, () =>
+                {
+                    AddPlatesToCarryStack(pickupPieces);
+                });
+                return;
             }
 
             if (path.Count > 0)
@@ -764,10 +854,8 @@ namespace CarryBlockJam
             int currentRow = _cylinder.Row;
             int currentColumn = _cylinder.Column;
             var cylinderPath = new List<Vector2Int>();
-            List<CarryBlockJamBoardPiece> pickupPieces = null;
+            var pickupPieces = new List<CarryBlockJamBoardPiece>();
             CarryBlockJamBoardPiece targetBox = null;
-            int pickupRow = -1;
-            int pickupColumn = -1;
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
             {
@@ -778,14 +866,25 @@ namespace CarryBlockJam
                     nextCell == null)
                     break;
 
-                CarryBlockJamBoardPiece nextPiece = nextCell.Occupant != null
-                    ? nextCell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
-                    : null;
-                if (nextPiece == _cylinder)
-                    nextPiece = null;
+                CarryBlockJamBoardPiece nextPiece = GetCellBoardPiece(nextRow, nextColumn);
 
                 if (nextPiece == null)
                 {
+                    currentRow = nextRow;
+                    currentColumn = nextColumn;
+                    cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
+                    continue;
+                }
+
+                if (TryCollectPlatesFromOccupant(nextPiece, nextRow, nextColumn, pickupPieces))
+                {
+                    if (IsBoxCellBlocker(nextPiece) || IsBoxOwnedCell(nextRow, nextColumn))
+                    {
+                        currentRow = nextRow;
+                        currentColumn = nextColumn;
+                        continue;
+                    }
+
                     currentRow = nextRow;
                     currentColumn = nextColumn;
                     cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
@@ -796,19 +895,7 @@ namespace CarryBlockJam
                 {
                     CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(nextPiece);
                     if (blockedStorageBox != null && blockedStorageBox.Color == CarriedColor)
-                    {
                         targetBox = blockedStorageBox;
-                    }
-                    else if (CanPickUpPiece(nextPiece, nextRow, nextColumn) && nextPiece.Color == CarriedColor)
-                    {
-                        bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
-                        pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
-                        pickupRow = nextRow;
-                        pickupColumn = nextColumn;
-                        if (!pickupFromPreviousCell)
-                            cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
-                    }
-
                     break;
                 }
 
@@ -816,41 +903,45 @@ namespace CarryBlockJam
                 if (storageBox != null && storageBox.Color == CarriedColor)
                 {
                     targetBox = storageBox;
+                    break;
                 }
-                else if (CanPickUpPiece(nextPiece, nextRow, nextColumn) && nextPiece.Color == CarriedColor)
-                {
-                    bool pickupFromPreviousCell = ShouldPickupFromPreviousCell(nextPiece);
-                    pickupPieces = ExtractPickupPlates(nextPiece, nextRow, nextColumn);
-                    pickupRow = nextRow;
-                    pickupColumn = nextColumn;
-                    if (!pickupFromPreviousCell)
-                        cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
-                }
-                else if (IsMatchingDropTarget(nextPiece))
+
+                if (IsMatchingDropTarget(nextPiece))
                 {
                     targetBox = nextPiece;
+                    break;
                 }
 
                 break;
             }
 
+            bool reachedExit =
+                TryResolveExit(rowStep, columnStep, currentRow, currentColumn, out CarryBlockJamExit edgeExit) ||
+                TryResolveExitAtCell(currentRow, currentColumn, out edgeExit);
+
+            if (pickupPieces.Count > 0 || targetBox != null || (reachedExit && HasCarriedPlates))
+            {
+                MoveConnectedCylinder(cylinderPath, () =>
+                {
+                    if (pickupPieces.Count > 0)
+                        AddPlatesToCarryStack(pickupPieces);
+
+                    if (targetBox != null && HasCarriedPlates)
+                    {
+                        AnimateCarriedPlatesToBox(targetBox);
+                        return;
+                    }
+
+                    if (reachedExit && edgeExit != null && HasCarriedPlates)
+                        AnimateCarriedPlatesToExit(edgeExit);
+                });
+                return;
+            }
+
             if (!HasCarriedPlates)
                 return;
 
-            if (pickupPieces != null && pickupPieces.Count > 0)
-            {
-                MoveConnectedCylinder(cylinderPath, () => AddPlatesToCarryStack(pickupPieces, pickupRow, pickupColumn));
-                return;
-            }
-
-            if (targetBox != null)
-            {
-                MoveConnectedCylinder(cylinderPath, () => AnimateCarriedPlatesToBox(targetBox));
-                return;
-            }
-
-            if (TryResolveExit(rowStep, columnStep, currentRow, currentColumn, out CarryBlockJamExit edgeExit) ||
-                TryResolveExitAtCell(currentRow, currentColumn, out edgeExit))
+            if (reachedExit && edgeExit != null)
             {
                 SendCarriedPlatesToExit(edgeExit, cylinderPath);
                 return;
@@ -1058,9 +1149,6 @@ namespace CarryBlockJam
             for (int i = 0; i < path.Count; i++)
             {
                 Vector2Int step = path[i];
-                if (IsBoxOwnedCell(step.x, step.y))
-                    break;
-
                 if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
                     break;
 
@@ -1070,8 +1158,15 @@ namespace CarryBlockJam
                 if (occupantPiece == _cylinder)
                     occupantPiece = null;
 
-                if (IsBoxCellBlocker(occupantPiece))
+                // Same-color collectible table cells are pass-through: skip standing on
+                // them, but keep later path cells so drag can continue past plates.
+                if (IsBoxOwnedCell(step.x, step.y) || IsBoxCellBlocker(occupantPiece))
+                {
+                    if (HasCollectiblePlateAt(step.x, step.y, GetRequiredCollectColor()))
+                        continue;
+
                     break;
+                }
 
                 safePath.Add(step);
             }
@@ -1532,12 +1627,13 @@ namespace CarryBlockJam
                 rowStep,
                 columnStep,
                 requestedSteps);
-            List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(previewPath);
+            // Follow the full preview (including collectible tables) while dragging so
+            // CharTable does not stop and wait on plates. Commit still trims table cells.
             UpdateDraggedCylinderPosition(
                 screenPosition,
                 rowStep,
                 columnStep,
-                movablePath,
+                previewPath,
                 segmentStart.x,
                 segmentStart.y,
                 _dragSegmentBoardLocalPoint);
@@ -1770,6 +1866,15 @@ namespace CarryBlockJam
                 draggedCells * (rowStep != 0 ? rowStep : columnStep));
             float clampedProgress = Mathf.Min(directedProgress, path.Count);
 
+            // Collect same-color plates continuously while dragging along the path,
+            // including table cells that were skipped in the standable path.
+            TryCollectAlongDragSegment(
+                startRow,
+                startColumn,
+                rowStep,
+                columnStep,
+                Mathf.Min(directedProgress, path.Count));
+
             Vector3 startPosition =
                 GetPieceLocalPosition(_cylinder, startRow, startColumn);
             Vector2Int endCell = path[path.Count - 1];
@@ -1805,6 +1910,8 @@ namespace CarryBlockJam
             var path = new List<Vector2Int>();
             int row = startRow;
             int column = startColumn;
+            // Provisional lock for this preview only; actual lock happens on collect.
+            PieceColorType pathCollectColor = GetRequiredCollectColor();
 
             for (int stepIndex = 0; stepIndex < requestedSteps; stepIndex++)
             {
@@ -1815,73 +1922,60 @@ namespace CarryBlockJam
                     cell == null)
                     break;
 
-                CarryBlockJamBoardPiece piece = cell.Occupant != null
-                    ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
-                    : null;
-                if (piece == _cylinder)
-                    piece = null;
+                CarryBlockJamBoardPiece piece = GetCellBoardPiece(nextRow, nextColumn);
 
-                if (!HasCarriedPlates)
+                if (piece == null)
                 {
-                    if (piece == null)
-                    {
-                        row = nextRow;
-                        column = nextColumn;
-                        path.Add(new Vector2Int(nextRow, nextColumn));
-                        continue;
-                    }
-
-                    if (IsBoxCellBlocker(piece))
-                    {
-                        // Stickman stops on the previous cell when picking up from a table,
-                        // but still highlight the table so the swipe target is clear.
-                        if (CanPickUpPiece(piece, nextRow, nextColumn))
-                            path.Add(new Vector2Int(nextRow, nextColumn));
-                        break;
-                    }
-
-                    if (CanPickUpPiece(piece, nextRow, nextColumn))
-                    {
-                        path.Add(new Vector2Int(nextRow, nextColumn));
-                        break;
-                    }
-                }
-                else
-                {
-                    if (piece != null)
-                    {
-                        if (IsBoxCellBlocker(piece))
-                        {
-                            CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(piece);
-                            if (blockedStorageBox != null && blockedStorageBox.Color == CarriedColor)
-                            {
-                                path.Add(new Vector2Int(nextRow, nextColumn));
-                                break;
-                            }
-
-                            if (CanPickUpPiece(piece, nextRow, nextColumn) && piece.Color == CarriedColor)
-                                path.Add(new Vector2Int(nextRow, nextColumn));
-                            break;
-                        }
-
-                        CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
-                        if (storageBox != null && storageBox.Color == CarriedColor)
-                        {
-                            path.Add(new Vector2Int(nextRow, nextColumn));
-                            break;
-                        }
-
-                        if (CanPickUpPiece(piece, nextRow, nextColumn) && piece.Color == CarriedColor)
-                            path.Add(new Vector2Int(nextRow, nextColumn));
-                        else if (IsMatchingDropTarget(piece))
-                            path.Add(new Vector2Int(nextRow, nextColumn));
-                        break;
-                    }
-
                     row = nextRow;
                     column = nextColumn;
                     path.Add(new Vector2Int(nextRow, nextColumn));
                     continue;
+                }
+
+                if (TryResolveCollectiblePlate(
+                        piece,
+                        nextRow,
+                        nextColumn,
+                        pathCollectColor,
+                        out CarryBlockJamBoardPiece collectPlate))
+                {
+                    if (pathCollectColor == PieceColorType.None)
+                        pathCollectColor = collectPlate.Color;
+
+                    // Include table/plate cells so drag distance keeps moving through them.
+                    // TrimPathBeforeBoxBlocker still prevents standing on tables at commit.
+                    row = nextRow;
+                    column = nextColumn;
+                    path.Add(new Vector2Int(nextRow, nextColumn));
+                    continue;
+                }
+
+                if (HasCarriedPlates || pathCollectColor != PieceColorType.None)
+                {
+                    PieceColorType dropColor = HasCarriedPlates
+                        ? CarriedColor
+                        : pathCollectColor;
+
+                    if (IsBoxCellBlocker(piece))
+                    {
+                        CarryBlockJamBoardPiece blockedStorageBox = GetStorageBox(piece);
+                        if (blockedStorageBox != null && blockedStorageBox.Color == dropColor)
+                            path.Add(new Vector2Int(nextRow, nextColumn));
+                        break;
+                    }
+
+                    CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
+                    if (storageBox != null && storageBox.Color == dropColor)
+                    {
+                        path.Add(new Vector2Int(nextRow, nextColumn));
+                        break;
+                    }
+
+                    if (IsMatchingDropTarget(piece))
+                    {
+                        path.Add(new Vector2Int(nextRow, nextColumn));
+                        break;
+                    }
                 }
 
                 break;
@@ -2398,6 +2492,23 @@ namespace CarryBlockJam
 
         private bool CanPickUpPiece(CarryBlockJamBoardPiece piece, int atRow = -1, int atColumn = -1)
         {
+            return IsCollectiblePlate(piece, atRow, atColumn, GetRequiredCollectColor());
+        }
+
+        private PieceColorType GetRequiredCollectColor()
+        {
+            if (_dragCollectColor != PieceColorType.None)
+                return _dragCollectColor;
+
+            return HasCarriedPlates ? CarriedColor : PieceColorType.None;
+        }
+
+        private bool IsCollectiblePlate(
+            CarryBlockJamBoardPiece piece,
+            int atRow,
+            int atColumn,
+            PieceColorType requiredColor)
+        {
             if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
                 return false;
 
@@ -2408,7 +2519,94 @@ namespace CarryBlockJam
                 !TutorialManager.Instance.CanCollectTutorialPlate(checkRow, checkColumn))
                 return false;
 
-            return !HasCarriedPlates || piece.Color == CarriedColor;
+            if (requiredColor != PieceColorType.None && piece.Color != requiredColor)
+                return false;
+
+            return true;
+        }
+
+        private bool TryCollectPlatesFromOccupant(
+            CarryBlockJamBoardPiece occupant,
+            int row,
+            int column,
+            List<CarryBlockJamBoardPiece> pickupPieces)
+        {
+            if (pickupPieces == null)
+                return false;
+
+            if (!TryResolveCollectiblePlate(
+                    occupant,
+                    row,
+                    column,
+                    GetRequiredCollectColor(),
+                    out CarryBlockJamBoardPiece plate))
+                return false;
+
+            if (_dragCollectColor == PieceColorType.None)
+                _dragCollectColor = plate.Color;
+
+            List<CarryBlockJamBoardPiece> extracted = ExtractPickupPlates(plate, row, column);
+            if (extracted == null || extracted.Count == 0)
+                return false;
+
+            for (int i = 0; i < extracted.Count; i++)
+            {
+                if (extracted[i] != null)
+                    pickupPieces.Add(extracted[i]);
+            }
+
+            return true;
+        }
+
+        private void TryCollectAtCellDuringDrag(int row, int column)
+        {
+            CarryBlockJamBoardPiece occupant = GetCellBoardPiece(row, column);
+            if (occupant == null)
+                return;
+
+            var pickupPieces = new List<CarryBlockJamBoardPiece>();
+            if (!TryCollectPlatesFromOccupant(occupant, row, column, pickupPieces))
+                return;
+
+            if (pickupPieces.Count > 0)
+                AddPlatesToCarryStack(pickupPieces);
+        }
+
+        private void TryCollectAlongDragSegment(
+            int startRow,
+            int startColumn,
+            int rowStep,
+            int columnStep,
+            float directedProgress)
+        {
+            // Collect once CharTable is roughly halfway into a cell.
+            int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.5f));
+            int row = startRow;
+            int column = startColumn;
+            for (int stepIndex = 0; stepIndex < reachedSteps; stepIndex++)
+            {
+                row += rowStep;
+                column += columnStep;
+                if (!_grid.IsInside(row, column))
+                    break;
+
+                CarryBlockJamBoardPiece occupant = GetCellBoardPiece(row, column);
+                if (occupant == null)
+                    continue;
+
+                if (HasCollectiblePlateAt(row, column, GetRequiredCollectColor()))
+                {
+                    TryCollectAtCellDuringDrag(row, column);
+                    continue;
+                }
+
+                // Stop scanning past non-collectible blockers (wrong color, empty drop table, etc.).
+                if (IsBoxCellBlocker(occupant) || IsBoxOwnedCell(row, column))
+                    break;
+
+                if (occupant.Kind != CarryBlockJamPieceKind.Plate)
+                    break;
+            }
         }
 
         private bool IsMatchingDropTarget(CarryBlockJamBoardPiece piece)
@@ -2575,7 +2773,8 @@ namespace CarryBlockJam
             });
             _plateCollectionTween = collection;
             Haptic.LightTaptic();
-            RefreshStickmanAnimation(moving: false);
+            if (!_trackingSwipe)
+                RefreshStickmanAnimation(moving: false);
 
             // Tutorial stages advance only when the start→target move finishes, never from pickup alone.
             if (notifyTutorialComplete &&
@@ -2585,7 +2784,8 @@ namespace CarryBlockJam
                 TutorialManager.Instance.IsTutorialTargetCell(pickupRow, pickupColumn))
                 TutorialManager.Instance.NotifyTutorialActionCompleted();
 
-            EvaluateCarriedPlateDeadlock();
+            if (!_trackingSwipe)
+                EvaluateCarriedPlateDeadlock();
         }
 
         private void UpdateCarriedPlateVisuals()
