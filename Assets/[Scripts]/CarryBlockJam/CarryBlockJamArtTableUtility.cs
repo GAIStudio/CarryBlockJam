@@ -97,7 +97,11 @@ namespace CarryBlockJam
             if (editorMaterial != null)
                 return editorMaterial;
 #endif
-            return Resources.Load<Material>("Materials/Mat_HiddenTable");
+            // Build: must live under Assets/Resources (editor AssetDatabase path is stripped).
+            Material material = Resources.Load<Material>("Materials/Mat_HiddenTable");
+            if (material == null)
+                material = Resources.Load<Material>("Materials/Tables/Mat_HiddenTable");
+            return material;
         }
     }
 }

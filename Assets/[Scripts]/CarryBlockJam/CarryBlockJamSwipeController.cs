@@ -32,9 +32,11 @@ namespace CarryBlockJam
         [SerializeField] private float pickupPlateFrontClearance = 0.65f;
         [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
         [SerializeField] private float dragCornerTransitionDuration = 0.06f;
-        [SerializeField] private float dragTurnThresholdCells = 0.4f;
-        [SerializeField] private float dragTurnProbeResetCells = 0.2f;
-        [SerializeField] private float dragTurnDominance = 1.35f;
+        [SerializeField] private float dragTurnThresholdCells = 0.28f;
+        [SerializeField] private float dragTurnProbeResetCells = 0.18f;
+        [SerializeField] private float dragTurnDominance = 1.08f;
+        [SerializeField] private float dragCellEngageThreshold = 0.18f;
+        [SerializeField] private float dragCellCommitThreshold = 0.55f;
         [SerializeField] private float charTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
@@ -48,6 +50,22 @@ namespace CarryBlockJam
         [SerializeField] private float failurePlateFlyHeight = 1.25f;
         [SerializeField] private float failurePlateSpreadStagger = 0.04f;
         [SerializeField] private float failureUiDelay = 1.4f;
+        [Header("CharTable Smoke Trail")]
+        [SerializeField] private bool enableCharTableTrail = true;
+        [SerializeField] private Color charTableTrailColor = new Color(0.38f, 0.38f, 0.4f, 0.8f);
+        [SerializeField] private float charTableTrailMinWidth = 0.1f;
+        [SerializeField] private float charTableTrailMaxWidth = 0.2f;
+        [SerializeField] private float charTableTrailMinTime = 0.14f;
+        [SerializeField] private float charTableTrailMaxTime = 0.55f;
+        [SerializeField] private float charTableTrailCellsForMaxHeavy = 10f;
+        [SerializeField] private float charTableTrailHeight = 0.12f;
+        [SerializeField] private float charTableTrailAbsorbDuration = 0.1f;
+        [Header("CharTable Idle Hints")]
+        [SerializeField] private bool enableCharTableIdleHints = true;
+        [SerializeField] private float charTableIdleShakeDelay = 3f;
+        [SerializeField] private float charTableIdleShakeDuration = 0.45f;
+        [SerializeField] private float charTableIdleShakeStrength = 0.055f;
+        [SerializeField] private float charTableStartHintDuration = 1.4f;
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -79,6 +97,16 @@ namespace CarryBlockJam
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
         private PieceColorType _dragCollectColor = PieceColorType.None;
         private bool _swipeStartedWithCarriedPlates;
+        private TrailRenderer _charTableTrail;
+        private float _trailSessionCells;
+        private float _trailSegmentProgressReported;
+        private Tween _charTableTrailAbsorbTween;
+        private Tween _charTableIdleShakeTween;
+        private ParticleSystem _charTableHintParticles;
+        private bool _charTableStartHintPlayed;
+        private float _lastPlayerInputTime = -1f;
+        private Vector3 _charTableVisualRestLocalPosition;
+        private bool _charTableVisualRestCaptured;
         private Tween _plateCollectionTween;
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
@@ -105,6 +133,7 @@ namespace CarryBlockJam
             HandleMouseInput();
             HandleTouchInput();
             UpdateSwipePreview();
+            UpdateCharTableIdleHints();
         }
 
         private void HandleMouseInput()
@@ -168,6 +197,11 @@ namespace CarryBlockJam
 
             MovePieceToCell(_cylinder, row, column, occupiesCell: true);
             RefreshStickmanAnimation(moving: false);
+            if (UsesCharTableVisual())
+            {
+                _charTableVisualRestCaptured = false;
+                CaptureCharTableVisualRestPose();
+            }
         }
 
         private void TryStartSwipe(Vector2 screenPosition)
@@ -188,6 +222,7 @@ namespace CarryBlockJam
 
             // Text-only tutorial tip: hide instruction on first press.
             TutorialManager.Instance?.NotifyPlayerInteracted();
+            NotifyCharTablePlayerInput();
 
             _swipeStartScreen = screenPosition;
             _swipeStartRow = _cylinder.Row;
@@ -204,7 +239,9 @@ namespace CarryBlockJam
             _dragCornerTransitionElapsed = 0f;
             _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
             _swipeStartedWithCarriedPlates = HasCarriedPlates;
+            _trailSegmentProgressReported = 0f;
             _trackingSwipe = true;
+            EnsureCharTableTrail();
             EnsureHighlightRoot();
             ShowHighlights(false);
             RefreshStickmanAnimation(moving: false);
@@ -336,6 +373,7 @@ namespace CarryBlockJam
                     screenPosition,
                     activeStart.x,
                     activeStart.y,
+                    commitOnRelease: true,
                     out int rowStep,
                     out int columnStep,
                     out int requestedSteps))
@@ -348,6 +386,7 @@ namespace CarryBlockJam
 
             ResetOrthogonalDrag();
             CompleteUnconsumedDirectDrag();
+            AbsorbCharTableTrail();
             RefreshStickmanAnimation(moving: false);
             if (HasCarriedPlates)
                 EvaluateCarriedPlateDeadlock();
@@ -387,8 +426,10 @@ namespace CarryBlockJam
             if (!HasCarriedPlates)
                 _dragCollectColor = PieceColorType.None;
             ShowHighlights(false);
+            AbsorbCharTableTrail();
             SnapCylinderToLogicalCell();
             RefreshStickmanAnimation(moving: false);
+            NotifyCharTablePlayerInput();
         }
 
         private void CompleteUnconsumedDirectDrag()
@@ -1072,6 +1113,9 @@ namespace CarryBlockJam
             _isAnimating = true;
             RefreshStickmanAnimation(moving: true);
             Haptic.HeavyTaptic();
+            EnsureCharTableTrail();
+            KillCharTableTrailAbsorbTween();
+            SetCharTableTrailEmitting(true);
 
             if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
                 _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
@@ -1089,7 +1133,12 @@ namespace CarryBlockJam
                 sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
                 sequence.Append(_cylinder.transform.DOLocalMove(
                     targetPosition,
-                    moveDurationPerCell).SetEase(Ease.Linear));
+                    moveDurationPerCell).SetEase(Ease.Linear)
+                    .OnUpdate(() =>
+                    {
+                        _trailSessionCells += Time.deltaTime / Mathf.Max(0.01f, moveDurationPerCell);
+                        RefreshCharTableTrailHeaviness();
+                    }));
                 sequence.AppendCallback(() =>
                 {
                     if (!IsBoxOwnedCell(targetRow, targetColumn))
@@ -1105,6 +1154,7 @@ namespace CarryBlockJam
 
                 _isAnimating = false;
                 RefreshStickmanAnimation(moving: false);
+                AbsorbCharTableTrail();
                 onComplete?.Invoke();
             });
         }
@@ -1217,6 +1267,8 @@ namespace CarryBlockJam
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(consumableCount);
             RefreshStickmanAnimation(moving: false);
+            if (!HasCarriedPlates)
+                ClearCharTableTrail(resetHeaviness: true);
             Haptic.MediumTaptic();
 
             Sequence sequence = DOTween.Sequence();
@@ -1294,6 +1346,7 @@ namespace CarryBlockJam
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
             RefreshStickmanAnimation(moving: false);
+            ClearCharTableTrail(resetHeaviness: true);
             Haptic.MediumTaptic();
             AnimateNextPlateToBox(plates, 0, targetBox, onComplete);
         }
@@ -1415,6 +1468,8 @@ namespace CarryBlockJam
             }
 
             EnsureStickmanAnimator();
+            if (UsesCharTableVisual())
+                CaptureCharTableVisualRestPose();
         }
 
         private void EnsureStickmanAnimator()
@@ -1662,12 +1717,15 @@ namespace CarryBlockJam
                 _dragCornerTransitionTarget,
                 easedProgress);
             RefreshStickmanAnimation(moving: true);
+            // Keep smoke emitting along the short corner settle.
+            UpdateCharTableTrailDuringDrag(Mathf.Max(0.05f, easedProgress));
 
             if (progress < 1f)
                 return true;
 
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
+            _trailSegmentProgressReported = 0f;
             return false;
         }
 
@@ -1695,9 +1753,11 @@ namespace CarryBlockJam
                     ? probeColumnCells
                     : probeRowCells);
             float dominance = Mathf.Max(1f, dragTurnDominance);
+            float turnThreshold = Mathf.Max(0.08f, dragTurnThresholdCells);
 
-            // Keep moving the probe forward during a straight drag so small
-            // perpendicular drift cannot accumulate into a false turn.
+            // Straight drag: keep resetting the probe so tiny wobble cannot
+            // build into a turn. Circular 2x2 moves clear this because the
+            // finger's recent motion flips to the perpendicular axis.
             if (recentActiveMovement >= Mathf.Max(
                     0.05f,
                     dragTurnProbeResetCells) &&
@@ -1708,25 +1768,31 @@ namespace CarryBlockJam
                 return false;
             }
 
-            if (recentPerpendicularMovement < Mathf.Max(
-                    0.1f,
-                    dragTurnThresholdCells) ||
-                recentPerpendicularMovement <
+            if (recentPerpendicularMovement < turnThreshold ||
+                recentPerpendicularMovement + 0.0001f <
                 recentActiveMovement * dominance)
                 return false;
 
-            Vector3 gridLocalPosition =
-                _cylinder.transform.localPosition - _cylinder.GridOffset;
-            int cornerColumn = Mathf.RoundToInt(
-                gridLocalPosition.x / _grid.GridSpacingX +
-                (_grid.Columns - 1) * 0.5f);
-            int cornerRow = Mathf.RoundToInt(
-                (_grid.Rows - 1) * 0.5f -
-                gridLocalPosition.z / _grid.GridSpacingZ);
-            if (_dragActiveAxis == 1)
-                cornerColumn = segmentStart.y;
-            else
-                cornerRow = segmentStart.x;
+            // Corner from segment progress with Floor bias — never Round ahead
+            // into a 3rd cell when circling a 2x2.
+            Vector3 segmentDelta =
+                pointerLocal - _dragSegmentBoardLocalPoint;
+            float alongCells = _dragActiveAxis == 1
+                ? -segmentDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
+                : segmentDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+
+            int cornerSteps = CountCornerDragSteps(alongCells);
+            int direction = alongCells >= 0f ? 1 : -1;
+            int cornerRow = segmentStart.x;
+            int cornerColumn = segmentStart.y;
+            if (cornerSteps > 0)
+            {
+                if (_dragActiveAxis == 1)
+                    cornerRow = segmentStart.x + direction * cornerSteps;
+                else
+                    cornerColumn =
+                        segmentStart.y + direction * cornerSteps;
+            }
 
             var corner = new Vector2Int(
                 Mathf.Clamp(cornerRow, 0, _grid.Rows - 1),
@@ -1738,7 +1804,17 @@ namespace CarryBlockJam
                 cornerCell == null ||
                 (cornerCell.Occupant != null &&
                  cornerCell.Occupant != _cylinder.gameObject))
-                return false;
+            {
+                // Occupied next cell — still allow turning on the current cell
+                // so a blocked 2x2 edge does not eat the gesture.
+                corner = segmentStart;
+                if (!_grid.TryGetCell(
+                        corner.x,
+                        corner.y,
+                        out cornerCell) ||
+                    cornerCell == null)
+                    return false;
+            }
 
             Vector2Int previousCorner =
                 _dragRouteCorners[_dragRouteCorners.Count - 1];
@@ -1746,16 +1822,14 @@ namespace CarryBlockJam
                 _dragRouteCorners.Add(corner);
 
             int nextAxis = _dragActiveAxis == 1 ? 2 : 1;
-            Vector3 nextSegmentOrigin = pointerLocal;
-            if (nextAxis == 1)
-                nextSegmentOrigin.z = _dragSegmentBoardLocalPoint.z;
-            else
-                nextSegmentOrigin.x = _dragSegmentBoardLocalPoint.x;
-
+            // Re-anchor the new leg on the corner cell so each side of a
+            // 2x2 square measures cleanly from that corner.
+            Vector3 cornerBoardLocal = _grid.GetLocalPosition(corner.x, corner.y);
             _dragActiveAxis = nextAxis;
             _lockedDragAxis = _dragActiveAxis;
-            _dragSegmentBoardLocalPoint = nextSegmentOrigin;
+            _dragSegmentBoardLocalPoint = cornerBoardLocal;
             _dragTurnProbeBoardLocalPoint = pointerLocal;
+            _trailSegmentProgressReported = 0f;
             _dragCornerTransitionActive = true;
             _dragCornerTransitionElapsed = 0f;
             _dragCornerTransitionStart =
@@ -1774,6 +1848,25 @@ namespace CarryBlockJam
             out int columnStep,
             out int requestedSteps)
         {
+            return TryGetActiveSegmentIntent(
+                screenPosition,
+                startRow,
+                startColumn,
+                commitOnRelease: false,
+                out rowStep,
+                out columnStep,
+                out requestedSteps);
+        }
+
+        private bool TryGetActiveSegmentIntent(
+            Vector2 screenPosition,
+            int startRow,
+            int startColumn,
+            bool commitOnRelease,
+            out int rowStep,
+            out int columnStep,
+            out int requestedSteps)
+        {
             rowStep = 0;
             columnStep = 0;
             requestedSteps = 0;
@@ -1786,17 +1879,18 @@ namespace CarryBlockJam
             Vector3 pointerDelta =
                 pointerLocal - _dragSegmentBoardLocalPoint;
             float cells;
+            float engage = Mathf.Max(0.05f, dragCellEngageThreshold);
             if (_dragActiveAxis == 1)
             {
                 cells = -pointerDelta.z /
                     Mathf.Max(0.0001f, _grid.GridSpacingZ);
-                if (Mathf.Abs(cells) < 0.35f)
+                if (Mathf.Abs(cells) < engage)
                     return false;
 
                 rowStep = cells > 0f ? 1 : -1;
-                requestedSteps = Mathf.Max(
-                    1,
-                    Mathf.RoundToInt(Mathf.Abs(cells)));
+                requestedSteps = commitOnRelease
+                    ? Mathf.Max(1, CountCommittedDragSteps(cells))
+                    : CountFollowDragSteps(cells);
                 requestedSteps = Mathf.Min(
                     requestedSteps,
                     rowStep > 0
@@ -1807,13 +1901,13 @@ namespace CarryBlockJam
             {
                 cells = pointerDelta.x /
                     Mathf.Max(0.0001f, _grid.GridSpacingX);
-                if (Mathf.Abs(cells) < 0.35f)
+                if (Mathf.Abs(cells) < engage)
                     return false;
 
                 columnStep = cells > 0f ? 1 : -1;
-                requestedSteps = Mathf.Max(
-                    1,
-                    Mathf.RoundToInt(Mathf.Abs(cells)));
+                requestedSteps = commitOnRelease
+                    ? Mathf.Max(1, CountCommittedDragSteps(cells))
+                    : CountFollowDragSteps(cells);
                 requestedSteps = Mathf.Min(
                     requestedSteps,
                     columnStep > 0
@@ -1822,6 +1916,48 @@ namespace CarryBlockJam
             }
 
             return requestedSteps > 0;
+        }
+
+        /// <summary>
+        /// Path length while dragging — keep progress continuous with the finger.
+        /// </summary>
+        private int CountFollowDragSteps(float signedCells)
+        {
+            float abs = Mathf.Abs(signedCells);
+            float engage = Mathf.Max(0.05f, dragCellEngageThreshold);
+            if (abs < engage)
+                return 0;
+
+            return Mathf.Max(1, Mathf.FloorToInt(abs) + 1);
+        }
+
+        /// <summary>
+        /// Corner cell along a segment. Floor-biased so a 1-cell 2x2 edge
+        /// cannot round forward into a 2nd extra cell.
+        /// </summary>
+        private static int CountCornerDragSteps(float signedCells)
+        {
+            float abs = Mathf.Abs(signedCells);
+            if (abs < 0.35f)
+                return 0;
+
+            // Commit around 45% into the next cell — easy for tight turns,
+            // still blocks Round(1.6)->2 overshoot.
+            return Mathf.Max(0, Mathf.FloorToInt(abs + 0.55f));
+        }
+
+        /// <summary>
+        /// Final cell count on release.
+        /// </summary>
+        private int CountCommittedDragSteps(float signedCells)
+        {
+            float abs = Mathf.Abs(signedCells);
+            if (abs < 0.0001f)
+                return 0;
+
+            float commit = Mathf.Clamp(dragCellCommitThreshold, 0.5f, 0.95f);
+            int steps = Mathf.FloorToInt(abs + (1f - commit));
+            return Mathf.Max(0, steps);
         }
 
         private void UpdateDraggedCylinderPosition(
@@ -1884,6 +2020,7 @@ namespace CarryBlockJam
                 _cylinder.transform.localPosition =
                     GetPieceLocalPosition(_cylinder, startRow, startColumn);
                 RefreshStickmanAnimation(moving: false);
+                SetCharTableTrailEmitting(false);
                 return;
             }
 
@@ -1897,6 +2034,7 @@ namespace CarryBlockJam
             _cylinder.transform.localPosition = targetPosition;
             FaceStickmanToward(targetPosition);
             RefreshStickmanAnimation(moving: clampedProgress > 0.01f);
+            UpdateCharTableTrailDuringDrag(clampedProgress);
         }
 
         private Vector3 EvaluateDragPathPosition(
@@ -2029,42 +2167,42 @@ namespace CarryBlockJam
             if (_lockedDragAxis == 0)
                 _lockedDragAxis = Mathf.Abs(columnCells) > Mathf.Abs(rowCells) ? 2 : 1;
 
+            float engage = Mathf.Max(0.05f, dragCellEngageThreshold);
             if (_lockedDragAxis == 2)
             {
-                if (Mathf.Abs(columnCells) < 0.35f)
+                if (Mathf.Abs(columnCells) < engage)
                     return false;
 
                 columnStep = columnCells > 0f ? 1 : -1;
                 rowStep = 0;
-                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(columnCells)));
+                requestedSteps = CountFollowDragSteps(columnCells);
             }
             else
             {
-                if (Mathf.Abs(rowCells) < 0.35f)
+                if (Mathf.Abs(rowCells) < engage)
                     return false;
 
                 rowStep = rowCells > 0f ? 1 : -1;
                 columnStep = 0;
-                requestedSteps = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(rowCells)));
+                requestedSteps = CountFollowDragSteps(rowCells);
             }
 
-            // Prefer finger end-cell when it agrees with the projected direction
-            // (so a short or long swipe stops where the finger lifts).
-            // If the finger is off-grid / disagrees (common near bottom exits),
-            // keep the projection-based step count instead of rejecting the swipe.
+            // Prefer finger end-cell when it agrees with the projected direction,
+            // but never allow it to jump ahead of the projected drag distance
+            // (tilted camera + fat finger otherwise overshoots into 3x3 loops).
             if (TryGetNearestGridCell(screenPosition, out int endRow, out int endColumn))
             {
                 if (rowStep != 0)
                 {
                     int rowDelta = endRow - _swipeStartRow;
                     if (rowDelta * rowStep > 0)
-                        requestedSteps = Mathf.Abs(rowDelta);
+                        requestedSteps = Mathf.Min(requestedSteps, Mathf.Abs(rowDelta));
                 }
                 else if (columnStep != 0)
                 {
                     int columnDelta = endColumn - _swipeStartColumn;
                     if (columnDelta * columnStep > 0)
-                        requestedSteps = Mathf.Abs(columnDelta);
+                        requestedSteps = Mathf.Min(requestedSteps, Mathf.Abs(columnDelta));
                 }
             }
 
@@ -2612,12 +2750,9 @@ namespace CarryBlockJam
                     continue;
                 }
 
-                // Stop scanning past non-collectible blockers (wrong color, empty drop table, etc.).
-                if (IsBoxCellBlocker(occupant) || IsBoxOwnedCell(row, column))
-                    break;
-
-                if (occupant.Kind != CarryBlockJamPieceKind.Plate)
-                    break;
+                // Wrong-color plates and any other non-collectible occupant block
+                // collect-through (e.g. red-blue-red must not grab the far red).
+                break;
             }
         }
 
@@ -2785,6 +2920,8 @@ namespace CarryBlockJam
             });
             _plateCollectionTween = collection;
             Haptic.LightTaptic();
+            EnsureCharTableTrail();
+            RefreshCharTableTrailHeaviness();
             if (!_trackingSwipe)
                 RefreshStickmanAnimation(moving: false);
 
@@ -2930,11 +3067,498 @@ namespace CarryBlockJam
             return current;
         }
 
+        private bool UsesCharTableVisual()
+        {
+            if (_cylinder == null)
+                return false;
+
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            return spawner != null && spawner.UsesCharTableCylinderVisual;
+        }
+
+        private bool UsesCharTableTrail()
+        {
+            return enableCharTableTrail && UsesCharTableVisual();
+        }
+
+        private void NotifyCharTablePlayerInput()
+        {
+            _lastPlayerInputTime = Time.unscaledTime;
+            StopCharTableIdleShake(restoreRestPose: true);
+        }
+
+        private void UpdateCharTableIdleHints()
+        {
+            if (!enableCharTableIdleHints || _failTriggered)
+                return;
+
+            if (_cylinder == null)
+                ResolveGameplayReferences();
+
+            if (!UsesCharTableVisual())
+                return;
+
+            if (!_charTableStartHintPlayed)
+            {
+                _charTableStartHintPlayed = true;
+                _lastPlayerInputTime = Time.unscaledTime;
+                PlayCharTableStartHint();
+            }
+
+            if (_trackingSwipe || _isAnimating || _dragCornerTransitionActive)
+            {
+                _lastPlayerInputTime = Time.unscaledTime;
+                StopCharTableIdleShake(restoreRestPose: true);
+                return;
+            }
+
+            if (_lastPlayerInputTime < 0f)
+                _lastPlayerInputTime = Time.unscaledTime;
+
+            if (Time.unscaledTime - _lastPlayerInputTime < Mathf.Max(0.5f, charTableIdleShakeDelay))
+                return;
+
+            if (_charTableIdleShakeTween != null && _charTableIdleShakeTween.IsActive())
+                return;
+
+            PlayCharTableIdleShake();
+            _lastPlayerInputTime = Time.unscaledTime;
+        }
+
+        private void PlayCharTableStartHint()
+        {
+            if (_cylinder == null)
+                return;
+
+            EnsureCharTableHintParticles();
+            if (_charTableHintParticles == null)
+                return;
+
+            _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            _charTableHintParticles.Play(true);
+        }
+
+        private void EnsureCharTableHintParticles()
+        {
+            if (_cylinder == null)
+                return;
+
+            if (_charTableHintParticles != null)
+            {
+                if (_charTableHintParticles.transform.parent != _cylinder.transform)
+                    _charTableHintParticles.transform.SetParent(_cylinder.transform, false);
+                return;
+            }
+
+            Transform existing = _cylinder.transform.Find("CharTableStartHint");
+            GameObject hintObject = existing != null
+                ? existing.gameObject
+                : new GameObject("CharTableStartHint");
+            if (existing == null)
+                hintObject.transform.SetParent(_cylinder.transform, false);
+
+            hintObject.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+            hintObject.transform.localRotation = Quaternion.identity;
+            hintObject.transform.localScale = Vector3.one;
+
+            _charTableHintParticles = hintObject.GetComponent<ParticleSystem>();
+            if (_charTableHintParticles == null)
+                _charTableHintParticles = hintObject.AddComponent<ParticleSystem>();
+
+            ConfigureCharTableHintParticles(_charTableHintParticles);
+        }
+
+        private void ConfigureCharTableHintParticles(ParticleSystem particles)
+        {
+            if (particles == null)
+                return;
+
+            float duration = Mathf.Max(0.4f, charTableStartHintDuration);
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            var main = particles.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.duration = duration;
+            main.startLifetime = 1.1f;
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.15f, 0.45f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.14f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(1f, 0.96f, 0.75f, 0.95f),
+                new Color(0.95f, 0.95f, 1f, 0.75f));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 48;
+            main.gravityModifier = -0.05f;
+
+            var emission = particles.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[]
+            {
+                new ParticleSystem.Burst(0f, 18),
+                new ParticleSystem.Burst(0.2f, 10),
+            });
+
+            var shape = particles.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.55f;
+            shape.radiusThickness = 0.35f;
+            shape.arc = 360f;
+            shape.rotation = new Vector3(90f, 0f, 0f);
+
+            var colorOverLifetime = particles.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(Color.white, 0f),
+                    new GradientColorKey(Color.white, 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0f, 0f),
+                    new GradientAlphaKey(1f, 0.15f),
+                    new GradientAlphaKey(0.7f, 0.55f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+            colorOverLifetime.color = gradient;
+
+            var sizeOverLifetime = particles.sizeOverLifetime;
+            sizeOverLifetime.enabled = true;
+            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
+                1f,
+                new AnimationCurve(
+                    new Keyframe(0f, 0.4f),
+                    new Keyframe(0.25f, 1f),
+                    new Keyframe(1f, 0.2f)));
+
+            var renderer = particles.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                Shader particleShader =
+                    Shader.Find("Particles/Standard Unlit") ??
+                    Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                    Shader.Find("Sprites/Default") ??
+                    Shader.Find("Mobile/Particles/Additive");
+                if (particleShader != null)
+                    renderer.material = new Material(particleShader);
+            }
+        }
+
+        private Transform GetCharTableShakeTarget()
+        {
+            Transform visual = GetStickmanVisual();
+            return visual != null ? visual : _cylinder != null ? _cylinder.transform : null;
+        }
+
+        private void CaptureCharTableVisualRestPose()
+        {
+            Transform target = GetCharTableShakeTarget();
+            if (target == null)
+                return;
+
+            _charTableVisualRestLocalPosition = target.localPosition;
+            _charTableVisualRestCaptured = true;
+        }
+
+        private void PlayCharTableIdleShake()
+        {
+            Transform target = GetCharTableShakeTarget();
+            if (target == null)
+                return;
+
+            StopCharTableIdleShake(restoreRestPose: false);
+            if (!_charTableVisualRestCaptured)
+                CaptureCharTableVisualRestPose();
+
+            float duration = Mathf.Max(0.15f, charTableIdleShakeDuration);
+            float strength = Mathf.Max(0.01f, charTableIdleShakeStrength);
+            _charTableIdleShakeTween = target
+                .DOShakePosition(
+                    duration,
+                    strength,
+                    vibrato: 14,
+                    randomness: 80f,
+                    snapping: false,
+                    fadeOut: true)
+                .SetUpdate(UpdateType.Normal)
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() =>
+                {
+                    if (target != null && _charTableVisualRestCaptured)
+                        target.localPosition = _charTableVisualRestLocalPosition;
+                    _charTableIdleShakeTween = null;
+                });
+        }
+
+        private void StopCharTableIdleShake(bool restoreRestPose)
+        {
+            if (_charTableIdleShakeTween != null && _charTableIdleShakeTween.IsActive())
+                _charTableIdleShakeTween.Kill();
+            _charTableIdleShakeTween = null;
+
+            if (!restoreRestPose || !_charTableVisualRestCaptured)
+                return;
+
+            Transform target = GetCharTableShakeTarget();
+            if (target != null)
+                target.localPosition = _charTableVisualRestLocalPosition;
+        }
+
+        private void EnsureCharTableTrail()
+        {
+            if (!UsesCharTableTrail())
+                return;
+
+            if (_charTableTrail != null)
+            {
+                if (_charTableTrail.transform.parent != _cylinder.transform)
+                    _charTableTrail.transform.SetParent(_cylinder.transform, false);
+                _charTableTrail.transform.localPosition =
+                    new Vector3(0f, charTableTrailHeight, 0f);
+                _charTableTrail.alignment = LineAlignment.View;
+                ApplyCharTableTrailMaterial();
+                RefreshCharTableTrailHeaviness();
+                return;
+            }
+
+            Transform existing = _cylinder.transform.Find("CharTableSmokeTrail");
+            GameObject trailObject = existing != null
+                ? existing.gameObject
+                : new GameObject("CharTableSmokeTrail");
+            if (existing == null)
+                trailObject.transform.SetParent(_cylinder.transform, false);
+
+            trailObject.transform.localPosition = new Vector3(0f, charTableTrailHeight, 0f);
+            trailObject.transform.localRotation = Quaternion.identity;
+            trailObject.transform.localScale = Vector3.one;
+
+            _charTableTrail = trailObject.GetComponent<TrailRenderer>();
+            if (_charTableTrail == null)
+                _charTableTrail = trailObject.AddComponent<TrailRenderer>();
+
+            ApplyCharTableTrailMaterial();
+
+            _charTableTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _charTableTrail.receiveShadows = false;
+            // View alignment so the ribbon faces the camera (TransformZ was
+            // edge-on / invisible with the tilted gameplay camera).
+            _charTableTrail.alignment = LineAlignment.View;
+            _charTableTrail.textureMode = LineTextureMode.Stretch;
+            _charTableTrail.numCapVertices = 2;
+            _charTableTrail.numCornerVertices = 2;
+            _charTableTrail.minVertexDistance = 0.025f;
+            _charTableTrail.autodestruct = false;
+            _charTableTrail.allowOcclusionWhenDynamic = false;
+            _charTableTrail.sortingOrder = 50;
+            _charTableTrail.emitting = false;
+            _charTableTrail.Clear();
+            RefreshCharTableTrailHeaviness();
+        }
+
+        private void ApplyCharTableTrailMaterial()
+        {
+            if (_charTableTrail == null)
+                return;
+
+            Shader trailShader =
+                Shader.Find("Mobile/Particles/Alpha Blended") ??
+                Shader.Find("Particles/Standard Unlit") ??
+                Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                Shader.Find("Legacy Shaders/Particles/Alpha Blended") ??
+                Shader.Find("Sprites/Default");
+            if (trailShader == null)
+                return;
+
+            Material material = _charTableTrail.material;
+            if (material == null || material.shader != trailShader)
+                material = new Material(trailShader);
+
+            // Mid gray smoke — avoid near-white values that read as chalk.
+            Color smoke = charTableTrailColor;
+            material.color = smoke;
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", smoke);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", smoke);
+            if (material.HasProperty("_TintColor"))
+                material.SetColor("_TintColor", smoke);
+
+            _charTableTrail.material = material;
+            _charTableTrail.sharedMaterial = material;
+        }
+
+        private void UpdateCharTableTrailDuringDrag(float segmentProgress)
+        {
+            if (!UsesCharTableTrail())
+            {
+                AbsorbCharTableTrail();
+                return;
+            }
+
+            EnsureCharTableTrail();
+            if (_charTableTrail == null)
+                return;
+
+            float progress = Mathf.Max(0f, segmentProgress);
+            float delta = Mathf.Max(0f, progress - _trailSegmentProgressReported);
+            // Segment resets to 0 on turns — don't subtract / wipe heaviness.
+            if (progress + 0.0001f < _trailSegmentProgressReported)
+                delta = progress;
+            _trailSegmentProgressReported = progress;
+            if (delta > 0f)
+                _trailSessionCells += delta;
+
+            RefreshCharTableTrailHeaviness();
+
+            bool moving = progress > 0.02f || _dragCornerTransitionActive;
+            if (moving)
+            {
+                KillCharTableTrailAbsorbTween();
+                SetCharTableTrailEmitting(true);
+            }
+            else
+            {
+                // Pause emit only while dragging — absorb happens on release.
+                SetCharTableTrailEmitting(false);
+            }
+        }
+
+        private void RefreshCharTableTrailHeaviness()
+        {
+            if (_charTableTrail == null)
+                return;
+
+            float maxCells = Mathf.Max(1f, charTableTrailCellsForMaxHeavy);
+            float heavy = Mathf.Clamp01(_trailSessionCells / maxCells);
+            float eased = heavy * heavy * (3f - 2f * heavy);
+
+            // Exhaust-thin but still camera-visible. Width is driven by
+            // widthMultiplier (Unity's real scale); keep length/time unchanged.
+            float width = Mathf.Lerp(charTableTrailMinWidth, charTableTrailMaxWidth, eased);
+            _charTableTrail.alignment = LineAlignment.View;
+            _charTableTrail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 1f),
+                new Keyframe(0.55f, 0.75f),
+                new Keyframe(1f, 0.2f));
+            _charTableTrail.widthMultiplier = width;
+            _charTableTrail.startWidth = width;
+            _charTableTrail.endWidth = width * 0.4f;
+            _charTableTrail.time = Mathf.Lerp(charTableTrailMinTime, charTableTrailMaxTime, eased);
+            _charTableTrail.minVertexDistance = 0.025f;
+
+            Color smoke = charTableTrailColor;
+            float startAlpha = Mathf.Lerp(0.55f, Mathf.Clamp(smoke.a, 0.55f, 0.9f), eased);
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(smoke, 0f),
+                    new GradientColorKey(
+                        new Color(smoke.r * 0.8f, smoke.g * 0.8f, smoke.b * 0.8f, smoke.a),
+                        1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(startAlpha, 0f),
+                    new GradientAlphaKey(startAlpha * 0.55f, 0.45f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+            _charTableTrail.colorGradient = gradient;
+        }
+
+        private void SetCharTableTrailEmitting(bool emitting)
+        {
+            if (_charTableTrail == null)
+                return;
+
+            _charTableTrail.emitting = emitting && UsesCharTableTrail();
+        }
+
+        private void AbsorbCharTableTrail()
+        {
+            if (_charTableTrail == null)
+                return;
+
+            _charTableTrail.emitting = false;
+            if (_charTableTrailAbsorbTween != null && _charTableTrailAbsorbTween.IsActive())
+                return;
+
+            if (_charTableTrail.positionCount <= 0 && _charTableTrail.time <= 0.01f)
+                return;
+
+            float duration = Mathf.Max(0.04f, charTableTrailAbsorbDuration);
+            float startTime = Mathf.Max(0.01f, _charTableTrail.time);
+            float startWidth = Mathf.Max(0.01f, _charTableTrail.widthMultiplier);
+
+            _charTableTrailAbsorbTween = DOTween
+                .To(
+                    () => 0f,
+                    t =>
+                    {
+                        if (_charTableTrail == null)
+                            return;
+
+                        // Ease harder toward the end so the trail snaps away quickly.
+                        float remain = (1f - t) * (1f - t);
+                        _charTableTrail.time = startTime * remain;
+                        _charTableTrail.widthMultiplier = startWidth * remain;
+                    },
+                    1f,
+                    duration)
+                .SetEase(Ease.InCubic)
+                .OnComplete(() =>
+                {
+                    if (_charTableTrail == null)
+                        return;
+
+                    _charTableTrail.Clear();
+                    RefreshCharTableTrailHeaviness();
+                    _charTableTrailAbsorbTween = null;
+                });
+        }
+
+        private void KillCharTableTrailAbsorbTween()
+        {
+            if (_charTableTrailAbsorbTween == null)
+                return;
+
+            if (_charTableTrailAbsorbTween.IsActive())
+                _charTableTrailAbsorbTween.Kill();
+            _charTableTrailAbsorbTween = null;
+        }
+
+        private void ClearCharTableTrail(bool resetHeaviness)
+        {
+            if (resetHeaviness)
+            {
+                _trailSessionCells = 0f;
+                _trailSegmentProgressReported = 0f;
+            }
+
+            KillCharTableTrailAbsorbTween();
+            if (_charTableTrail == null)
+                return;
+
+            _charTableTrail.emitting = false;
+            _charTableTrail.Clear();
+            RefreshCharTableTrailHeaviness();
+        }
+
         public void PrepareForFailure(Action completed)
         {
             CaptureFailureOriginCell();
             _failTriggered = true;
             _trackingSwipe = false;
+            ClearCharTableTrail(resetHeaviness: true);
+            StopCharTableIdleShake(restoreRestPose: true);
+            if (_charTableHintParticles != null)
+                _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ShowHighlights(false);
             if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
                 _plateCollectionTween.Kill();

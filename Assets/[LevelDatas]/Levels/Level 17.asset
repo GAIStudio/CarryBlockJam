@@ -60,9 +60,9 @@ MonoBehaviour:
       - color: 1
         requiredPlateCount: 3
     - row: 12
-      column: 4
+      column: 7
       side: 1
-      startIndex: 4
+      startIndex: 7
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}

@@ -41,7 +41,7 @@ MonoBehaviour:
       - color: 3
         requiredPlateCount: 4
       - color: 6
-        requiredPlateCount: 2
+        requiredPlateCount: 1
     - row: 0
       column: 4
       side: 0
@@ -104,7 +104,7 @@ MonoBehaviour:
       row: 4
       column: 4
       count: 1
-    - color: 6
+    - color: 1
       row: 4
       column: 5
       count: 1

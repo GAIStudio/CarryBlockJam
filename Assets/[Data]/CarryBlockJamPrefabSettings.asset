@@ -78,7 +78,7 @@ MonoBehaviour:
     tintWithPieceColor: 0
   topExitModelOffset: {x: 0, y: 0, z: -0.58}
   bottomExitModelOffset: {x: 0, y: 0, z: 0.58}
-  leftExitModelOffset: {x: 0, y: 0, z: 0}
+  leftExitModelOffset: {x: 0.5, y: 0, z: 0}
   rightExitModelOffset: {x: -0.5, y: 0, z: 0}
   topExitModelScale: {x: 1, y: 1, z: 1}
   bottomExitModelScale: {x: 1, y: 1, z: 1}
