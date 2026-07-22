@@ -15,7 +15,8 @@ namespace CarryBlockJam
     {
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private float swipeThresholdPixels = 40f;
-        [SerializeField] private float moveDurationPerCell = 0.09f;
+        [SerializeField] private float moveDurationPerCell = 0.16f;
+        [SerializeField] private Ease moveEasePerCell = Ease.Linear;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
         [SerializeField] private float gatePlateFlyDuration = 0.28f;
@@ -426,16 +427,7 @@ namespace CarryBlockJam
             {
                 int targetRow = path[i].x;
                 int targetColumn = path[i].y;
-                Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
-
-                sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
-                sequence.Append(_cylinder.transform.DOLocalMove(
-                    targetPosition,
-                    moveDurationPerCell).SetEase(Ease.Linear));
-
-                int placeRow = targetRow;
-                int placeColumn = targetColumn;
-                sequence.AppendCallback(() => PlaceStickmanOnCell(placeRow, placeColumn));
+                AppendStickmanWalkStep(sequence, targetRow, targetColumn, checkBoxBlocker: false);
             }
 
             sequence.OnComplete(() =>
@@ -780,27 +772,17 @@ namespace CarryBlockJam
                 _grid.ClearOccupant(_cylinder.Row, _cylinder.Column);
 
             Sequence sequence = DOTween.Sequence();
+            Vector2Int finalStep = path[0];
             for (int i = 0; i < path.Count; i++)
             {
                 Vector2Int step = path[i];
-                int targetRow = step.x;
-                int targetColumn = step.y;
-                if (IsBoxOwnedCell(targetRow, targetColumn))
+                if (IsBoxOwnedCell(step.x, step.y))
                     break;
 
-                Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
-                sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
-                sequence.Append(_cylinder.transform.DOLocalMove(
-                    targetPosition,
-                    moveDurationPerCell).SetEase(Ease.Linear));
-                sequence.AppendCallback(() =>
-                {
-                    if (!IsBoxOwnedCell(targetRow, targetColumn))
-                        PlaceStickmanOnCell(targetRow, targetColumn);
-                });
+                finalStep = step;
+                AppendStickmanWalkStep(sequence, step.x, step.y, checkBoxBlocker: true);
             }
 
-            Vector2Int finalStep = path[path.Count - 1];
             sequence.OnComplete(() =>
             {
                 if (!IsBoxOwnedCell(finalStep.x, finalStep.y))
@@ -809,6 +791,35 @@ namespace CarryBlockJam
                 _isAnimating = false;
                 RefreshStickmanAnimation(moving: false);
                 onComplete?.Invoke();
+            });
+        }
+
+        /// <summary>
+        /// One grid step at constant speed so multi-cell swipes stay continuous
+        /// (no settle pause / ease that slows at every cell).
+        /// </summary>
+        private void AppendStickmanWalkStep(
+            Sequence sequence,
+            int targetRow,
+            int targetColumn,
+            bool checkBoxBlocker)
+        {
+            if (sequence == null || _cylinder == null)
+                return;
+
+            Vector3 targetPosition = GetPieceLocalPosition(_cylinder, targetRow, targetColumn);
+            float stepDuration = Mathf.Max(0.01f, moveDurationPerCell);
+
+            sequence.AppendCallback(() => FaceStickmanToward(targetPosition));
+            sequence.Append(
+                _cylinder.transform.DOLocalMove(targetPosition, stepDuration)
+                    .SetEase(moveEasePerCell));
+            sequence.AppendCallback(() =>
+            {
+                if (checkBoxBlocker && IsBoxOwnedCell(targetRow, targetColumn))
+                    return;
+
+                PlaceStickmanOnCell(targetRow, targetColumn);
             });
         }
 
