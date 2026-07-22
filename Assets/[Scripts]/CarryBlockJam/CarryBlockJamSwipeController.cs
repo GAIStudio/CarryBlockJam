@@ -15,7 +15,7 @@ namespace CarryBlockJam
     {
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private float swipeThresholdPixels = 40f;
-        [SerializeField] private float moveDurationPerCell = 0.09f;
+        [SerializeField] private float moveDurationPerCell = 0.1f;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
         [SerializeField] private float gatePlateFlyDuration = 0.28f;
@@ -31,12 +31,14 @@ namespace CarryBlockJam
         [SerializeField] private float pickupPlateSettleScale = 0.22f;
         [SerializeField] private float pickupPlateFrontClearance = 0.65f;
         [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
-        [SerializeField] private float dragCornerTransitionDuration = 0.06f;
-        [SerializeField] private float dragTurnThresholdCells = 0.28f;
-        [SerializeField] private float dragTurnProbeResetCells = 0.18f;
-        [SerializeField] private float dragTurnDominance = 1.08f;
-        [SerializeField] private float dragCellEngageThreshold = 0.18f;
+        [SerializeField] private float dragCornerTransitionDuration = 0f;
+        [SerializeField] private float dragTurnThresholdCells = 0.22f;
+        [SerializeField] private float dragTurnProbeResetCells = 0.14f;
+        [SerializeField] private float dragTurnDominance = 1.05f;
+        [SerializeField] private float dragCellEngageThreshold = 0.08f;
         [SerializeField] private float dragCellCommitThreshold = 0.55f;
+        [SerializeField, Min(0.2f)] private float dragFollowGain = 0.92f;
+        [SerializeField, Min(1f)] private float dragFollowSpeed = 18f;
         [SerializeField] private float charTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
@@ -169,10 +171,18 @@ namespace CarryBlockJam
             }
         }
 
+        /// <summary>
+        /// True once success/fail is reserved — CharTable must not be teleported for tutorial snaps.
+        /// </summary>
+        public bool IsEndLocked => _successTriggered || _failTriggered;
+
         public void PlaceStickmanAtCell(int row, int column, bool force = false)
         {
             ResolveGameplayReferences();
             if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+            // Keep CharTable where it is when end panels open (no snap back to stage/start).
+            if (_successTriggered || _failTriggered)
                 return;
             if (!_grid.IsInside(row, column))
                 return;
@@ -384,12 +394,190 @@ namespace CarryBlockJam
                     requestedSteps);
             }
 
+            // Finger often ends on the table while CharTable is on the approach
+            // cell with 0 committed steps — still step into that table to deliver.
+            TryCommitReleaseOntoMatchingTable(screenPosition);
+
+            TryDeliverCarriedPlatesIfDragEndedOnTable(screenPosition);
+
+            if (TryResolveDragVisualCell(out Vector2Int releaseVisualCell) &&
+                !IsBoxOwnedCell(releaseVisualCell.x, releaseVisualCell.y))
+            {
+                PlaceStickmanOnCell(releaseVisualCell.x, releaseVisualCell.y);
+            }
+            else
+            {
+                SnapCylinderToLogicalCell();
+            }
+
             ResetOrthogonalDrag();
             CompleteUnconsumedDirectDrag();
             AbsorbCharTableTrail();
             RefreshStickmanAnimation(moving: false);
             if (HasCarriedPlates)
                 EvaluateCarriedPlateDeadlock();
+        }
+
+        /// <summary>
+        /// If the finger is on a matching table and CharTable is on an adjacent
+        /// approach cell, commit one step into the table so plates deliver.
+        /// </summary>
+        private void TryCommitReleaseOntoMatchingTable(Vector2 screenPosition)
+        {
+            if (!HasCarriedPlates || _cylinder == null || _grid == null)
+                return;
+
+            if (!TryGetNearestGridCell(
+                    screenPosition,
+                    out int fingerRow,
+                    out int fingerColumn))
+                return;
+
+            if (!TryResolveDropTargetAtCell(fingerRow, fingerColumn, out _))
+                return;
+
+            int fromRow = _cylinder.Row;
+            int fromColumn = _cylinder.Column;
+            int rowDelta = fingerRow - fromRow;
+            int columnDelta = fingerColumn - fromColumn;
+            if (Mathf.Abs(rowDelta) + Mathf.Abs(columnDelta) != 1)
+                return;
+
+            if (!CanDeliverCarriedPlatesToCell(
+                    fingerRow,
+                    fingerColumn,
+                    fromRow,
+                    fromColumn,
+                    pathCellsTraveled: 0))
+                return;
+
+            ExecuteDirectDragSegment(
+                Math.Sign(rowDelta),
+                Math.Sign(columnDelta),
+                1);
+        }
+
+        /// <summary>
+        /// Deliver when the finger ends on the matching table cell (CharTable
+        /// stays on the approach cell while dragging).
+        /// </summary>
+        private bool TryDeliverCarriedPlatesIfDragEndedOnTable(Vector2 screenPosition)
+        {
+            if (!HasCarriedPlates || _cylinder == null || _grid == null)
+                return false;
+
+            bool movedDuringDrag =
+                _cylinder.Row != _swipeStartRow ||
+                _cylinder.Column != _swipeStartColumn ||
+                HasLeftSwipeStartDuringDrag();
+            if (!_swipeStartedWithCarriedPlates && !movedDuringDrag)
+                return false;
+
+            CarryBlockJamBoardPiece targetBox = null;
+
+            if (TryGetNearestGridCell(
+                    screenPosition,
+                    out int fingerRow,
+                    out int fingerColumn) &&
+                TryResolveDropTargetAtCell(fingerRow, fingerColumn, out targetBox))
+            {
+                // Finger ended on the table cell.
+            }
+            else if (!TryResolveMatchingTableEnteredOnRelease(
+                         screenPosition,
+                         out targetBox))
+            {
+                return false;
+            }
+
+            AnimateCarriedPlatesToBox(targetBox);
+            return true;
+        }
+
+        /// <summary>
+        /// True when finger progress from CharTable reaches into an adjacent
+        /// matching table cell (drag ended on that table).
+        /// </summary>
+        private bool TryResolveMatchingTableEnteredOnRelease(
+            Vector2 screenPosition,
+            out CarryBlockJamBoardPiece targetBox)
+        {
+            targetBox = null;
+            if (!TryProjectPointerToBoardLocal(
+                    screenPosition,
+                    out Vector3 pointerLocal))
+                return false;
+
+            int fromRow = _cylinder.Row;
+            int fromColumn = _cylinder.Column;
+            Vector3 fromLocal = _grid.GetLocalPosition(fromRow, fromColumn);
+            Vector3 delta = pointerLocal - fromLocal;
+            float rowCells =
+                -delta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ);
+            float columnCells =
+                delta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+
+            int rowStep = 0;
+            int columnStep = 0;
+            float along = 0f;
+            if (Mathf.Abs(rowCells) >= Mathf.Abs(columnCells))
+            {
+                if (Mathf.Abs(rowCells) < 0.35f)
+                    return false;
+                rowStep = rowCells > 0f ? 1 : -1;
+                along = Mathf.Abs(rowCells);
+            }
+            else
+            {
+                if (Mathf.Abs(columnCells) < 0.35f)
+                    return false;
+                columnStep = columnCells > 0f ? 1 : -1;
+                along = Mathf.Abs(columnCells);
+            }
+
+            // Progress of ~1 cell means the drag ended on the neighbor cell.
+            if (along < 0.55f)
+                return false;
+
+            return TryResolveDropTargetAtCell(
+                fromRow + rowStep,
+                fromColumn + columnStep,
+                out targetBox);
+        }
+
+        private bool CanDeliverCarriedPlatesToCell(
+            int tableRow,
+            int tableColumn,
+            int currentRow,
+            int currentColumn,
+            int pathCellsTraveled)
+        {
+            if (!HasCarriedPlates)
+                return false;
+            if (HasCollectiblePlateAt(tableRow, tableColumn, CarriedColor))
+                return false;
+
+            if (_swipeStartedWithCarriedPlates)
+                return true;
+
+            // Collected earlier in this drag / swipe — allow drop after travel.
+            return pathCellsTraveled > 0 ||
+                   currentRow != _swipeStartRow ||
+                   currentColumn != _swipeStartColumn ||
+                   HasLeftSwipeStartDuringDrag();
+        }
+
+        private bool HasLeftSwipeStartDuringDrag()
+        {
+            if (_dragRouteCorners.Count > 1)
+                return true;
+
+            if (TryResolveDragVisualCell(out Vector2Int visualCell) &&
+                (visualCell.x != _swipeStartRow ||
+                 visualCell.y != _swipeStartColumn))
+                return true;
+
+            return false;
         }
 
         private void ResetOrthogonalDrag()
@@ -929,12 +1117,15 @@ namespace CarryBlockJam
 
                 if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
                 {
-                    // Only drop when this swipe began while already carrying.
-                    // Otherwise a pickup-from-table swipe would collect mid-drag and
-                    // immediately put the plates back on the same table at release.
-                    if (_swipeStartedWithCarriedPlates &&
-                        HasCarriedPlates &&
-                        !HasCollectiblePlateAt(nextRow, nextColumn, CarriedColor))
+                    // Drop onto matching table when this swipe reached it while
+                    // carrying. Require travel (or starting already loaded) so a
+                    // pickup-from-table swipe does not put plates straight back.
+                    if (CanDeliverCarriedPlatesToCell(
+                            nextRow,
+                            nextColumn,
+                            currentRow,
+                            currentColumn,
+                            cylinderPath.Count))
                     {
                         CarryBlockJamBoardPiece dropBox = GetStorageBox(nextPiece) ??
                             (nextPiece != null && nextPiece.Kind == CarryBlockJamPieceKind.Box
@@ -948,16 +1139,26 @@ namespace CarryBlockJam
                 }
 
                 CarryBlockJamBoardPiece storageBox = GetStorageBox(nextPiece);
-                if (_swipeStartedWithCarriedPlates &&
-                    storageBox != null &&
-                    storageBox.Color == CarriedColor &&
-                    !HasCollectiblePlateAt(nextRow, nextColumn, CarriedColor))
+                if (storageBox != null &&
+                    CanDeliverCarriedPlatesToCell(
+                        nextRow,
+                        nextColumn,
+                        currentRow,
+                        currentColumn,
+                        cylinderPath.Count) &&
+                    storageBox.Color == CarriedColor)
                 {
                     targetBox = storageBox;
                     break;
                 }
 
-                if (_swipeStartedWithCarriedPlates && IsMatchingDropTarget(nextPiece))
+                if (IsMatchingDropTarget(nextPiece) &&
+                    CanDeliverCarriedPlatesToCell(
+                        nextRow,
+                        nextColumn,
+                        currentRow,
+                        currentColumn,
+                        cylinderPath.Count))
                 {
                     targetBox = nextPiece;
                     break;
@@ -1202,32 +1403,66 @@ namespace CarryBlockJam
 
         private List<Vector2Int> TrimPathBeforeBoxBlocker(List<Vector2Int> path)
         {
+            return TrimPathBeforeMovementBlocker(path);
+        }
+
+        private List<Vector2Int> TrimPathBeforeMovementBlocker(List<Vector2Int> path)
+        {
             if (path == null || path.Count == 0 || _grid == null)
                 return path;
 
+            PieceColorType requiredColor = GetRequiredCollectColor();
             var safePath = new List<Vector2Int>(path.Count);
             for (int i = 0; i < path.Count; i++)
             {
                 Vector2Int step = path[i];
-                if (IsBoxOwnedCell(step.x, step.y))
+                if (IsDragPathBlocker(step.x, step.y, requiredColor))
                     break;
 
-                if (!_grid.TryGetCell(step.x, step.y, out PuzzleCell cell) || cell == null)
-                    break;
-
-                CarryBlockJamBoardPiece occupantPiece = cell.Occupant != null
-                    ? cell.Occupant.GetComponent<CarryBlockJamBoardPiece>()
-                    : null;
-                if (occupantPiece == _cylinder)
-                    occupantPiece = null;
-
-                if (IsBoxCellBlocker(occupantPiece))
-                    break;
+                if (TryResolveCollectiblePlate(
+                        GetCellBoardPiece(step.x, step.y),
+                        step.x,
+                        step.y,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    requiredColor == PieceColorType.None &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
 
                 safePath.Add(step);
             }
 
             return safePath;
+        }
+
+        /// <summary>
+        /// Movement blockers while dragging: every table, and any plate that is not
+        /// collectible for the active drag color. Same-color freestanding plates stay open.
+        /// CharTable never enters a table cell while dragging — delivery happens on release.
+        /// </summary>
+        private bool IsDragPathBlocker(int row, int column, PieceColorType requiredColor)
+        {
+            if (_grid == null || !_grid.IsInside(row, column))
+                return true;
+
+            if (IsBoxOwnedCell(row, column))
+                return true;
+
+            CarryBlockJamBoardPiece piece = GetCellBoardPiece(row, column);
+            if (piece == null || piece == _cylinder)
+                return false;
+
+            if (IsBoxCellBlocker(piece))
+                return true;
+
+            // Same-color plates (including stacks with a matching plate) stay walkable.
+            if (HasCollectiblePlateAt(row, column, requiredColor))
+                return false;
+
+            // Different-color plates / other occupants block the path.
+            return true;
         }
 
         private bool IsBoxOwnedCell(int row, int column)
@@ -1313,11 +1548,22 @@ namespace CarryBlockJam
             {
                 UpdateCarriedPlateVisuals();
                 _isAnimating = false;
-                MaybeNotifyTutorialExitDelivery();
                 if (HasCarriedPlates)
+                {
+                    MaybeNotifyTutorialExitDelivery();
                     EvaluateCarriedPlateDeadlock();
-                else
-                    TryTriggerSuccess(plates);
+                    return;
+                }
+
+                // Win before tutorial advance — otherwise the next stage snaps CharTable to start.
+                TryTriggerSuccess(plates);
+                if (_successTriggered)
+                {
+                    TutorialManager.Instance?.CompleteAndHide();
+                    return;
+                }
+
+                MaybeNotifyTutorialExitDelivery();
             });
         }
 
@@ -1637,9 +1883,6 @@ namespace CarryBlockJam
 
         private void UpdateOrthogonalDrag(Vector2 screenPosition)
         {
-            if (UpdateDragCornerTransition())
-                return;
-
             if (_dragActiveAxis == 0)
             {
                 if (!TryGetSwipeIntent(
@@ -1648,7 +1891,7 @@ namespace CarryBlockJam
                         out _,
                         out _))
                 {
-                    SnapCylinderToLogicalCell();
+                    // Keep the current pose — snapping here feels like a border hitch.
                     RefreshStickmanAnimation(moving: false);
                     return;
                 }
@@ -1660,10 +1903,30 @@ namespace CarryBlockJam
             Vector2Int segmentStart = _dragRouteCorners.Count > 0
                 ? _dragRouteCorners[_dragRouteCorners.Count - 1]
                 : new Vector2Int(_swipeStartRow, _swipeStartColumn);
-            if (TryCommitOrthogonalTurn(
-                    screenPosition,
-                    segmentStart))
-                return;
+
+            if (TryResolveDragVisualCell(out Vector2Int visualCell))
+            {
+                // Keep the segment pinned to where CharTable actually is so wall
+                // hits don't leave the drag anchored on an earlier cell.
+                if (visualCell != segmentStart &&
+                    (IsActiveAxisBlockedFrom(segmentStart, screenPosition) ||
+                     IsActiveAxisBlockedFrom(visualCell, screenPosition)))
+                {
+                    ReanchorDragSegmentToCell(visualCell);
+                    segmentStart = visualCell;
+                }
+            }
+
+            bool blockedOnActiveAxis =
+                IsActiveAxisBlockedFrom(segmentStart, screenPosition);
+
+            TryCommitOrthogonalTurn(
+                screenPosition,
+                segmentStart,
+                blockedOnActiveAxis);
+            segmentStart = _dragRouteCorners.Count > 0
+                ? _dragRouteCorners[_dragRouteCorners.Count - 1]
+                : new Vector2Int(_swipeStartRow, _swipeStartColumn);
 
             if (!TryGetActiveSegmentIntent(
                     screenPosition,
@@ -1673,14 +1936,59 @@ namespace CarryBlockJam
                     out int columnStep,
                     out int requestedSteps))
             {
-                _cylinder.transform.localPosition =
-                    GetPieceLocalPosition(
-                        _cylinder,
-                        segmentStart.x,
-                        segmentStart.y);
+                // Dead axis (wall/blocker): switch to the finger's sideways axis
+                // without requiring a release + new drag.
+                if (TrySwitchAxisToFingerDirection(
+                        screenPosition,
+                        segmentStart,
+                        forceWhenBlocked: true))
+                {
+                    segmentStart = _dragRouteCorners.Count > 0
+                        ? _dragRouteCorners[_dragRouteCorners.Count - 1]
+                        : segmentStart;
+                    if (!TryGetActiveSegmentIntent(
+                            screenPosition,
+                            segmentStart.x,
+                            segmentStart.y,
+                            out rowStep,
+                            out columnStep,
+                            out requestedSteps))
+                    {
+                        RefreshStickmanAnimation(moving: false);
+                        return;
+                    }
+                }
+                else
+                {
+                    RefreshStickmanAnimation(moving: false);
+                    return;
+                }
+            }
+
+            if (!TryProjectPointerToBoardLocal(
+                    screenPosition,
+                    out Vector3 pointerLocal))
+            {
                 RefreshStickmanAnimation(moving: false);
                 return;
             }
+
+            Vector3 pointerDelta = pointerLocal - _dragSegmentBoardLocalPoint;
+            float draggedCells = rowStep != 0
+                ? -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
+                : pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            float directedProgress = Mathf.Max(
+                0f,
+                draggedCells * (rowStep != 0 ? rowStep : columnStep));
+            float followGain = Mathf.Clamp(dragFollowGain, 0.2f, 1f);
+            float followProgress = directedProgress * followGain;
+
+            TryCollectAlongDragSegment(
+                segmentStart.x,
+                segmentStart.y,
+                rowStep,
+                columnStep,
+                followProgress);
 
             List<Vector2Int> previewPath = BuildPreviewPath(
                 segmentStart.x,
@@ -1688,41 +1996,180 @@ namespace CarryBlockJam
                 rowStep,
                 columnStep,
                 requestedSteps);
-            // Tables block movement like other obstacles; drops/pickups resolve on release.
-            List<Vector2Int> movablePath = TrimPathBeforeBoxBlocker(previewPath);
-            UpdateDraggedCylinderPosition(
-                screenPosition,
+            List<Vector2Int> movablePath = TrimPathBeforeMovementBlocker(previewPath);
+
+            Vector2Int stopCell = movablePath.Count > 0
+                ? movablePath[movablePath.Count - 1]
+                : segmentStart;
+            // Never reanchor onto a table — CharTable stays on the approach cell.
+            if (TryResolveDragVisualCell(out Vector2Int visualStop) &&
+                !IsBoxOwnedCell(visualStop.x, visualStop.y))
+                stopCell = visualStop;
+            bool pressedPastEnd = followProgress > movablePath.Count + 0.05f;
+            if (movablePath.Count == 0 ||
+                (pressedPastEnd && IsActiveAxisBlockedFrom(stopCell, screenPosition)))
+            {
+                ReanchorDragSegmentToCell(stopCell);
+                if (TryProjectPointerToBoardLocal(screenPosition, out Vector3 blockedPointer))
+                    _dragTurnProbeBoardLocalPoint = blockedPointer;
+            }
+
+            ApplyDraggedCylinderPosition(
+                followProgress,
                 rowStep,
                 columnStep,
                 movablePath,
                 segmentStart.x,
-                segmentStart.y,
-                _dragSegmentBoardLocalPoint);
+                segmentStart.y);
+        }
+
+        /// <summary>
+        /// When the locked axis has no legal steps (wall/blocker), adopt the
+        /// finger's stronger perpendicular axis so dragging can continue.
+        /// </summary>
+        private bool TrySwitchAxisToFingerDirection(
+            Vector2 screenPosition,
+            Vector2Int segmentStart,
+            bool forceWhenBlocked)
+        {
+            if (_dragActiveAxis == 0 ||
+                !TryProjectPointerToBoardLocal(
+                    screenPosition,
+                    out Vector3 pointerLocal))
+                return false;
+
+            Vector3 delta = pointerLocal - _dragSegmentBoardLocalPoint;
+            float rowCells =
+                -delta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ);
+            float columnCells =
+                delta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            float rowAbs = Mathf.Abs(rowCells);
+            float columnAbs = Mathf.Abs(columnCells);
+            float activeAbs = _dragActiveAxis == 1 ? rowAbs : columnAbs;
+            float perpAbs = _dragActiveAxis == 1 ? columnAbs : rowAbs;
+            float switchThreshold = forceWhenBlocked ? 0.08f : 0.16f;
+            if (perpAbs < switchThreshold)
+                return false;
+            if (!forceWhenBlocked && perpAbs < activeAbs * Mathf.Max(1f, dragTurnDominance))
+                return false;
+
+            // Prefer switching when the current axis is blocked or clearly weaker.
+            int nextRow = segmentStart.x + (_dragActiveAxis == 1
+                ? (rowCells >= 0f ? 1 : -1)
+                : 0);
+            int nextColumn = segmentStart.y + (_dragActiveAxis == 2
+                ? (columnCells >= 0f ? 1 : -1)
+                : 0);
+            bool activeBlocked =
+                _dragActiveAxis == 1
+                    ? !_grid.IsInside(nextRow, segmentStart.y) ||
+                      IsDragPathBlocker(
+                          nextRow,
+                          segmentStart.y,
+                          GetRequiredCollectColor())
+                    : !_grid.IsInside(segmentStart.x, nextColumn) ||
+                      IsDragPathBlocker(
+                          segmentStart.x,
+                          nextColumn,
+                          GetRequiredCollectColor());
+            if (!forceWhenBlocked && !activeBlocked && perpAbs < activeAbs * 1.15f)
+                return false;
+
+            int nextAxis = _dragActiveAxis == 1 ? 2 : 1;
+            int stepSign = nextAxis == 1
+                ? (rowCells >= 0f ? 1 : -1)
+                : (columnCells >= 0f ? 1 : -1);
+            int probeRow = segmentStart.x + (nextAxis == 1 ? stepSign : 0);
+            int probeColumn = segmentStart.y + (nextAxis == 2 ? stepSign : 0);
+            if (_grid.IsInside(probeRow, probeColumn) &&
+                IsDragPathBlocker(probeRow, probeColumn, GetRequiredCollectColor()))
+            {
+                // Side direction also blocked — still switch so reverse on that
+                // axis can be measured from this cell.
+            }
+
+            ReanchorDragSegmentToCell(segmentStart);
+            _dragActiveAxis = nextAxis;
+            _lockedDragAxis = nextAxis;
+            _dragTurnProbeBoardLocalPoint = pointerLocal;
+            _trailSegmentProgressReported = 0f;
+            return true;
+        }
+
+        private bool IsActiveAxisBlockedFrom(Vector2Int segmentStart, Vector2 screenPosition)
+        {
+            if (_grid == null || _dragActiveAxis == 0)
+                return false;
+            if (!TryProjectPointerToBoardLocal(screenPosition, out Vector3 pointerLocal))
+                return false;
+
+            Vector3 pointerDelta = pointerLocal - _dragSegmentBoardLocalPoint;
+            float cells = _dragActiveAxis == 1
+                ? -pointerDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
+                : pointerDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
+            if (Mathf.Abs(cells) < Mathf.Max(0.05f, dragCellEngageThreshold))
+                return false;
+
+            int rowStep = 0;
+            int columnStep = 0;
+            if (_dragActiveAxis == 1)
+                rowStep = cells > 0f ? 1 : -1;
+            else
+                columnStep = cells > 0f ? 1 : -1;
+
+            int nextRow = segmentStart.x + rowStep;
+            int nextColumn = segmentStart.y + columnStep;
+            if (!_grid.IsInside(nextRow, nextColumn))
+                return true;
+
+            return IsDragPathBlocker(nextRow, nextColumn, GetRequiredCollectColor());
+        }
+
+        private bool TryResolveDragVisualCell(out Vector2Int cell)
+        {
+            cell = default;
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return false;
+
+            Vector3 gridLocalPosition =
+                _cylinder.transform.localPosition - _cylinder.GridOffset;
+            int column = Mathf.RoundToInt(
+                gridLocalPosition.x / _grid.GridSpacingX +
+                (_grid.Columns - 1) * 0.5f);
+            int row = Mathf.RoundToInt(
+                (_grid.Rows - 1) * 0.5f -
+                gridLocalPosition.z / _grid.GridSpacingZ);
+            row = Mathf.Clamp(row, 0, _grid.Rows - 1);
+            column = Mathf.Clamp(column, 0, _grid.Columns - 1);
+            if (!_grid.TryGetCell(row, column, out PuzzleCell puzzleCell) ||
+                puzzleCell == null)
+                return false;
+
+            cell = new Vector2Int(row, column);
+            return true;
+        }
+
+        private void ReanchorDragSegmentToCell(Vector2Int cell)
+        {
+            if (_grid == null || !_grid.IsInside(cell.x, cell.y))
+                return;
+
+            if (_dragRouteCorners.Count == 0)
+                _dragRouteCorners.Add(cell);
+            else if (_dragRouteCorners[_dragRouteCorners.Count - 1] != cell)
+                _dragRouteCorners.Add(cell);
+
+            _dragSegmentBoardLocalPoint = _grid.GetLocalPosition(cell.x, cell.y);
+            _trailSegmentProgressReported = 0f;
         }
 
         private bool UpdateDragCornerTransition()
         {
+            // Kept for compatibility; corner settles are applied immediately now.
             if (!_dragCornerTransitionActive || _cylinder == null)
                 return false;
 
-            float duration = Mathf.Max(
-                0.01f,
-                dragCornerTransitionDuration);
-            _dragCornerTransitionElapsed += Time.deltaTime;
-            float progress = Mathf.Clamp01(
-                _dragCornerTransitionElapsed / duration);
-            float easedProgress = progress * progress * (3f - 2f * progress);
-            _cylinder.transform.localPosition = Vector3.LerpUnclamped(
-                _dragCornerTransitionStart,
-                _dragCornerTransitionTarget,
-                easedProgress);
-            RefreshStickmanAnimation(moving: true);
-            // Keep smoke emitting along the short corner settle.
-            UpdateCharTableTrailDuringDrag(Mathf.Max(0.05f, easedProgress));
-
-            if (progress < 1f)
-                return true;
-
+            _cylinder.transform.localPosition = _dragCornerTransitionTarget;
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
             _trailSegmentProgressReported = 0f;
@@ -1732,6 +2179,17 @@ namespace CarryBlockJam
         private bool TryCommitOrthogonalTurn(
             Vector2 screenPosition,
             Vector2Int segmentStart)
+        {
+            return TryCommitOrthogonalTurn(
+                screenPosition,
+                segmentStart,
+                blockedOnActiveAxis: false);
+        }
+
+        private bool TryCommitOrthogonalTurn(
+            Vector2 screenPosition,
+            Vector2Int segmentStart,
+            bool blockedOnActiveAxis)
         {
             if (!TryProjectPointerToBoardLocal(
                     screenPosition,
@@ -1753,12 +2211,15 @@ namespace CarryBlockJam
                     ? probeColumnCells
                     : probeRowCells);
             float dominance = Mathf.Max(1f, dragTurnDominance);
-            float turnThreshold = Mathf.Max(0.08f, dragTurnThresholdCells);
+            float turnThreshold = blockedOnActiveAxis
+                ? Mathf.Max(0.06f, dragTurnThresholdCells * 0.55f)
+                : Mathf.Max(0.08f, dragTurnThresholdCells);
 
             // Straight drag: keep resetting the probe so tiny wobble cannot
-            // build into a turn. Circular 2x2 moves clear this because the
-            // finger's recent motion flips to the perpendicular axis.
-            if (recentActiveMovement >= Mathf.Max(
+            // build into a turn. When pressed into a wall/blocker, do NOT reset
+            // on active-axis noise or side moves are never detected.
+            if (!blockedOnActiveAxis &&
+                recentActiveMovement >= Mathf.Max(
                     0.05f,
                     dragTurnProbeResetCells) &&
                 recentActiveMovement * dominance >=
@@ -1769,51 +2230,64 @@ namespace CarryBlockJam
             }
 
             if (recentPerpendicularMovement < turnThreshold ||
-                recentPerpendicularMovement + 0.0001f <
-                recentActiveMovement * dominance)
+                (!blockedOnActiveAxis &&
+                 recentPerpendicularMovement + 0.0001f <
+                 recentActiveMovement * dominance))
                 return false;
 
-            // Corner from segment progress with Floor bias — never Round ahead
-            // into a 3rd cell when circling a 2x2.
-            Vector3 segmentDelta =
-                pointerLocal - _dragSegmentBoardLocalPoint;
-            float alongCells = _dragActiveAxis == 1
-                ? -segmentDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
-                : segmentDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
-
-            int cornerSteps = CountCornerDragSteps(alongCells);
-            int direction = alongCells >= 0f ? 1 : -1;
-            int cornerRow = segmentStart.x;
-            int cornerColumn = segmentStart.y;
-            if (cornerSteps > 0)
+            // When blocked, turn on the current cell immediately (no need to
+            // advance along the dead axis first).
+            Vector2Int corner = segmentStart;
+            if (!blockedOnActiveAxis)
             {
-                if (_dragActiveAxis == 1)
-                    cornerRow = segmentStart.x + direction * cornerSteps;
-                else
-                    cornerColumn =
-                        segmentStart.y + direction * cornerSteps;
-            }
+                Vector3 segmentDelta =
+                    pointerLocal - _dragSegmentBoardLocalPoint;
+                float alongCells = _dragActiveAxis == 1
+                    ? -segmentDelta.z / Mathf.Max(0.0001f, _grid.GridSpacingZ)
+                    : segmentDelta.x / Mathf.Max(0.0001f, _grid.GridSpacingX);
 
-            var corner = new Vector2Int(
-                Mathf.Clamp(cornerRow, 0, _grid.Rows - 1),
-                Mathf.Clamp(cornerColumn, 0, _grid.Columns - 1));
-            if (!_grid.TryGetCell(
-                    corner.x,
-                    corner.y,
-                    out PuzzleCell cornerCell) ||
-                cornerCell == null ||
-                (cornerCell.Occupant != null &&
-                 cornerCell.Occupant != _cylinder.gameObject))
-            {
-                // Occupied next cell — still allow turning on the current cell
-                // so a blocked 2x2 edge does not eat the gesture.
-                corner = segmentStart;
+                int cornerSteps = CountCornerDragSteps(alongCells);
+                int direction = alongCells >= 0f ? 1 : -1;
+                int cornerRow = segmentStart.x;
+                int cornerColumn = segmentStart.y;
+                if (cornerSteps > 0)
+                {
+                    if (_dragActiveAxis == 1)
+                        cornerRow = segmentStart.x + direction * cornerSteps;
+                    else
+                        cornerColumn =
+                            segmentStart.y + direction * cornerSteps;
+                }
+
+                corner = new Vector2Int(
+                    Mathf.Clamp(cornerRow, 0, _grid.Rows - 1),
+                    Mathf.Clamp(cornerColumn, 0, _grid.Columns - 1));
                 if (!_grid.TryGetCell(
                         corner.x,
                         corner.y,
-                        out cornerCell) ||
-                    cornerCell == null)
-                    return false;
+                        out PuzzleCell cornerCell) ||
+                    cornerCell == null ||
+                    IsDragPathBlocker(
+                        corner.x,
+                        corner.y,
+                        GetRequiredCollectColor()))
+                {
+                    corner = segmentStart;
+                    if (!_grid.TryGetCell(
+                            corner.x,
+                            corner.y,
+                            out cornerCell) ||
+                        cornerCell == null)
+                        return false;
+                }
+            }
+            else if (!_grid.TryGetCell(
+                         corner.x,
+                         corner.y,
+                         out PuzzleCell blockedCornerCell) ||
+                     blockedCornerCell == null)
+            {
+                return false;
             }
 
             Vector2Int previousCorner =
@@ -1822,20 +2296,19 @@ namespace CarryBlockJam
                 _dragRouteCorners.Add(corner);
 
             int nextAxis = _dragActiveAxis == 1 ? 2 : 1;
-            // Re-anchor the new leg on the corner cell so each side of a
-            // 2x2 square measures cleanly from that corner.
             Vector3 cornerBoardLocal = _grid.GetLocalPosition(corner.x, corner.y);
             _dragActiveAxis = nextAxis;
             _lockedDragAxis = _dragActiveAxis;
             _dragSegmentBoardLocalPoint = cornerBoardLocal;
             _dragTurnProbeBoardLocalPoint = pointerLocal;
             _trailSegmentProgressReported = 0f;
-            _dragCornerTransitionActive = true;
+            _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
             _dragCornerTransitionStart =
                 _cylinder.transform.localPosition;
             _dragCornerTransitionTarget =
                 GetPieceLocalPosition(_cylinder, corner.x, corner.y);
+            _cylinder.transform.localPosition = _dragCornerTransitionTarget;
             RefreshStickmanAnimation(moving: true);
             return true;
         }
@@ -2007,7 +2480,6 @@ namespace CarryBlockJam
                 0f,
                 draggedCells * (rowStep != 0 ? rowStep : columnStep));
 
-            // Collect along the finger reach, including the blocked table cell ahead.
             TryCollectAlongDragSegment(
                 startRow,
                 startColumn,
@@ -2015,23 +2487,64 @@ namespace CarryBlockJam
                 columnStep,
                 directedProgress);
 
+            ApplyDraggedCylinderPosition(
+                directedProgress,
+                rowStep,
+                columnStep,
+                path,
+                startRow,
+                startColumn);
+        }
+
+        private void ApplyDraggedCylinderPosition(
+            float directedProgress,
+            int rowStep,
+            int columnStep,
+            List<Vector2Int> path,
+            int startRow,
+            int startColumn)
+        {
+            if (_cylinder == null)
+                return;
+
             if (path == null || path.Count == 0)
             {
-                _cylinder.transform.localPosition =
-                    GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                if (_grid != null && _grid.IsInside(startRow, startColumn))
+                {
+                    _cylinder.transform.localPosition =
+                        GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                }
+
                 RefreshStickmanAnimation(moving: false);
                 SetCharTableTrailEmitting(false);
                 return;
             }
 
-            float clampedProgress = Mathf.Min(directedProgress, path.Count);
+            // Never advance past the last walkable cell — blockers stay solid
+            // even on very fast finger movement. Never visually enter a table.
+            float maxProgress = path.Count;
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (IsBoxOwnedCell(path[i].x, path[i].y))
+                {
+                    maxProgress = i;
+                    break;
+                }
+            }
+
+            float clampedProgress = Mathf.Min(directedProgress, maxProgress);
             Vector3 targetPosition = EvaluateDragPathPosition(
                 startRow,
                 startColumn,
                 path,
                 clampedProgress);
 
-            _cylinder.transform.localPosition = targetPosition;
+            float followSpeed = Mathf.Max(1f, dragFollowSpeed);
+            float blend = 1f - Mathf.Exp(-followSpeed * Time.deltaTime);
+            _cylinder.transform.localPosition = Vector3.Lerp(
+                _cylinder.transform.localPosition,
+                targetPosition,
+                blend);
             FaceStickmanToward(targetPosition);
             RefreshStickmanAnimation(moving: clampedProgress > 0.01f);
             UpdateCharTableTrailDuringDrag(clampedProgress);
@@ -2092,39 +2605,27 @@ namespace CarryBlockJam
                     cell == null)
                     break;
 
-                CarryBlockJamBoardPiece piece = GetCellBoardPiece(nextRow, nextColumn);
-
-                if (piece == null)
-                {
-                    row = nextRow;
-                    column = nextColumn;
-                    path.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
-                }
-
-                // Normal tables always block CharTable movement (like other obstacles).
-                // Pickup/drop against a table happens from the previous cell on release.
-                if (IsBoxCellBlocker(piece) || IsBoxOwnedCell(nextRow, nextColumn))
+                // Tables and different-color plates always stop the path.
+                // Same-color freestanding plates stay walkable while collecting.
+                if (IsDragPathBlocker(nextRow, nextColumn, pathCollectColor))
                     break;
 
-                if (TryResolveCollectiblePlate(
+                CarryBlockJamBoardPiece piece = GetCellBoardPiece(nextRow, nextColumn);
+                if (piece != null &&
+                    TryResolveCollectiblePlate(
                         piece,
                         nextRow,
                         nextColumn,
                         pathCollectColor,
-                        out CarryBlockJamBoardPiece collectPlate))
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    pathCollectColor == PieceColorType.None)
                 {
-                    if (pathCollectColor == PieceColorType.None)
-                        pathCollectColor = collectPlate.Color;
-
-                    // Freestanding same-color plates remain walkable while collecting.
-                    row = nextRow;
-                    column = nextColumn;
-                    path.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
+                    pathCollectColor = collectPlate.Color;
                 }
 
-                break;
+                row = nextRow;
+                column = nextColumn;
+                path.Add(new Vector2Int(nextRow, nextColumn));
             }
 
             return path;
@@ -2725,10 +3226,12 @@ namespace CarryBlockJam
             int columnStep,
             float directedProgress)
         {
-            // Collect once the finger has clearly entered a cell (aligned with swipe intent).
-            int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.65f));
+            // Collect once the finger has clearly entered a cell.
+            // Cap look-ahead so fast swipes cannot interact past a blocker.
+            int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.35f));
             int row = startRow;
             int column = startColumn;
+            PieceColorType requiredColor = GetRequiredCollectColor();
             for (int stepIndex = 0; stepIndex < reachedSteps; stepIndex++)
             {
                 row += rowStep;
@@ -2738,20 +3241,29 @@ namespace CarryBlockJam
 
                 CarryBlockJamBoardPiece occupant = GetCellBoardPiece(row, column);
                 if (occupant == null)
-                    continue;
-
-                if (HasCollectiblePlateAt(row, column, GetRequiredCollectColor()))
                 {
-                    TryCollectAtCellDuringDrag(row, column);
-                    // Tables stay blocked — stop after collecting from them.
-                    if (IsBoxOwnedCell(row, column) || IsBoxCellBlocker(occupant))
+                    if (IsBoxOwnedCell(row, column))
                         break;
-
                     continue;
                 }
 
-                // Wrong-color plates and any other non-collectible occupant block
-                // collect-through (e.g. red-blue-red must not grab the far red).
+                if (IsBoxOwnedCell(row, column) || IsBoxCellBlocker(occupant))
+                {
+                    // Tables block movement. Same-color plates on a table can still
+                    // be collected from the approach cell, then the path stops.
+                    if (HasCollectiblePlateAt(row, column, requiredColor))
+                        TryCollectAtCellDuringDrag(row, column);
+                    break;
+                }
+
+                if (HasCollectiblePlateAt(row, column, requiredColor))
+                {
+                    TryCollectAtCellDuringDrag(row, column);
+                    requiredColor = GetRequiredCollectColor();
+                    continue;
+                }
+
+                // Different-color plates (and any other non-collectible) hard-stop.
                 break;
             }
         }
@@ -3090,7 +3602,7 @@ namespace CarryBlockJam
 
         private void UpdateCharTableIdleHints()
         {
-            if (!enableCharTableIdleHints || _failTriggered)
+            if (!enableCharTableIdleHints || _failTriggered || _successTriggered)
                 return;
 
             if (_cylinder == null)
@@ -3555,6 +4067,9 @@ namespace CarryBlockJam
             CaptureFailureOriginCell();
             _failTriggered = true;
             _trackingSwipe = false;
+            // Sync logical cell to the visual board position so later snaps don't yank
+            // CharTable back to a stale start cell while the fail panel opens.
+            SyncCylinderLogicalCellToVisual();
             ClearCharTableTrail(resetHeaviness: true);
             StopCharTableIdleShake(restoreRestPose: true);
             if (_charTableHintParticles != null)
@@ -3569,6 +4084,37 @@ namespace CarryBlockJam
 
             _failurePreparing = true;
             StartCoroutine(PlayFailureSequence(completed));
+        }
+
+        private void SyncCylinderLogicalCellToVisual()
+        {
+            if (_cylinder == null || _grid == null || !_grid.IsBuilt)
+                return;
+            if (_failureOriginRow < 0 || _failureOriginColumn < 0)
+                return;
+            if (IsBoxOwnedCell(_failureOriginRow, _failureOriginColumn))
+                return;
+            if (_cylinder.Row == _failureOriginRow &&
+                _cylinder.Column == _failureOriginColumn)
+            {
+                SnapCylinderToLogicalCell();
+                return;
+            }
+
+            ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
+            _cylinder.PlaceOnGrid(
+                _grid,
+                GetPiecesRoot(),
+                _failureOriginRow,
+                _failureOriginColumn);
+            if (_grid.TryGetCell(
+                    _failureOriginRow,
+                    _failureOriginColumn,
+                    out PuzzleCell cell) &&
+                cell != null)
+            {
+                cell.Occupant = _cylinder.gameObject;
+            }
         }
 
         private void CaptureFailureOriginCell()
@@ -3652,13 +4198,14 @@ namespace CarryBlockJam
                 board.PrefabSettings;
             Vector3 failureRotation = settings != null
                 ? settings.charTableFailureRotation
-                : new Vector3(-90f, 0f, 0f);
+                : new Vector3(90f, 0f, 0f);
+
+            // Match PlayCharTableFailureRotation: apply failure euler on top of current local pose.
             Quaternion fallenLocalRotation =
-                Quaternion.Euler(visual.localEulerAngles + failureRotation);
-            Vector3 faceWorldDirection = visual.parent.TransformDirection(
-                fallenLocalRotation * Vector3.up);
-            Vector3 faceBoardDirection =
-                board.transform.InverseTransformDirection(faceWorldDirection);
+                visual.localRotation * Quaternion.Euler(failureRotation);
+            Vector3 faceParentDirection = fallenLocalRotation * Vector3.up;
+            Vector3 faceBoardDirection = board.transform.InverseTransformDirection(
+                visual.parent.TransformDirection(faceParentDirection));
 
             int rowOffset = 0;
             int columnOffset = 0;
@@ -3824,26 +4371,30 @@ namespace CarryBlockJam
                     if (!_grid.TryGetCell(nextRow, nextColumn, out PuzzleCell cell) || cell == null)
                         continue;
 
+                    // Explore through blockers so empty cells beyond tables are still reachable.
+                    queue.Enqueue(new Vector2Int(nextRow, nextColumn));
+
+                    bool isOrigin =
+                        nextRow == startRow &&
+                        nextColumn == startColumn;
                     bool isExcluded =
                         excludedCell.HasValue &&
                         excludedCell.Value.x == nextRow &&
                         excludedCell.Value.y == nextColumn;
-                    bool isEmptyGridCell =
-                        !isExcluded &&
-                        cell.Occupant == null &&
-                        !IsBoxOwnedCell(nextRow, nextColumn) &&
-                        !IsExitCell(nextRow, nextColumn);
-                    if (isEmptyGridCell)
-                    {
-                        result.Add(new Vector2Int(nextRow, nextColumn));
-                        if (result.Count >= requestedCount)
-                            return result;
-                    }
+                    if (isOrigin || isExcluded)
+                        continue;
 
-                    // Keep expanding through empty cells so plates spread across
-                    // the nearest available part of the board.
-                    if (cell.Occupant == null || cell.Occupant == _cylinder.gameObject)
-                        queue.Enqueue(new Vector2Int(nextRow, nextColumn));
+                    bool occupiedByOther =
+                        cell.Occupant != null &&
+                        cell.Occupant != _cylinder.gameObject;
+                    if (occupiedByOther ||
+                        IsBoxOwnedCell(nextRow, nextColumn) ||
+                        IsExitCell(nextRow, nextColumn))
+                        continue;
+
+                    result.Add(new Vector2Int(nextRow, nextColumn));
+                    if (result.Count >= requestedCount)
+                        return result;
                 }
             }
 
@@ -3894,6 +4445,12 @@ namespace CarryBlockJam
             }
 
             _successTriggered = true;
+            _trackingSwipe = false;
+            ClearCharTableTrail(resetHeaviness: true);
+            StopCharTableIdleShake(restoreRestPose: false);
+            if (_charTableHintParticles != null)
+                _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ShowHighlights(false);
             Haptic.MediumTaptic();
             LevelManager.instance.Success();
         }

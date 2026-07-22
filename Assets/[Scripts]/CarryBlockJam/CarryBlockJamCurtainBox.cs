@@ -193,11 +193,14 @@ namespace CarryBlockJam
             if (settings?.colorSprite != null)
                 return settings.colorSprite;
 
+            Sprite sprite = Resources.Load<Sprite>("Sprites/ColorSprite_Cricle");
 #if UNITY_EDITOR
-            Sprite sprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
+            if (sprite == null)
+                sprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
+#endif
             if (sprite != null)
                 return sprite;
-#endif
+
             return GetOrCreateCircleSprite();
         }
 
@@ -307,11 +310,12 @@ namespace CarryBlockJam
             if (settings?.curtainMaterial != null)
                 return settings.curtainMaterial;
 
+            Material material = Resources.Load<Material>("Materials/Mat_Box");
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/[Materials]/Mat_Box.mat");
-#else
-            return Resources.Load<Material>("Materials/Mat_Box");
+            if (material == null)
+                material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/[Materials]/Mat_Box.mat");
 #endif
+            return material;
         }
 
         private static Material CreateRuntimeColorMaterial(Color color)

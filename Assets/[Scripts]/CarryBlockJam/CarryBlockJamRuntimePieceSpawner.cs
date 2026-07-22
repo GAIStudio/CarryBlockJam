@@ -408,10 +408,25 @@ namespace CarryBlockJam
             if (visualRoot == null)
                 return;
 
-#if UNITY_EDITOR
             if (stickmanMaterial == null)
-                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+            {
+                stickmanMaterial = Resources.Load<Material>("Materials/Mat_Stickman");
+#if UNITY_EDITOR
+                if (stickmanMaterial == null)
+                    stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
 #endif
+            }
+
+            if (stickmanBowtieMaterial == null)
+            {
+                stickmanBowtieMaterial = Resources.Load<Material>("Materials/Mat_Bowtie");
+#if UNITY_EDITOR
+                if (stickmanBowtieMaterial == null)
+                    stickmanBowtieMaterial =
+                        AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
+#endif
+            }
+
             if (stickmanMaterial == null)
                 return;
 

@@ -92,15 +92,14 @@ namespace CarryBlockJam
 
         private static Material ResolveHiddenTableMaterial()
         {
-#if UNITY_EDITOR
-            Material editorMaterial = AssetDatabase.LoadAssetAtPath<Material>(HiddenTableMaterialPath);
-            if (editorMaterial != null)
-                return editorMaterial;
-#endif
-            // Build: must live under Assets/Resources (editor AssetDatabase path is stripped).
+            // Build + Play Mode: Resources first so editor/build match.
             Material material = Resources.Load<Material>("Materials/Mat_HiddenTable");
             if (material == null)
                 material = Resources.Load<Material>("Materials/Tables/Mat_HiddenTable");
+#if UNITY_EDITOR
+            if (material == null)
+                material = AssetDatabase.LoadAssetAtPath<Material>(HiddenTableMaterialPath);
+#endif
             return material;
         }
     }
