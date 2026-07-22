@@ -17,19 +17,27 @@ namespace CarryBlockJam
     {
         private const string StickmanAssetPath = "Assets/[Models]/Stickman.fbx";
         private const string StickmanMaterialPath = "Assets/[Materials]/Mat_Stickman.mat";
+        private const string StickmanBowtieMaterialPath = "Assets/[Materials]/Mat_Bowtie.mat";
         private const string StickmanControllerPath = "Assets/[Animations]/Stickman.controller";
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
-        private const string FrozenBoxModelPath = "Assets/[Models]/IceV01.fbx";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/T_Ice.mat";
+        private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
+        private const string CurtainBoxModelPath = "Assets/[Models]/M_Box.fbx";
+        private const string CurtainBoxMaterialPath = "Assets/[Materials]/Mat_Box.mat";
+        private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
 
         [SerializeField] private CarryBlockJamSimpleBoard board;
         [SerializeField] private BoardCylinderPlacement cylinder = BoardCylinderPlacement.CreateDefault();
         [SerializeField] private GameObject cylinderVisualPrefab;
         [SerializeField] private Material stickmanMaterial;
+        [SerializeField] private Material stickmanBowtieMaterial;
         [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
 
         public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
+        public bool UsesCharTableCylinderVisual =>
+            cylinderVisualPrefab != null &&
+            cylinderVisualPrefab.name.IndexOf("CharTable", StringComparison.OrdinalIgnoreCase) >= 0;
 
         [Header("Frozen Table Visual (All Levels)")]
         [FormerlySerializedAs("frozenBoxVisual")]
@@ -99,6 +107,19 @@ namespace CarryBlockJam
             SpawnPieces();
         }
 
+        public void RefreshCurtainVisuals()
+        {
+            BoardCurtainBoxVisualSettings settings =
+                ResolveCurtainBoxVisualSettings();
+            CarryBlockJamCurtainBox[] curtainBoxes =
+                GetComponentsInChildren<CarryBlockJamCurtainBox>(true);
+            for (int i = 0; i < curtainBoxes.Length; i++)
+            {
+                if (curtainBoxes[i] != null)
+                    curtainBoxes[i].RefreshVisualSettings(settings);
+            }
+        }
+
         private void EnsureRuntimeAssets()
         {
 #if UNITY_EDITOR
@@ -108,6 +129,10 @@ namespace CarryBlockJam
             if (stickmanMaterial == null)
                 stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
 
+            if (stickmanBowtieMaterial == null)
+                stickmanBowtieMaterial =
+                    AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
+
             if (stickmanAnimatorController == null)
                 stickmanAnimatorController =
                     AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(StickmanControllerPath);
@@ -115,6 +140,7 @@ namespace CarryBlockJam
             EnsureTableVisualDefaults(tableVisual);
             EnsurePlateVisualDefaults(plateVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
+            EnsureCurtainTableVisualDefaults(curtainTableVisual);
 #endif
         }
 
@@ -148,6 +174,21 @@ namespace CarryBlockJam
             if (settings.material == null)
                 settings.material = AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
         }
+
+        private static void EnsureCurtainTableVisualDefaults(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            if (settings.model == null)
+                settings.model = AssetDatabase.LoadAssetAtPath<GameObject>(CurtainBoxModelPath);
+
+            if (settings.curtainMaterial == null)
+                settings.curtainMaterial = AssetDatabase.LoadAssetAtPath<Material>(CurtainBoxMaterialPath);
+
+            if (settings.colorSprite == null)
+                settings.colorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
+        }
 #endif
 
 #if UNITY_EDITOR
@@ -156,11 +197,19 @@ namespace CarryBlockJam
             if (cylinderVisualPrefab == null)
                 cylinderVisualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(StickmanAssetPath);
 
+            if (stickmanMaterial == null)
+                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+
+            if (stickmanBowtieMaterial == null)
+                stickmanBowtieMaterial =
+                    AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
+
             if (tableVisual == null)
                 tableVisual = BoardPieceVisualSettings.CreateTableDefault();
 
             EnsureTableVisualDefaults(tableVisual);
             EnsureFrozenTableVisualDefaults(frozenTableVisual);
+            EnsureCurtainTableVisualDefaults(curtainTableVisual);
 
             if (plateVisual == null)
                 plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
@@ -277,7 +326,9 @@ namespace CarryBlockJam
         {
             CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
             if (settings != null)
-                return settings.stickmanOffset;
+                return UsesCharTableCylinderVisual
+                    ? settings.charTableOffset
+                    : settings.stickmanOffset;
 
             if (cylinder != null)
                 return cylinder.positionOffset;
@@ -289,7 +340,9 @@ namespace CarryBlockJam
         {
             CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
             if (settings != null)
-                return settings.stickmanRotation;
+                return UsesCharTableCylinderVisual
+                    ? settings.charTableRotation
+                    : settings.stickmanRotation;
 
             return new Vector3(0f, 180f, 0f);
         }
@@ -303,13 +356,32 @@ namespace CarryBlockJam
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.Euler(ResolveStickmanRotation());
-            visual.transform.localScale = cylinder.localScale == Vector3.zero
-                ? Vector3.one
-                : cylinder.localScale;
+            CarryBlockJamPrefabSettings settings = board != null ? board.PrefabSettings : null;
+            if (UsesCharTableCylinderVisual && settings != null)
+            {
+                visual.transform.localScale = settings.charTableScale == Vector3.zero
+                    ? Vector3.one
+                    : settings.charTableScale;
+            }
+            else
+            {
+                visual.transform.localScale = cylinder.localScale == Vector3.zero
+                    ? Vector3.one
+                    : cylinder.localScale;
+            }
             // Do not GroundVisualToParent here: SkinnedMeshRenderer.bounds are unreliable at
             // instantiate. Height comes from Prefab Settings → Stickman Offset.
             ApplyStickmanMaterial(visual);
-            SetupStickmanAnimator(visual);
+            if (UsesCharTableCylinderVisual)
+            {
+                Animator[] animators = visual.GetComponentsInChildren<Animator>(true);
+                for (int i = 0; i < animators.Length; i++)
+                    animators[i].enabled = false;
+            }
+            else
+            {
+                SetupStickmanAnimator(visual);
+            }
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
@@ -358,7 +430,17 @@ namespace CarryBlockJam
                 }
 
                 for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
-                    materials[materialIndex] = stickmanMaterial;
+                {
+                    Material sourceMaterial = materials[materialIndex];
+                    bool isBowtie = sourceMaterial != null &&
+                                    sourceMaterial.name.IndexOf(
+                                        "bowtie",
+                                        StringComparison.OrdinalIgnoreCase) >= 0;
+                    materials[materialIndex] =
+                        isBowtie && stickmanBowtieMaterial != null
+                            ? stickmanBowtieMaterial
+                            : stickmanMaterial;
+                }
                 renderer.sharedMaterials = materials;
             }
         }
@@ -439,6 +521,9 @@ namespace CarryBlockJam
                 if (placement.isHidden)
                 {
                     piece.SetColorHidden(true);
+                    if (visualObject != null)
+                        CarryBlockJamArtTableUtility.ApplyHiddenTableMaterial(visualObject.transform);
+
                     GamePiece visualPiece = visualObject != null ? visualObject.GetComponent<GamePiece>() : null;
                     if (visualPiece != null)
                         visualPiece.ApplyHidden(true);
@@ -1721,18 +1806,20 @@ namespace CarryBlockJam
                 if (!usedCells.Add(gridCell))
                     continue;
 
-                if (!PieceColorPalette.IsPaintable(cell.color))
+                PieceColorType color = cell.color;
+                if (!PieceColorPalette.IsPaintable(color))
                 {
+                    // Ice cells need a table color; fall back so M_Ice still spawns.
+                    color = PieceColorType.Pink;
                     Debug.LogWarning(
-                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] needs a color to spawn a frozen box.");
-                    usedCells.Remove(gridCell);
-                    continue;
+                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] had no color; " +
+                        "using Pink so the ice table can spawn. Set a color in Level Creator.");
                 }
 
                 placements.Add(BoardBoxPlacement.CreateFrozen(
                     cell.row,
                     cell.column,
-                    cell.color,
+                    color,
                     Mathf.Max(1, cell.flagValue)));
             }
         }

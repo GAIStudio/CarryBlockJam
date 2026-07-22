@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d4e8f1a2b3c54d6e9f0a1b2c3d4e5f6a, type: 3}
-  m_Name: GameTutorial
+  m_Name: GameTutorial2_level 2
   m_EditorClassIdentifier: 
   mechanicType: 0
-  gridRows: 10
-  gridColumns: 6
+  gridRows: 13
+  gridColumns: 9
   colorCells: []
   carryBlockJam:
     hasTimer: 1
@@ -40,33 +40,65 @@ MonoBehaviour:
       goals:
       - color: 1
         requiredPlateCount: 3
+    - row: 0
+      column: 3
+      side: 0
+      startIndex: 3
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
+      goals:
+      - color: 2
+        requiredPlateCount: 3
     disableAutoTables: 1
-    tablePlacements: []
+    tablePlacements:
+    - color: 1
+      row: 6
+      column: 4
+      isHidden: 0
+      isFrozen: 0
+      isCurtain: 0
+      curtainColor: 0
+      unlockMoves: 0
     platePlacements:
     - color: 1
+      row: 6
+      column: 1
+      count: 1
+    - color: 1
+      row: 10
+      column: 5
+      count: 1
+    - color: 1
+      row: 10
+      column: 1
+      count: 1
+    - color: 2
+      row: 2
+      column: 3
+      count: 1
+    - color: 2
       row: 3
-      column: 1
+      column: 5
       count: 1
-    - color: 1
-      row: 7
-      column: 4
-      count: 1
-    - color: 1
-      row: 7
-      column: 1
+    - color: 2
+      row: 4
+      column: 3
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
       row: 4
-      column: 4
+      column: 5
   hasTutorial: 1
-  tutorialTextWorldPosition: {x: 0, y: 0, z: -8}
+  tutorialTextWorldPosition: {x: 0, y: 0, z: -6}
   tutorialStages:
   - stageName: 1
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 4, y: 4}
-    targetCell: {x: 7, y: 4}
+    startCell: {x: 4, y: 5}
+    targetCell: {x: 10, y: 5}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
@@ -76,9 +108,10 @@ MonoBehaviour:
     clickableCells: []
   - stageName: Stage 2
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 7, y: 4}
-    targetCell: {x: 7, y: 1}
+    startCell: {x: 10, y: 5}
+    targetCell: {x: 10, y: 1}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
@@ -88,9 +121,10 @@ MonoBehaviour:
     clickableCells: []
   - stageName: Stage 3
     instruction: Collect Plates
+    hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 7, y: 1}
-    targetCell: {x: 3, y: 1}
+    startCell: {x: 10, y: 1}
+    targetCell: {x: 6, y: 1}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
@@ -99,10 +133,11 @@ MonoBehaviour:
     handPauseAtEnds: 0.25
     clickableCells: []
   - stageName: Stage 4
-    instruction: Bring the plates to Check Out
+    instruction: You can rest the plates on the table
+    hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 3, y: 1}
-    targetCell: {x: 0, y: 1}
+    startCell: {x: 6, y: 1}
+    targetCell: {x: 6, y: 4}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}

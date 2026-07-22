@@ -359,27 +359,138 @@ namespace CarryBlockJam
             if (gateRenderers.Count == 0)
                 return;
 
+            // Prefer the side encoded in the model name so a mismatched artGateSide
+            // still loads the correct Mat_Gate* materials.
+            BoardBorderSide resolvedSide = ResolveGateSideFromName(gate);
+            if (resolvedSide != side)
+                side = resolvedSide;
+
             string prefix = CarryBlockJamArtMaterialUtility.GetGateMaterialPrefix(side);
             Material baseMaterial = LoadMaterial(prefix);
             Material colorMaterial = LoadColorMaterial(side, color);
             if (colorMaterial == null)
                 colorMaterial = baseMaterial;
 
-            ResolveBaseAndColorRenderers(gateRenderers, out Renderer baseRenderer, out Renderer colorRenderer);
+            bool appliedColorSlot = false;
+            for (int i = 0; i < gateRenderers.Count; i++)
+            {
+                Renderer renderer = gateRenderers[i];
+                if (renderer == null)
+                    continue;
 
-            if (baseRenderer != null && baseMaterial != null)
-                baseRenderer.sharedMaterial = baseMaterial;
-            if (colorRenderer != null && colorMaterial != null)
-                colorRenderer.sharedMaterial = colorMaterial;
-            else if (gateRenderers.Count == 1 && colorMaterial != null)
-                gateRenderers[0].sharedMaterial = colorMaterial;
+                bool rendererIsColor =
+                    renderer.gameObject.name.IndexOf(
+                        "-Color",
+                        System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0)
+                {
+                    if (rendererIsColor && colorMaterial != null)
+                    {
+                        renderer.sharedMaterial = colorMaterial;
+                        appliedColorSlot = true;
+                    }
+
+                    continue;
+                }
+
+                bool changed = false;
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    Material current = materials[materialIndex];
+                    string materialName = NormalizeMaterialName(
+                        current != null ? current.name : string.Empty);
+                    bool materialIsColor = IsColoredGateMaterialName(materialName);
+                    bool materialIsBase = IsBaseGateMaterialName(materialName);
+
+                    // Color mesh always receives the active goal material, even when
+                    // the previous material came from another side or a palette fallback.
+                    if (rendererIsColor && colorMaterial != null)
+                    {
+                        materials[materialIndex] = colorMaterial;
+                        appliedColorSlot = true;
+                        changed = true;
+                    }
+                    else if (materialIsColor && colorMaterial != null)
+                    {
+                        materials[materialIndex] = colorMaterial;
+                        appliedColorSlot = true;
+                        changed = true;
+                    }
+                    else if (materialIsBase && baseMaterial != null)
+                    {
+                        materials[materialIndex] = baseMaterial;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                    renderer.sharedMaterials = materials;
+            }
+
+            // Legacy gate meshes may not preserve recognizable material names.
+            if (!appliedColorSlot)
+            {
+                ResolveBaseAndColorRenderers(
+                    gateRenderers,
+                    out Renderer baseRenderer,
+                    out Renderer colorRenderer);
+
+                if (baseRenderer != null && baseMaterial != null)
+                    baseRenderer.sharedMaterial = baseMaterial;
+                if (colorRenderer != null && colorMaterial != null)
+                    colorRenderer.sharedMaterial = colorMaterial;
+                else if (gateRenderers.Count == 1 && colorMaterial != null)
+                    gateRenderers[0].sharedMaterial = colorMaterial;
+            }
+        }
+
+        private static string NormalizeMaterialName(string materialName)
+        {
+            if (string.IsNullOrEmpty(materialName))
+                return string.Empty;
+
+            const string instanceSuffix = " (Instance)";
+            if (materialName.EndsWith(instanceSuffix, System.StringComparison.Ordinal))
+                return materialName.Substring(0, materialName.Length - instanceSuffix.Length);
+
+            return materialName;
+        }
+
+        private static bool IsColoredGateMaterialName(string materialName)
+        {
+            if (string.IsNullOrEmpty(materialName) ||
+                !materialName.StartsWith("Mat_Gate", System.StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int separator = materialName.IndexOf('-');
+            return separator > 0 && separator < materialName.Length - 1;
+        }
+
+        private static bool IsBaseGateMaterialName(string materialName)
+        {
+            if (string.IsNullOrEmpty(materialName))
+                return false;
+
+            return materialName.Equals("Mat_GateUp", System.StringComparison.OrdinalIgnoreCase) ||
+                   materialName.Equals("Mat_GateBottom", System.StringComparison.OrdinalIgnoreCase) ||
+                   materialName.Equals("Mat_GateLeft", System.StringComparison.OrdinalIgnoreCase) ||
+                   materialName.Equals("Mat_GateRight", System.StringComparison.OrdinalIgnoreCase);
         }
 
         public static Color GetGateTintColor(bool isUpGate, PieceColorType color)
         {
-            Material material = LoadColorMaterial(
+            return GetGateTintColor(
                 isUpGate ? BoardBorderSide.Top : BoardBorderSide.Bottom,
                 color);
+        }
+
+        public static Color GetGateTintColor(
+            BoardBorderSide side,
+            PieceColorType color)
+        {
+            Material material = LoadColorMaterial(side, color);
             return ExtractMaterialTint(material, color);
         }
 
@@ -669,6 +780,9 @@ namespace CarryBlockJam
                 return BoardBorderSide.Right;
             return BoardBorderSide.Top;
         }
+
+        public static BoardBorderSide ResolveGateSide(Transform gate) =>
+            ResolveGateSideFromName(gate);
 
         private static bool IsUpGate(Transform gate)
         {

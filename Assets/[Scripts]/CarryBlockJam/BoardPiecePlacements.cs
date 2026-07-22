@@ -116,6 +116,7 @@ namespace CarryBlockJam
     [Serializable]
     public class BoardCurtainBoxVisualSettings
     {
+        public GameObject model;
         public Material curtainMaterial;
         public Color curtainTint = Color.white;
         public Sprite colorSprite;

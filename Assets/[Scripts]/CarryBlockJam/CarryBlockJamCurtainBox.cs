@@ -8,6 +8,8 @@ namespace CarryBlockJam
     public sealed class CarryBlockJamCurtainBox : MonoBehaviour
     {
         private const int CircleTextureSize = 64;
+        private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
+        private const float BadgeSurfaceClearance = 0.02f;
 
         private static Sprite _cachedCircleSprite;
 
@@ -24,6 +26,24 @@ namespace CarryBlockJam
         public bool IsOpen => _isOpen;
         public PieceColorType CurtainColor => _curtainColor;
         public int RemainingRequiredDeliveries => _remainingRequiredDeliveries;
+
+        public void RefreshVisualSettings(BoardCurtainBoxVisualSettings visualSettings)
+        {
+            _visualSettings =
+                visualSettings ?? BoardCurtainBoxVisualSettings.CreateDefault();
+            if (_isOpen)
+                return;
+
+            if (_curtainOverlay != null)
+                Destroy(_curtainOverlay);
+            if (_colorCircle != null)
+                Destroy(_colorCircle);
+
+            _curtainOverlay = null;
+            _colorCircle = null;
+            CreateCurtainOverlay();
+            HideBoxVisual();
+        }
 
         public void Bind(
             CarryBlockJamBoardPiece boxPiece,
@@ -93,16 +113,28 @@ namespace CarryBlockJam
 
         private void CreateCurtainOverlay()
         {
-            _curtainOverlay = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject modelPrefab = ResolveCurtainModel(_visualSettings);
+            if (modelPrefab != null)
+            {
+                _curtainOverlay = Instantiate(modelPrefab, transform, false);
+            }
+            else
+            {
+                _curtainOverlay = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Collider collider = _curtainOverlay.GetComponent<Collider>();
+                if (collider != null)
+                    Destroy(collider);
+            }
+
             _curtainOverlay.name = "CurtainOverlay";
             _curtainOverlay.transform.SetParent(transform, false);
             _curtainOverlay.transform.localRotation = Quaternion.identity;
             _curtainOverlay.transform.localScale = Vector3.one;
             _curtainOverlay.transform.localPosition = Vector3.zero;
 
-            Collider collider = _curtainOverlay.GetComponent<Collider>();
-            if (collider != null)
-                Destroy(collider);
+            Collider[] colliders = _curtainOverlay.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                Destroy(colliders[i]);
 
             ApplyCurtainMaterial(_curtainOverlay);
 
@@ -117,6 +149,18 @@ namespace CarryBlockJam
             CreateColorCircle();
         }
 
+        private static GameObject ResolveCurtainModel(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.model != null)
+                return settings.model;
+
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/[Models]/M_Box.fbx");
+#else
+            return Resources.Load<GameObject>("M_Box");
+#endif
+        }
+
         private void CreateColorCircle()
         {
             if (_colorCircle != null)
@@ -126,14 +170,35 @@ namespace CarryBlockJam
             _colorCircle.transform.SetParent(transform, false);
             _colorCircle.transform.localPosition = GetColorCircleLocalPosition();
             _colorCircle.transform.localRotation = Quaternion.Euler(GetResolvedBadgeRotation());
-            _colorCircle.transform.localScale = _visualSettings.GetResolvedBadgeScale();
 
             SpriteRenderer spriteRenderer = _colorCircle.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = _visualSettings.colorSprite != null
-                ? _visualSettings.colorSprite
-                : GetOrCreateCircleSprite();
+            spriteRenderer.sprite = ResolveColorCircleSprite(_visualSettings);
             spriteRenderer.color = PieceColorPalette.GetColor(_curtainColor);
             spriteRenderer.sortingOrder = 50;
+            _colorCircle.transform.localScale = GetNormalizedBadgeScale(spriteRenderer.sprite);
+        }
+
+        private Vector3 GetNormalizedBadgeScale(Sprite sprite)
+        {
+            Vector3 badgeScale = _visualSettings.GetResolvedBadgeScale();
+            if (sprite == null)
+                return badgeScale;
+
+            float spriteSize = Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y);
+            return spriteSize > 0.0001f ? badgeScale / spriteSize : badgeScale;
+        }
+
+        private static Sprite ResolveColorCircleSprite(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.colorSprite != null)
+                return settings.colorSprite;
+
+#if UNITY_EDITOR
+            Sprite sprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(CurtainColorSpritePath);
+            if (sprite != null)
+                return sprite;
+#endif
+            return GetOrCreateCircleSprite();
         }
 
         private Vector3 GetResolvedBadgeRotation()
@@ -158,7 +223,7 @@ namespace CarryBlockJam
             {
                 return new Vector3(
                     curtainBounds.center.x,
-                    curtainBounds.max.y + 0.04f,
+                    curtainBounds.max.y + BadgeSurfaceClearance,
                     curtainBounds.center.z) + offset;
             }
 
@@ -219,17 +284,34 @@ namespace CarryBlockJam
 
         private void ApplyCurtainMaterial(GameObject overlay)
         {
-            Renderer renderer = overlay != null ? overlay.GetComponent<Renderer>() : null;
-            if (renderer == null)
+            if (overlay == null)
                 return;
 
-            if (_visualSettings.curtainMaterial != null)
+            Material material = ResolveCurtainMaterial(_visualSettings);
+            if (material == null)
+                material = CreateRuntimeColorMaterial(_visualSettings.curtainTint);
+
+            Renderer[] renderers = overlay.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
             {
-                renderer.sharedMaterial = _visualSettings.curtainMaterial;
-                return;
-            }
+                if (renderers[i] == null)
+                    continue;
 
-            renderer.sharedMaterial = CreateRuntimeColorMaterial(_visualSettings.curtainTint);
+                renderers[i].enabled = true;
+                renderers[i].sharedMaterial = material;
+            }
+        }
+
+        private static Material ResolveCurtainMaterial(BoardCurtainBoxVisualSettings settings)
+        {
+            if (settings?.curtainMaterial != null)
+                return settings.curtainMaterial;
+
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/[Materials]/Mat_Box.mat");
+#else
+            return Resources.Load<Material>("Materials/Mat_Box");
+#endif
         }
 
         private static Material CreateRuntimeColorMaterial(Color color)

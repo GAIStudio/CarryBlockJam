@@ -108,7 +108,8 @@ namespace CarryBlockJam
 
             text.fontSize = resolvedSettings.fontSize;
             text.fontStyle = resolvedSettings.bold ? FontStyles.Bold : FontStyles.Normal;
-            text.color = resolvedSettings.color;
+            // Goal/gate tint is owned by CarryBlockJamExit.RefreshVisuals.
+            // Do not apply BoardExitLabelSettings.color here or labels drift from the gate.
 
             if (text.font != null && text.font.material != null)
                 text.ForceMeshUpdate(true);

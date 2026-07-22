@@ -14,7 +14,7 @@ namespace CarryBlockJam
     public class CarryBlockJamBoardPiece : MonoBehaviour
     {
         private const float TableToPlateClearance = 0.02f;
-        private const float PlateToPlateClearance = 0.02f;
+        private const float PlateToPlateClearance = 0.01f;
 
         [SerializeField] private CarryBlockJamPieceKind kind;
         [SerializeField] private PieceColorType color = PieceColorType.None;

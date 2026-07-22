@@ -12,7 +12,7 @@ namespace CarryBlockJam
         public const string CarryingParam = "IsCarrying";
         public const string FailedParam = "IsFailed";
         public const string ControllerAssetPath = "Assets/[Animations]/Stickman.controller";
-        public const string EmptyIdleStateName = "SadIdle";
+        public const string EmptyIdleStateName = "Idle";
         public const string FailedStateName = "FallingDown";
 
         [SerializeField] private Animator animator;

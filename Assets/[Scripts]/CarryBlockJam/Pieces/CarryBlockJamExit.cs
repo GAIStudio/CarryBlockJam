@@ -179,9 +179,11 @@ namespace CarryBlockJam
         {
             if (useArtGateMaterials)
             {
+                BoardBorderSide gateSide = CarryBlockJamArtGateUtility.ResolveGateSide(transform);
+                artGateSide = gateSide;
                 CarryBlockJamArtGateUtility.ApplyGateColor(
                     transform,
-                    artGateSide,
+                    gateSide,
                     PieceColorPalette.IsPaintable(CurrentColor) ? CurrentColor : PieceColorType.Grey);
             }
             else if (gateVisual != null)
@@ -201,8 +203,16 @@ namespace CarryBlockJam
                 PieceColorType labelColor = PieceColorPalette.IsPaintable(CurrentColor)
                     ? CurrentColor
                     : PieceColorType.White;
-                // Label color always comes from -GateUp Materials (Mat_GateUp-{Color}).
-                goalLabel.color = CarryBlockJamArtGateUtility.GetGateUpLabelTintColor(labelColor);
+                // Match the logical goal color. Sampling gate materials can diverge
+                // because toon gate mats store tint in textures / non-_Color props.
+                Color goalTint = PieceColorPalette.GetColor(labelColor);
+                goalLabel.color = goalTint;
+
+                // TMP face color multiplies vertex color; keep face white so a shared
+                // font material cannot leave a stale blue/green tint on the label.
+                Material fontMaterial = goalLabel.fontMaterial;
+                if (fontMaterial != null && fontMaterial.HasProperty(ShaderUtilities.ID_FaceColor))
+                    fontMaterial.SetColor(ShaderUtilities.ID_FaceColor, Color.white);
 
                 if (goalLabel.font != null && goalLabel.font.material != null)
                     goalLabel.ForceMeshUpdate(true);
