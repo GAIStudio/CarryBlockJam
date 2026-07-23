@@ -870,7 +870,7 @@ namespace CarryBlockJam
             _dragRouteCorners.Clear();
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
-            if (!_trackingSwipe && !HasCarriedPlates)
+            if (!HasCarriedPlates)
                 _dragCollectColor = PieceColorType.None;
         }
 
@@ -3570,10 +3570,16 @@ namespace CarryBlockJam
 
         private PieceColorType GetRequiredCollectColor()
         {
-            if (_dragCollectColor != PieceColorType.None)
-                return _dragCollectColor;
+            if (HasCarriedPlates)
+            {
+                _dragCollectColor = CarriedColor;
+                return CarriedColor;
+            }
 
-            return HasCarriedPlates ? CarriedColor : PieceColorType.None;
+            if (_carriedPlates.Count == 0)
+                _dragCollectColor = PieceColorType.None;
+
+            return _dragCollectColor;
         }
 
         private bool IsCollectiblePlate(
