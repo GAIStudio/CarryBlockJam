@@ -2986,10 +2986,27 @@ namespace CarryBlockJam
 
             float followSpeed = Mathf.Max(1f, dragFollowSpeed);
             float blend = 1f - Mathf.Exp(-followSpeed * Time.deltaTime);
-            _cylinder.transform.localPosition = Vector3.Lerp(
-                _cylinder.transform.localPosition,
-                targetPosition,
-                blend);
+
+            Vector3 currentPos = _cylinder.transform.localPosition;
+            Vector3 nextPos;
+            if (rowStep != 0)
+            {
+                // Lock X strictly to target line for sharp 90-degree orthogonal turns
+                float newZ = Mathf.Lerp(currentPos.z, targetPosition.z, blend);
+                nextPos = new Vector3(targetPosition.x, targetPosition.y, newZ);
+            }
+            else if (columnStep != 0)
+            {
+                // Lock Z strictly to target line for sharp 90-degree orthogonal turns
+                float newX = Mathf.Lerp(currentPos.x, targetPosition.x, blend);
+                nextPos = new Vector3(newX, targetPosition.y, targetPosition.z);
+            }
+            else
+            {
+                nextPos = Vector3.Lerp(currentPos, targetPosition, blend);
+            }
+
+            _cylinder.transform.localPosition = nextPos;
             FaceStickmanToward(targetPosition);
             RefreshStickmanAnimation(moving: clampedProgress > 0.01f);
             UpdateCharTableTrailDuringDrag(clampedProgress);
