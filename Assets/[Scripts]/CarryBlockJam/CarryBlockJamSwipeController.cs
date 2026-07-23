@@ -39,8 +39,8 @@ namespace CarryBlockJam
         [SerializeField] private float dragCellCommitThreshold = 0.55f;
         [Tooltip("How far into the next cell CharTable must be before that cell is claimed on settle/turns. Higher = less border-sensitive.")]
         [SerializeField] private float dragCellCrossThreshold = 0.65f;
-        [SerializeField, Min(0.2f)] private float dragFollowGain = 0.88f;
-        [SerializeField, Min(1f)] private float dragFollowSpeed = 14f;
+        [SerializeField, Min(0.2f)] private float dragFollowGain = 0.92f;
+        [SerializeField, Min(1f)] private float dragFollowSpeed = 16f;
         [SerializeField] private float charTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
