@@ -2341,8 +2341,7 @@ namespace CarryBlockJam
                 columnStep);
             if (fingerAlong >= 0f)
                 directedProgress = Mathf.Min(directedProgress, fingerAlong + 0.35f);
-            float followGain = Mathf.Clamp(dragFollowGain, 0.2f, 1f);
-            float followProgress = directedProgress * followGain;
+            float followProgress = directedProgress;
 
             // Collect uses the unscaled finger progress so pickup is not delayed
             // behind followGain / visual lag. Tables only here — freestanding
@@ -2740,7 +2739,6 @@ namespace CarryBlockJam
                 _cylinder.transform.localPosition;
             _dragCornerTransitionTarget =
                 GetPieceLocalPosition(_cylinder, corner.x, corner.y);
-            _cylinder.transform.localPosition = _dragCornerTransitionTarget;
             RefreshStickmanAnimation(moving: true);
             return true;
         }
