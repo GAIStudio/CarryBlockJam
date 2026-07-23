@@ -39,8 +39,8 @@ namespace CarryBlockJam
         [SerializeField] private float dragCellCommitThreshold = 0.55f;
         [Tooltip("How far into the next cell CharTable must be before that cell is claimed on settle/turns. Higher = less border-sensitive.")]
         [SerializeField] private float dragCellCrossThreshold = 0.65f;
-        [SerializeField, Min(0.2f)] private float dragFollowGain = 0.92f;
-        [SerializeField, Min(1f)] private float dragFollowSpeed = 18f;
+        [SerializeField, Min(0.2f)] private float dragFollowGain = 0.88f;
+        [SerializeField, Min(1f)] private float dragFollowSpeed = 14f;
         [SerializeField] private float charTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
@@ -70,6 +70,9 @@ namespace CarryBlockJam
         [SerializeField] private float charTableIdleShakeDuration = 0.45f;
         [SerializeField] private float charTableIdleShakeStrength = 0.055f;
         [SerializeField] private float charTableStartHintDuration = 1.4f;
+        [Header("CarryBlockJam SFX (SoundManager names)")]
+        [SerializeField] private string plateCollectSound = "SFX_UI_Fillup_Block_Box_1";
+        [SerializeField] private string plateDeliverSound = "SFX_UI_Fillup_Block_AquaBright_3";
 
         private Camera _gameplayCamera;
         private PuzzleGrid _grid;
@@ -378,13 +381,20 @@ namespace CarryBlockJam
         /// <summary>
         /// Pin logical + visual CharTable to the hysteresis follow cell — never
         /// Round() mid-border positions (that caused side-grid jumps on release).
+        /// Matching exit cells are an exception: settle onto the gate front cell
+        /// when CharTable is already visually there so delivery is not missed.
         /// </summary>
         private void SettleCharTableAtDragEnd()
         {
             UpdateDragFollowCellFromVisual();
 
             Vector2Int cell = _dragFollowCell;
-            if (!IsValidCharTableSettleCell(cell.x, cell.y))
+            if (TryResolveVisualMatchingExitCell(out Vector2Int exitCell))
+            {
+                cell = exitCell;
+                _dragFollowCell = exitCell;
+            }
+            else if (!IsValidCharTableSettleCell(cell.x, cell.y))
             {
                 if (!TryResolveSettleCellAtDragEnd(out cell))
                 {
@@ -395,6 +405,41 @@ namespace CarryBlockJam
 
             PlaceStickmanOnCell(cell.x, cell.y);
             SnapCylinderToLogicalCell();
+        }
+
+        /// <summary>
+        /// True when CharTable's visual pose is clearly on a matching exit cell.
+        /// </summary>
+        private bool TryResolveVisualMatchingExitCell(out Vector2Int exitCell)
+        {
+            exitCell = default;
+            if (!HasCarriedPlates ||
+                !TryGetDragVisualCellContinuous(out float rowContinuous, out float columnContinuous))
+                return false;
+
+            int row = Mathf.Clamp(
+                Mathf.RoundToInt(rowContinuous),
+                0,
+                _grid.Rows - 1);
+            int column = Mathf.Clamp(
+                Mathf.RoundToInt(columnContinuous),
+                0,
+                _grid.Columns - 1);
+
+            // Must be near the cell center — not a borderline Round() into the gate.
+            if (Mathf.Abs(rowContinuous - row) > 0.5f ||
+                Mathf.Abs(columnContinuous - column) > 0.5f)
+                return false;
+
+            if (IsBoxOwnedCell(row, column))
+                return false;
+
+            if (!TryResolveExitAtCell(row, column, out CarryBlockJamExit exit) ||
+                exit == null)
+                return false;
+
+            exitCell = new Vector2Int(row, column);
+            return true;
         }
 
         private bool TryResolveSettleCellAtDragEnd(out Vector2Int cell)
@@ -513,87 +558,39 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Gate delivery only when CharTable is on the gate's front cell — not
-        /// from an approach cell farther inside the board.
+        /// Gate delivery when CharTable is on the gate's front cell. Arriving on
+        /// that cell is enough — no extra finger-past-rim check (that caused
+        /// missed deliveries until leaving and returning).
         /// </summary>
         private bool TryDeliverCarriedPlatesIfPressingExit(Vector2 screenPosition)
         {
             if (!HasCarriedPlates || _cylinder == null || _grid == null)
                 return false;
 
-            int fromRow = _cylinder.Row;
-            int fromColumn = _cylinder.Column;
-
-            if (!TryResolveExitAtCell(
-                    fromRow,
-                    fromColumn,
-                    out CarryBlockJamExit exit) ||
-                exit == null)
-                return false;
-
-            // Must be standing on the exit cell itself, and finger must still
-            // indicate this gate (on it or pressing past its rim).
-            if (!IsFingerOnOrPastExit(
-                    screenPosition,
-                    exit,
-                    fromRow,
-                    fromColumn))
-                return false;
-
-            SendCarriedPlatesToExit(exit, null);
-            return true;
-        }
-
-        private bool IsFingerOnOrPastExit(
-            Vector2 screenPosition,
-            CarryBlockJamExit exit,
-            int fromRow,
-            int fromColumn)
-        {
-            if (exit == null)
-                return false;
-
-            if (TryGetNearestGridCell(
-                    screenPosition,
-                    out int fingerRow,
-                    out int fingerColumn) &&
-                IsCellOnExit(fingerRow, fingerColumn, exit))
-                return true;
-
-            GetExitOutwardStep(exit, out int outRow, out int outColumn);
-            return IsPressingOffBoardEdge(
-                screenPosition,
-                fromRow,
-                fromColumn,
-                outRow,
-                outColumn);
-        }
-
-        private static void GetExitOutwardStep(
-            CarryBlockJamExit exit,
-            out int rowStep,
-            out int columnStep)
-        {
-            rowStep = 0;
-            columnStep = 0;
-            if (exit == null)
-                return;
-
-            switch (exit.Side)
+            if (TryResolveExitAtCell(
+                    _cylinder.Row,
+                    _cylinder.Column,
+                    out CarryBlockJamExit exit) &&
+                exit != null)
             {
-                case BoardBorderSide.Left:
-                    columnStep = -1;
-                    break;
-                case BoardBorderSide.Right:
-                    columnStep = 1;
-                    break;
-                case BoardBorderSide.Top:
-                    rowStep = -1;
-                    break;
-                case BoardBorderSide.Bottom:
-                    rowStep = 1;
-                    break;
+                SendCarriedPlatesToExit(exit, null);
+                return true;
             }
+
+            // Fallback: visual/follow claimed the gate but settle lagged one cell.
+            if (TryResolveVisualMatchingExitCell(out Vector2Int exitCell) &&
+                TryResolveExitAtCell(
+                    exitCell.x,
+                    exitCell.y,
+                    out exit) &&
+                exit != null)
+            {
+                PlaceStickmanOnCell(exitCell.x, exitCell.y);
+                SendCarriedPlatesToExit(exit, null);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1756,6 +1753,7 @@ namespace CarryBlockJam
                     flyDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {
+                    PlayCarrySfx(plateDeliverSound);
                     exitComponent.ConsumeOne(deliverColor);
                     CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
@@ -1881,6 +1879,7 @@ namespace CarryBlockJam
                 RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
             landing.AppendCallback(() =>
             {
+                PlayCarrySfx(plateDeliverSound);
                 plate.StackOnPiece(basePiece);
                 if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
                     cell.Occupant = plate.gameObject;
@@ -2202,9 +2201,9 @@ namespace CarryBlockJam
 
             if (requestedSteps <= 0)
             {
-                // Path length can be 0 while pressed into a neighboring table —
-                // still allow pickup from that table.
-                TryCollectAdjacentTableDuringDrag(
+                // Path length can be 0 while pressed into a neighbor — still pick up
+                // freestanding plates or table stacks on that cell.
+                TryCollectNeighborInDragDirection(
                     screenPosition,
                     segmentStart.x,
                     segmentStart.y,
@@ -2240,14 +2239,15 @@ namespace CarryBlockJam
             float followGain = Mathf.Clamp(dragFollowGain, 0.2f, 1f);
             float followProgress = directedProgress * followGain;
 
+            // Collect uses the unscaled finger progress so pickup is not delayed
+            // behind followGain / visual lag.
             TryCollectAlongDragSegment(
                 segmentStart.x,
                 segmentStart.y,
                 rowStep,
                 columnStep,
-                followProgress);
-            // Neighbor table may sit just past path length 0 — keep pickup reliable.
-            TryCollectAdjacentTableDuringDrag(
+                directedProgress);
+            TryCollectNeighborInDragDirection(
                 screenPosition,
                 segmentStart.x,
                 segmentStart.y,
@@ -3553,9 +3553,9 @@ namespace CarryBlockJam
             int columnStep,
             float directedProgress)
         {
-            // Collect once the finger has clearly entered a cell.
-            // Cap look-ahead so fast swipes cannot interact past a blocker.
-            int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.35f));
+            // Collect as soon as the finger/path enters a cell — do not wait for
+            // deep cross thresholds used by visual settle hysteresis.
+            int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.85f));
             int row = startRow;
             int column = startColumn;
             PieceColorType requiredColor = GetRequiredCollectColor();
@@ -3596,18 +3596,18 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// When CharTable is on the approach cell and the finger is on/into a
-        /// neighboring table, pick up matching plates from that table.
+        /// Pick up freestanding plates or table stacks on the neighbor cell under
+        /// the finger / in the active drag direction.
         /// </summary>
-        private void TryCollectAdjacentTableDuringDrag(
+        private void TryCollectNeighborInDragDirection(
             Vector2 screenPosition,
             int fromRow,
             int fromColumn,
             int rowStep,
             int columnStep)
         {
-            int tableRow = fromRow;
-            int tableColumn = fromColumn;
+            int targetRow = fromRow;
+            int targetColumn = fromColumn;
 
             if (TryGetNearestGridCell(
                     screenPosition,
@@ -3617,11 +3617,10 @@ namespace CarryBlockJam
                     fromRow,
                     fromColumn,
                     fingerRow,
-                    fingerColumn) &&
-                IsBoxOwnedCell(fingerRow, fingerColumn))
+                    fingerColumn))
             {
-                tableRow = fingerRow;
-                tableColumn = fingerColumn;
+                targetRow = fingerRow;
+                targetColumn = fingerColumn;
             }
             else if (rowStep != 0 || columnStep != 0)
             {
@@ -3631,13 +3630,11 @@ namespace CarryBlockJam
                     fromColumn,
                     rowStep,
                     columnStep);
-                if (along < 0.35f)
+                if (along < 0.2f)
                     return;
 
-                tableRow = fromRow + rowStep;
-                tableColumn = fromColumn + columnStep;
-                if (!IsBoxOwnedCell(tableRow, tableColumn))
-                    return;
+                targetRow = fromRow + rowStep;
+                targetColumn = fromColumn + columnStep;
             }
             else
             {
@@ -3645,12 +3642,12 @@ namespace CarryBlockJam
             }
 
             if (!HasCollectiblePlateAt(
-                    tableRow,
-                    tableColumn,
+                    targetRow,
+                    targetColumn,
                     GetRequiredCollectColor()))
                 return;
 
-            TryCollectAtCellDuringDrag(tableRow, tableColumn);
+            TryCollectAtCellDuringDrag(targetRow, targetColumn);
         }
 
         private bool IsMatchingDropTarget(CarryBlockJamBoardPiece piece)
@@ -3817,6 +3814,7 @@ namespace CarryBlockJam
             });
             _plateCollectionTween = collection;
             Haptic.LightTaptic();
+            PlayCarrySfx(plateCollectSound);
             EnsureCharTableTrail();
             RefreshCharTableTrailHeaviness();
             if (!_trackingSwipe)
@@ -3832,6 +3830,14 @@ namespace CarryBlockJam
 
             if (!_trackingSwipe)
                 EvaluateCarriedPlateDeadlock();
+        }
+
+        private static void PlayCarrySfx(string soundName)
+        {
+            if (string.IsNullOrEmpty(soundName) || SoundManager.instance == null)
+                return;
+
+            SoundManager.instance.PlayOneShot(soundName);
         }
 
         private void UpdateCarriedPlateVisuals()
