@@ -3991,6 +3991,24 @@ namespace CarryBlockJam
             StopCharTableIdleShake(restoreRestPose: true);
         }
 
+        /// <summary>
+        /// Called after CharTable/pieces are spawned for a level so the start hint always plays.
+        /// </summary>
+        public void NotifyLevelPiecesSpawned()
+        {
+            _cylinder = null;
+            _charTableHintParticles = null;
+            _charTableStartHintPlayed = false;
+            _lastPlayerInputTime = -1f;
+            _charTableVisualRestCaptured = false;
+            _failTriggered = false;
+            _successTriggered = false;
+            _failurePreparing = false;
+
+            ResolveGameplayReferences();
+            TryPlayCharTableStartHint(force: true);
+        }
+
         private void UpdateCharTableIdleHints()
         {
             if (!enableCharTableIdleHints || _failTriggered || _successTriggered)
@@ -4002,12 +4020,7 @@ namespace CarryBlockJam
             if (!UsesCharTableVisual())
                 return;
 
-            if (!_charTableStartHintPlayed)
-            {
-                _charTableStartHintPlayed = true;
-                _lastPlayerInputTime = Time.unscaledTime;
-                PlayCharTableStartHint();
-            }
+            TryPlayCharTableStartHint(force: false);
 
             if (_trackingSwipe || _isAnimating || _dragCornerTransitionActive)
             {
@@ -4029,17 +4042,39 @@ namespace CarryBlockJam
             _lastPlayerInputTime = Time.unscaledTime;
         }
 
-        private void PlayCharTableStartHint()
+        private bool TryPlayCharTableStartHint(bool force)
         {
+            if (!force && _charTableStartHintPlayed)
+                return false;
+
+            if (!PlayCharTableStartHint())
+                return false;
+
+            _charTableStartHintPlayed = true;
+            _lastPlayerInputTime = Time.unscaledTime;
+            return true;
+        }
+
+        private bool PlayCharTableStartHint()
+        {
+            if (!enableCharTableIdleHints || !UsesCharTableVisual())
+                return false;
+
             if (_cylinder == null)
-                return;
+                ResolveGameplayReferences();
+            if (_cylinder == null)
+                return false;
 
             EnsureCharTableHintParticles();
             if (_charTableHintParticles == null)
-                return;
+                return false;
 
+            ConfigureCharTableHintParticles(_charTableHintParticles);
+            _charTableHintParticles.transform.position =
+                _cylinder.transform.position + Vector3.up * 0.35f;
             _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             _charTableHintParticles.Play(true);
+            return true;
         }
 
         private void EnsureCharTableHintParticles()
@@ -4084,29 +4119,30 @@ namespace CarryBlockJam
             main.playOnAwake = false;
             main.loop = false;
             main.duration = duration;
-            main.startLifetime = 1.1f;
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.15f, 0.45f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.14f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.85f, 1.25f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.55f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.2f);
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(1f, 0.96f, 0.75f, 0.95f),
-                new Color(0.95f, 0.95f, 1f, 0.75f));
+                new Color(1f, 0.97f, 0.82f, 1f),
+                new Color(1f, 1f, 1f, 1f));
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.maxParticles = 48;
+            main.maxParticles = 96;
             main.gravityModifier = -0.05f;
 
             var emission = particles.emission;
             emission.rateOverTime = 0f;
             emission.SetBursts(new[]
             {
-                new ParticleSystem.Burst(0f, 18),
-                new ParticleSystem.Burst(0.2f, 10),
+                new ParticleSystem.Burst(0f, 36),
+                new ParticleSystem.Burst(0.15f, 22),
+                new ParticleSystem.Burst(0.35f, 14),
             });
 
             var shape = particles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = 0.55f;
-            shape.radiusThickness = 0.35f;
+            shape.radius = 0.65f;
+            shape.radiusThickness = 0.4f;
             shape.arc = 360f;
             shape.rotation = new Vector3(90f, 0f, 0f);
 
@@ -4122,8 +4158,9 @@ namespace CarryBlockJam
                 new[]
                 {
                     new GradientAlphaKey(0f, 0f),
-                    new GradientAlphaKey(1f, 0.15f),
-                    new GradientAlphaKey(0.7f, 0.55f),
+                    new GradientAlphaKey(1f, 0.06f),
+                    new GradientAlphaKey(1f, 0.45f),
+                    new GradientAlphaKey(0.45f, 0.8f),
                     new GradientAlphaKey(0f, 1f),
                 });
             colorOverLifetime.color = gradient;
@@ -4133,24 +4170,122 @@ namespace CarryBlockJam
             sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
                 1f,
                 new AnimationCurve(
-                    new Keyframe(0f, 0.4f),
-                    new Keyframe(0.25f, 1f),
+                    new Keyframe(0f, 0.5f),
+                    new Keyframe(0.22f, 1f),
                     new Keyframe(1f, 0.2f)));
 
             var renderer = particles.GetComponent<ParticleSystemRenderer>();
-            if (renderer != null)
+            if (renderer == null)
+                return;
+
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.alignment = ParticleSystemRenderSpace.View;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            Material circleMat = CreateCharTableSoftCircleMaterial();
+            if (circleMat != null)
+                renderer.sharedMaterial = circleMat;
+        }
+
+        private static Texture2D _charTableSoftCircleTexture;
+        private static Material _charTableSoftCircleMaterial;
+
+        private static Material CreateCharTableSoftCircleMaterial()
+        {
+            if (_charTableSoftCircleMaterial != null)
+                return _charTableSoftCircleMaterial;
+
+            Shader particleShader =
+                Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                Shader.Find("Particles/Standard Unlit") ??
+                Shader.Find("Mobile/Particles/Additive") ??
+                Shader.Find("Sprites/Default");
+            if (particleShader == null)
+                return null;
+
+            Texture2D circle = GetCharTableSoftCircleTexture();
+            _charTableSoftCircleMaterial = new Material(particleShader)
             {
-                renderer.renderMode = ParticleSystemRenderMode.Billboard;
-                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                renderer.receiveShadows = false;
-                Shader particleShader =
-                    Shader.Find("Particles/Standard Unlit") ??
-                    Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
-                    Shader.Find("Sprites/Default") ??
-                    Shader.Find("Mobile/Particles/Additive");
-                if (particleShader != null)
-                    renderer.material = new Material(particleShader);
+                name = "CharTableSoftCircleParticleMat",
+                hideFlags = HideFlags.HideAndDontSave,
+                mainTexture = circle,
+                color = Color.white
+            };
+
+            if (_charTableSoftCircleMaterial.HasProperty("_BaseMap"))
+                _charTableSoftCircleMaterial.SetTexture("_BaseMap", circle);
+            if (_charTableSoftCircleMaterial.HasProperty("_MainTex"))
+                _charTableSoftCircleMaterial.SetTexture("_MainTex", circle);
+            Color baseTint = new Color(1.25f, 1.25f, 1.25f, 1f);
+            if (_charTableSoftCircleMaterial.HasProperty("_BaseColor"))
+                _charTableSoftCircleMaterial.SetColor("_BaseColor", baseTint);
+            if (_charTableSoftCircleMaterial.HasProperty("_Color"))
+                _charTableSoftCircleMaterial.SetColor("_Color", baseTint);
+
+            if (_charTableSoftCircleMaterial.HasProperty("_Surface"))
+                _charTableSoftCircleMaterial.SetFloat("_Surface", 1f);
+            if (_charTableSoftCircleMaterial.HasProperty("_Blend"))
+                _charTableSoftCircleMaterial.SetFloat("_Blend", 0f);
+            if (_charTableSoftCircleMaterial.HasProperty("_SrcBlend"))
+                _charTableSoftCircleMaterial.SetFloat(
+                    "_SrcBlend",
+                    (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (_charTableSoftCircleMaterial.HasProperty("_DstBlend"))
+                _charTableSoftCircleMaterial.SetFloat(
+                    "_DstBlend",
+                    (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (_charTableSoftCircleMaterial.HasProperty("_ZWrite"))
+                _charTableSoftCircleMaterial.SetFloat("_ZWrite", 0f);
+            if (_charTableSoftCircleMaterial.HasProperty("_Mode"))
+                _charTableSoftCircleMaterial.SetFloat("_Mode", 2f);
+
+            _charTableSoftCircleMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            _charTableSoftCircleMaterial.DisableKeyword("_ALPHATEST_ON");
+            _charTableSoftCircleMaterial.SetOverrideTag("RenderType", "Transparent");
+            _charTableSoftCircleMaterial.renderQueue = 3000;
+            return _charTableSoftCircleMaterial;
+        }
+
+        private static Texture2D GetCharTableSoftCircleTexture()
+        {
+            if (_charTableSoftCircleTexture != null)
+                return _charTableSoftCircleTexture;
+
+            const int size = 128;
+            _charTableSoftCircleTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "CharTableSoftCircleParticle",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            float center = (size - 1) * 0.5f;
+            float radius = center * 0.9f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x - center) / radius;
+                    float dy = (y - center) / radius;
+                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
+                    float alpha;
+                    if (distance >= 1f)
+                        alpha = 0f;
+                    else if (distance < 0.55f)
+                        alpha = 1f;
+                    else
+                    {
+                        float t = (distance - 0.55f) / 0.45f;
+                        alpha = 1f - (t * t * (3f - 2f * t));
+                    }
+
+                    _charTableSoftCircleTexture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
             }
+
+            _charTableSoftCircleTexture.Apply(false, true);
+            return _charTableSoftCircleTexture;
         }
 
         private Transform GetCharTableShakeTarget()

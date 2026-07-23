@@ -259,6 +259,13 @@ namespace CarryBlockJam
             if (!Application.isPlaying)
                 EditorUtility.SetDirty(board);
 #endif
+
+            if (Application.isPlaying)
+            {
+                CarryBlockJamSwipeController swipe = GetComponent<CarryBlockJamSwipeController>();
+                if (swipe != null)
+                    swipe.NotifyLevelPiecesSpawned();
+            }
         }
 
         private void EnsurePiecesRoot()
