@@ -913,7 +913,7 @@ namespace CarryBlockJam
             SnapCylinderToLogicalCell();
         }
 
-        private void SnapCylinderToLogicalCell()
+        private void SnapCylinderToLogicalCell(bool immediate = false)
         {
             if (_cylinder == null || _grid == null || !_grid.IsBuilt)
                 return;
@@ -921,8 +921,25 @@ namespace CarryBlockJam
             if (!_grid.IsInside(_cylinder.Row, _cylinder.Column))
                 return;
 
-            _cylinder.transform.localPosition =
-                GetPieceLocalPosition(_cylinder, _cylinder.Row, _cylinder.Column);
+            Vector3 targetPosition = GetPieceLocalPosition(_cylinder, _cylinder.Row, _cylinder.Column);
+            if (immediate)
+            {
+                _cylinder.transform.DOKill();
+                _cylinder.transform.localPosition = targetPosition;
+            }
+            else
+            {
+                float dist = Vector3.Distance(_cylinder.transform.localPosition, targetPosition);
+                if (dist > 0.01f)
+                {
+                    _cylinder.transform.DOKill();
+                    _cylinder.transform.DOLocalMove(targetPosition, 0.08f).SetEase(Ease.OutQuad);
+                }
+                else
+                {
+                    _cylinder.transform.localPosition = targetPosition;
+                }
+            }
         }
 
         /// <summary>
@@ -2882,8 +2899,13 @@ namespace CarryBlockJam
                     _grid != null &&
                     _grid.IsInside(startRow, startColumn))
                 {
-                    _cylinder.transform.localPosition =
-                        GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                    Vector3 targetPos = GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                    float speed = Mathf.Max(1f, dragFollowSpeed);
+                    float t = 1f - Mathf.Exp(-speed * Time.deltaTime);
+                    _cylinder.transform.localPosition = Vector3.Lerp(
+                        _cylinder.transform.localPosition,
+                        targetPos,
+                        t);
                 }
                 RefreshStickmanAnimation(moving: false);
                 return;
@@ -2930,8 +2952,13 @@ namespace CarryBlockJam
             {
                 if (_grid != null && _grid.IsInside(startRow, startColumn))
                 {
-                    _cylinder.transform.localPosition =
-                        GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                    Vector3 targetPos = GetPieceLocalPosition(_cylinder, startRow, startColumn);
+                    float speed = Mathf.Max(1f, dragFollowSpeed);
+                    float t = 1f - Mathf.Exp(-speed * Time.deltaTime);
+                    _cylinder.transform.localPosition = Vector3.Lerp(
+                        _cylinder.transform.localPosition,
+                        targetPos,
+                        t);
                 }
 
                 RefreshStickmanAnimation(moving: false);
