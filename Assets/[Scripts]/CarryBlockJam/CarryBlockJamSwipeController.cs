@@ -24,13 +24,13 @@ namespace CarryBlockJam
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
         [SerializeField] private float tablePlateSettleDuration = 0.16f;
         [SerializeField] private float tablePlateAnimationSpeed = 1.4f;
-        [SerializeField] private float pickupPlateBounceDuration = 0.42f;
-        [SerializeField] private float pickupPlateBounceHeight = 0.8f;
-        [SerializeField] private float pickupPlateStagger = 0.07f;
-        [SerializeField] private float pickupPlateSettleDuration = 0.2f;
-        [SerializeField] private float pickupPlateSettleScale = 0.22f;
-        [SerializeField] private float pickupPlateFrontClearance = 0.65f;
-        [SerializeField] private float pickupPlateAnimationSpeed = 1.6f;
+        [SerializeField] private float pickupPlateBounceDuration = 0.18f;
+        [SerializeField] private float pickupPlateBounceHeight = 0.55f;
+        [SerializeField] private float pickupPlateStagger = 0.025f;
+        [SerializeField] private float pickupPlateSettleDuration = 0.08f;
+        [SerializeField] private float pickupPlateSettleScale = 0.16f;
+        [SerializeField] private float pickupPlateFrontClearance = 0.45f;
+        [SerializeField] private float pickupPlateAnimationSpeed = 2.8f;
         [SerializeField] private float dragCornerTransitionDuration = 0f;
         [SerializeField] private float dragTurnThresholdCells = 0.22f;
         [SerializeField] private float dragTurnProbeResetCells = 0.14f;
@@ -363,7 +363,7 @@ namespace CarryBlockJam
             // Never travel on release — that was teleporting CharTable toward a
             // clamped finger/edge cell after circular flicks. Settle where the
             // visual already is; deliveries happen in place.
-            SettleCharTableAtDragEnd();
+            SettleCharTableAtDragEnd(screenPosition);
 
             TryInteractMatchingTableOnRelease(screenPosition);
             TryDeliverCarriedPlatesIfPressingExit(screenPosition);
@@ -384,7 +384,7 @@ namespace CarryBlockJam
         /// Matching exit cells are an exception: settle onto the gate front cell
         /// when CharTable is already visually there so delivery is not missed.
         /// </summary>
-        private void SettleCharTableAtDragEnd()
+        private void SettleCharTableAtDragEnd(Vector2 screenPosition)
         {
             UpdateDragFollowCellFromVisual();
 
@@ -403,8 +403,42 @@ namespace CarryBlockJam
                 }
             }
 
+            // Catch any freestanding plate CharTable ended on.
+            TryCollectPlatesUnderCharTable();
+
             PlaceStickmanOnCell(cell.x, cell.y);
             SnapCylinderToLogicalCell();
+        }
+
+        /// <summary>
+        /// Collect freestanding plates only from the cell CharTable is currently
+        /// on (visual nearest + follow cell). Enables quick multi-pickup while
+        /// dragging through several plate cells — never vacuums neighbors.
+        /// </summary>
+        private void TryCollectPlatesUnderCharTable()
+        {
+            if (_cylinder == null || _grid == null)
+                return;
+
+            if (TryGetDragVisualCellContinuous(
+                    out float rowContinuous,
+                    out float columnContinuous))
+            {
+                int visualRow = Mathf.Clamp(
+                    Mathf.RoundToInt(rowContinuous),
+                    0,
+                    _grid.Rows - 1);
+                int visualColumn = Mathf.Clamp(
+                    Mathf.RoundToInt(columnContinuous),
+                    0,
+                    _grid.Columns - 1);
+                if (!IsBoxOwnedCell(visualRow, visualColumn))
+                    TryCollectAtCellDuringDrag(visualRow, visualColumn);
+            }
+
+            UpdateDragFollowCellFromVisual();
+            if (!IsBoxOwnedCell(_dragFollowCell.x, _dragFollowCell.y))
+                TryCollectAtCellDuringDrag(_dragFollowCell.x, _dragFollowCell.y);
         }
 
         /// <summary>
@@ -1660,8 +1694,8 @@ namespace CarryBlockJam
 
         /// <summary>
         /// Movement blockers while dragging: every table, and any plate that is not
-        /// collectible for the active drag color. Same-color freestanding plates stay open.
-        /// CharTable never enters a table cell while dragging — delivery happens on release.
+        /// collectible for the active drag color. Same-color freestanding plates stay
+        /// walkable so CharTable can overlap and collect quickly on that cell.
         /// </summary>
         private bool IsDragPathBlocker(int row, int column, PieceColorType requiredColor)
         {
@@ -1678,7 +1712,7 @@ namespace CarryBlockJam
             if (IsBoxCellBlocker(piece))
                 return true;
 
-            // Same-color plates (including stacks with a matching plate) stay walkable.
+            // Same-color plates stay walkable for on-cell pickup.
             if (HasCollectiblePlateAt(row, column, requiredColor))
                 return false;
 
@@ -2201,14 +2235,15 @@ namespace CarryBlockJam
 
             if (requestedSteps <= 0)
             {
-                // Path length can be 0 while pressed into a neighbor — still pick up
-                // freestanding plates or table stacks on that cell.
+                // Path length can be 0 while pressed into a table neighbor — still
+                // pick up table stacks on that cell (not freestanding plates).
                 TryCollectNeighborInDragDirection(
                     screenPosition,
                     segmentStart.x,
                     segmentStart.y,
                     rowStep,
                     columnStep);
+                TryCollectPlatesUnderCharTable();
                 RefreshStickmanAnimation(moving: false);
                 return;
             }
@@ -2240,7 +2275,8 @@ namespace CarryBlockJam
             float followProgress = directedProgress * followGain;
 
             // Collect uses the unscaled finger progress so pickup is not delayed
-            // behind followGain / visual lag.
+            // behind followGain / visual lag. Tables only here — freestanding
+            // plates collect from the cell CharTable is on (below).
             TryCollectAlongDragSegment(
                 segmentStart.x,
                 segmentStart.y,
@@ -2269,6 +2305,9 @@ namespace CarryBlockJam
                 movablePath,
                 segmentStart.x,
                 segmentStart.y);
+
+            // Quick on-cell freestanding pickup as CharTable overlaps each plate cell.
+            TryCollectPlatesUnderCharTable();
 
             // Reanchor from hysteresis follow cell — never Round() at borders.
             Vector2Int stopCell = IsValidCharTableSettleCell(
@@ -2819,6 +2858,8 @@ namespace CarryBlockJam
                 path,
                 startRow,
                 startColumn);
+
+            TryCollectPlatesUnderCharTable();
         }
 
         private void ApplyDraggedCylinderPosition(
@@ -2933,7 +2974,7 @@ namespace CarryBlockJam
                     break;
 
                 // Tables and different-color plates always stop the path.
-                // Same-color freestanding plates stay walkable while collecting.
+                // Same-color freestanding plates stay walkable for on-cell pickup.
                 if (IsDragPathBlocker(nextRow, nextColumn, pathCollectColor))
                     break;
 
@@ -3553,8 +3594,9 @@ namespace CarryBlockJam
             int columnStep,
             float directedProgress)
         {
-            // Collect as soon as the finger/path enters a cell — do not wait for
-            // deep cross thresholds used by visual settle hysteresis.
+            // Table stacks only (CharTable cannot enter box cells).
+            // Freestanding plates collect via TryCollectPlatesUnderCharTable when
+            // CharTable overlaps their cell — supports quick multi-pickup.
             int reachedSteps = Mathf.Max(0, Mathf.FloorToInt(directedProgress + 0.85f));
             int row = startRow;
             int column = startColumn;
@@ -3576,28 +3618,26 @@ namespace CarryBlockJam
 
                 if (IsBoxOwnedCell(row, column) || IsBoxCellBlocker(occupant))
                 {
-                    // Tables block movement. Same-color plates on a table can still
-                    // be collected from the approach cell, then the path stops.
                     if (HasCollectiblePlateAt(row, column, requiredColor))
                         TryCollectAtCellDuringDrag(row, column);
                     break;
                 }
 
+                // Freestanding: do not vacuum from the path — walk onto the cell
+                // and collect under CharTable instead.
                 if (HasCollectiblePlateAt(row, column, requiredColor))
                 {
-                    TryCollectAtCellDuringDrag(row, column);
                     requiredColor = GetRequiredCollectColor();
                     continue;
                 }
 
-                // Different-color plates (and any other non-collectible) hard-stop.
                 break;
             }
         }
 
         /// <summary>
-        /// Pick up freestanding plates or table stacks on the neighbor cell under
-        /// the finger / in the active drag direction.
+        /// Pick up table stacks on the neighbor cell under the finger / in the
+        /// active drag direction. Freestanding plates are not collected here.
         /// </summary>
         private void TryCollectNeighborInDragDirection(
             Vector2 screenPosition,
@@ -3640,6 +3680,10 @@ namespace CarryBlockJam
             {
                 return;
             }
+
+            // Freestanding plates only collect when drag ends on their cell.
+            if (!IsBoxOwnedCell(targetRow, targetColumn))
+                return;
 
             if (!HasCollectiblePlateAt(
                     targetRow,
