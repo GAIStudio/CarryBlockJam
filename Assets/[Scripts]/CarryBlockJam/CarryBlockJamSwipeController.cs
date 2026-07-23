@@ -92,6 +92,7 @@ namespace CarryBlockJam
         private Vector3 _dragCornerTransitionStart;
         private Vector3 _dragCornerTransitionTarget;
         private bool _trackingSwipe;
+        private int _activeFingerId = -1;
         private bool _commitDraggedMovementInstantly;
         private bool _isAnimating;
         private bool _successTriggered;
@@ -156,24 +157,65 @@ namespace CarryBlockJam
                 FinishSwipe(Input.mousePosition);
         }
 
+        private bool TryGetTouchById(int fingerId, out Touch touch)
+        {
+            touch = default;
+            int count = Input.touchCount;
+            for (int i = 0; i < count; i++)
+            {
+                Touch t = Input.GetTouch(i);
+                if (t.fingerId == fingerId)
+                {
+                    touch = t;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private void HandleTouchInput()
         {
             if (Input.touchCount == 0)
-                return;
-
-            Touch touch = Input.GetTouch(0);
-            switch (touch.phase)
             {
-                case TouchPhase.Began:
-                    TryStartSwipe(touch.position);
-                    break;
-                case TouchPhase.Ended:
-                    if (_trackingSwipe)
-                        FinishSwipe(touch.position);
-                    break;
-                case TouchPhase.Canceled:
+                _activeFingerId = -1;
+                return;
+            }
+
+            if (_trackingSwipe && _activeFingerId >= 0)
+            {
+                if (TryGetTouchById(_activeFingerId, out Touch activeTouch))
+                {
+                    if (activeTouch.phase == TouchPhase.Ended)
+                    {
+                        FinishSwipe(activeTouch.position);
+                        _activeFingerId = -1;
+                    }
+                    else if (activeTouch.phase == TouchPhase.Canceled)
+                    {
+                        CancelSwipe();
+                        _activeFingerId = -1;
+                    }
+                }
+                else
+                {
                     CancelSwipe();
-                    break;
+                    _activeFingerId = -1;
+                }
+                return;
+            }
+
+            for (int i = 0; i < Input.touchCount; i++)
+            {
+                Touch touch = Input.GetTouch(i);
+                if (touch.phase == TouchPhase.Began)
+                {
+                    TryStartSwipe(touch.position);
+                    if (_trackingSwipe)
+                    {
+                        _activeFingerId = touch.fingerId;
+                        break;
+                    }
+                }
             }
         }
 
@@ -267,6 +309,7 @@ namespace CarryBlockJam
         private void FinishSwipe(Vector2 screenPosition)
         {
             _trackingSwipe = false;
+            _activeFingerId = -1;
             ShowHighlights(false);
 
             ResolveGameplayReferences();
@@ -850,6 +893,7 @@ namespace CarryBlockJam
         private void CancelSwipe()
         {
             _trackingSwipe = false;
+            _activeFingerId = -1;
             ResetOrthogonalDrag();
             if (!HasCarriedPlates)
                 _dragCollectColor = PieceColorType.None;
@@ -2077,9 +2121,18 @@ namespace CarryBlockJam
             }
 
             ShowHighlights(false);
-            Vector2 currentScreenPosition = Input.touchCount > 0
-                ? Input.GetTouch(0).position
-                : (Vector2)Input.mousePosition;
+            Vector2 currentScreenPosition;
+            if (Input.touchCount > 0)
+            {
+                if (_activeFingerId >= 0 && TryGetTouchById(_activeFingerId, out Touch activeTouch))
+                    currentScreenPosition = activeTouch.position;
+                else
+                    currentScreenPosition = Input.GetTouch(0).position;
+            }
+            else
+            {
+                currentScreenPosition = Input.mousePosition;
+            }
 
             bool tutorialPathLocked =
                 TutorialManager.Instance != null &&
@@ -3131,6 +3184,13 @@ namespace CarryBlockJam
             if (_gameplayCamera == null)
                 return false;
 
+            // Priority 1: Grid cell hit test (allows tapping/dragging directly on the character's cell)
+            if (TryGetNearestGridCell(screenPosition, out int cellRow, out int cellColumn))
+            {
+                if (cellRow == _cylinder.Row && cellColumn == _cylinder.Column)
+                    return true;
+            }
+
             Renderer[] renderers = _cylinder.GetComponentsInChildren<Renderer>(true);
             bool hasBounds = false;
             Bounds worldBounds = default;
@@ -3152,11 +3212,7 @@ namespace CarryBlockJam
             }
 
             if (!hasBounds)
-            {
-                return TryGetNearestGridCell(screenPosition, out int row, out int column) &&
-                       row == _cylinder.Row &&
-                       column == _cylinder.Column;
-            }
+                return false;
 
             Vector3 center = worldBounds.center;
             Vector3 extents = worldBounds.extents;
@@ -3188,7 +3244,9 @@ namespace CarryBlockJam
                 }
             }
 
-            const float selectionPaddingPixels = 18f;
+            float dpiScale = Screen.dpi > 0f ? (Screen.dpi / 160f) : (Screen.width / 1080f);
+            float selectionPaddingPixels = Mathf.Clamp(36f * dpiScale, 24f, 120f);
+
             return hasVisibleCorner &&
                    screenPosition.x >= minX - selectionPaddingPixels &&
                    screenPosition.x <= maxX + selectionPaddingPixels &&
