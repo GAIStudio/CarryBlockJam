@@ -22,16 +22,24 @@ namespace CarryBlockJam
         private CarryBlockJamBoardPiece _boxPiece;
         private Transform _visualRoot;
         private GamePiece _visualPiece;
+        private PieceColorType _revealColor = PieceColorType.Grey;
         private readonly HashSet<CarryBlockJamBoardPiece> _surroundingPlates = new HashSet<CarryBlockJamBoardPiece>();
         private bool _isRevealed;
 
         public bool IsRevealed => _isRevealed;
 
-        public void Bind(CarryBlockJamBoardPiece boxPiece, Transform visualRoot, GamePiece visualPiece)
+        public void Bind(
+            CarryBlockJamBoardPiece boxPiece,
+            Transform visualRoot,
+            GamePiece visualPiece,
+            PieceColorType revealColor = PieceColorType.Grey)
         {
             _boxPiece = boxPiece;
             _visualRoot = visualRoot;
             _visualPiece = visualPiece;
+            _revealColor = PieceColorPalette.IsPaintable(revealColor)
+                ? revealColor
+                : PieceColorType.Grey;
         }
 
         public void Bind(CarryBlockJamBoardPiece boxPiece, GamePiece visualPiece)
@@ -80,9 +88,9 @@ namespace CarryBlockJam
             _boxPiece.RevealHiddenColor();
 
             if (_visualRoot != null)
-                CarryBlockJamArtTableUtility.ApplyTableColor(_visualRoot, _boxPiece.TrueColor);
+                CarryBlockJamArtTableUtility.ApplyTableColor(_visualRoot, _revealColor);
             else if (_visualPiece != null)
-                _visualPiece.ApplyColor(_boxPiece.TrueColor);
+                _visualPiece.ApplyColor(_revealColor);
 
             if (_visualPiece != null)
                 _visualPiece.ApplyHidden(false);

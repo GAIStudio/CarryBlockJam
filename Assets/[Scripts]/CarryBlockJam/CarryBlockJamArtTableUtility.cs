@@ -8,6 +8,7 @@ namespace CarryBlockJam
 {
     /// <summary>
     /// Applies art table materials (base + color slot) onto M_Table visuals.
+    /// Shared table color is authored on the board/spawner prefab.
     /// </summary>
     public static class CarryBlockJamArtTableUtility
     {
@@ -92,12 +93,15 @@ namespace CarryBlockJam
 
         private static Material ResolveHiddenTableMaterial()
         {
+            // Build + Play Mode: Resources first so editor/build match.
+            Material material = Resources.Load<Material>("Materials/Mat_HiddenTable");
+            if (material == null)
+                material = Resources.Load<Material>("Materials/Tables/Mat_HiddenTable");
 #if UNITY_EDITOR
-            Material editorMaterial = AssetDatabase.LoadAssetAtPath<Material>(HiddenTableMaterialPath);
-            if (editorMaterial != null)
-                return editorMaterial;
+            if (material == null)
+                material = AssetDatabase.LoadAssetAtPath<Material>(HiddenTableMaterialPath);
 #endif
-            return Resources.Load<Material>("Materials/Mat_HiddenTable");
+            return material;
         }
     }
 }

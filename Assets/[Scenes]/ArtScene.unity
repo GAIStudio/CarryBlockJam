@@ -12982,6 +12982,27 @@ MonoBehaviour:
     loop: 0
     playOnAwake: 0
     source: {fileID: 0}
+  - name: SFX_UI_Fillup_Block_Box_1
+    clip: {fileID: 8300000, guid: ac09cdd5fe1526248a11db901fb4a128, type: 3}
+    volume: 1
+    pitch: 1
+    loop: 0
+    playOnAwake: 0
+    source: {fileID: 0}
+  - name: SFX_UI_Fillup_Block_AquaBright_3
+    clip: {fileID: 8300000, guid: 20b0220d746fff648a6fb13d035d4dc2, type: 3}
+    volume: 1
+    pitch: 1
+    loop: 0
+    playOnAwake: 0
+    source: {fileID: 0}
+  - name: SFX_Interact_Fabric
+    clip: {fileID: 8300000, guid: 9ff148f8a0ec8d344a62ddaca446a72b, type: 3}
+    volume: 1
+    pitch: 1
+    loop: 0
+    playOnAwake: 0
+    source: {fileID: 0}
 --- !u!4 &1065578927
 Transform:
   m_ObjectHideFlags: 0

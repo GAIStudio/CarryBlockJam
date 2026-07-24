@@ -325,8 +325,27 @@ namespace GAITemplate
 
             CarryBlockJam.CarryBlockJamSwipeController swipe =
                 FindObjectOfType<CarryBlockJam.CarryBlockJamSwipeController>();
-            if (swipe != null)
-                swipe.PlaceStickmanAtCell(stage.startCell.x, stage.startCell.y, force: true);
+            if (swipe == null || swipe.IsEndLocked)
+                return;
+
+            swipe.PlaceStickmanAtCell(stage.startCell.x, stage.startCell.y, force: true);
+        }
+
+        /// <summary>
+        /// Hide the tutorial when the level ends so stage advance cannot teleport CharTable.
+        /// </summary>
+        public void CompleteAndHide()
+        {
+            if (!IsActive)
+                return;
+
+            if (_levelData != null)
+            {
+                PlayerPrefs.SetInt(PrefKeyPrefix + _levelData.name, 1);
+                PlayerPrefs.Save();
+            }
+
+            EndTutorial();
         }
 
         private void StartHandPathLoop(TutorialStage stage)
