@@ -15,7 +15,23 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 4
+    column: 4
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 8
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 30

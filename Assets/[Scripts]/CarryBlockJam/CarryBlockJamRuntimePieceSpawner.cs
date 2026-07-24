@@ -247,6 +247,7 @@ namespace CarryBlockJam
                 boxPlacements);
             spawnedCount += SpawnPlates(grid, platePlacements);
             InitializeHiddenBoxes(grid);
+            InitializeHiddenPlates(grid);
 
             if (spawnedCount == 0)
             {
@@ -626,13 +627,37 @@ namespace CarryBlockJam
                 plateObject.transform.localRotation = Quaternion.identity;
                 plateObject.transform.localScale = Vector3.one;
 
-                CreatePlateVisual(plateVisual, "Visual", plateObject.transform, placement.color);
+                GameObject visualObject = CreatePlateVisual(
+                    plateVisual,
+                    "Visual",
+                    plateObject.transform,
+                    placement.color);
                 CarryBlockJamBoardPiece piece = plateObject.AddComponent<CarryBlockJamBoardPiece>();
                 piece.Initialize(
                     CarryBlockJamPieceKind.Plate,
                     placement.color,
                     plateVisual != null ? plateVisual.offset : new Vector3(0f, 0.75f, 0f),
                     new Vector3(0f, 1.15f, 0f));
+
+                if (placement.isHidden)
+                {
+                    piece.SetColorHidden(true);
+                    if (visualObject != null)
+                        CarryBlockJamArtPlateUtility.ApplyHiddenPlateMaterial(visualObject.transform);
+
+                    GamePiece visualPiece = visualObject != null
+                        ? visualObject.GetComponent<GamePiece>()
+                        : null;
+                    if (visualPiece != null)
+                        visualPiece.ApplyHidden(true);
+
+                    CarryBlockJamHiddenPlate hiddenPlate =
+                        plateObject.AddComponent<CarryBlockJamHiddenPlate>();
+                    hiddenPlate.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        visualPiece);
+                }
 
                 piece.PlaceOnGrid(grid, _piecesRoot, placement.row, placement.column);
                 if (cell != null)
@@ -784,19 +809,38 @@ namespace CarryBlockJam
             }
         }
 
+        private void InitializeHiddenPlates(PuzzleGrid grid)
+        {
+            if (_piecesRoot == null || grid == null)
+                return;
+
+            CarryBlockJamHiddenPlate[] hiddenPlates =
+                _piecesRoot.GetComponentsInChildren<CarryBlockJamHiddenPlate>(true);
+            for (int i = 0; i < hiddenPlates.Length; i++)
+            {
+                if (hiddenPlates[i] == null)
+                    continue;
+
+                hiddenPlates[i].RegisterSurroundingPlates(grid);
+            }
+        }
+
         private BoardPlatePlacement[] GetPlatePlacements(
             PuzzleGrid grid,
             HashSet<Vector2Int> occupied,
             BoardBoxPlacement[] boxPlacements)
         {
             BoardPlatePlacement[] levelPlacements = GetLevelPlatePlacements();
+            BoardPlatePlacement[] basePlacements;
             if (levelPlacements.Length > 0)
-                return levelPlacements;
+                basePlacements = levelPlacements;
+            else if (!randomizeTables && plates != null && plates.Length > 0)
+                basePlacements = plates;
+            else
+                basePlacements = GenerateExitDrivenPlatePlacements(grid, occupied, boxPlacements);
 
-            if (!randomizeTables && plates != null && plates.Length > 0)
-                return plates;
-
-            return GenerateExitDrivenPlatePlacements(grid, occupied, boxPlacements);
+            // Level creator Hidden cells spawn as plates (same paint tool, plate runtime).
+            return MergeHiddenPlatePlacementsFromGrid(basePlacements);
         }
 
         private readonly struct ExitDrivenSpawnPlan
@@ -898,9 +942,6 @@ namespace CarryBlockJam
             BoardBoxPlacement[] boxPlacements)
         {
             ExitDrivenSpawnPlan plan = BuildExitDrivenSpawnPlan();
-            if (plan.PlateCountsByColor.Count == 0)
-                return Array.Empty<BoardPlatePlacement>();
-
             var placements = new List<BoardPlatePlacement>();
             var boxCells = new HashSet<Vector2Int>();
             if (boxPlacements != null)
@@ -921,6 +962,25 @@ namespace CarryBlockJam
             Vector2Int stickmanCell = GetStickmanCell();
             var blockedPlateCells = new HashSet<Vector2Int>(boxCells) { stickmanCell };
 
+            // Place grid Hidden plates first so auto plates can cluster around them.
+            var reservedCells = new HashSet<Vector2Int>(blockedPlateCells);
+            foreach (Vector2Int occupiedCell in localOccupied)
+                reservedCells.Add(occupiedCell);
+            AppendHiddenPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
+            for (int i = 0; i < placements.Count; i++)
+            {
+                BoardPlatePlacement hiddenPlacement = placements[i];
+                if (hiddenPlacement == null)
+                    continue;
+
+                var cell = new Vector2Int(hiddenPlacement.row, hiddenPlacement.column);
+                localOccupied.Add(cell);
+                blockedPlateCells.Add(cell);
+            }
+
+            if (plan.PlateCountsByColor.Count == 0)
+                return placements.ToArray();
+
             foreach (KeyValuePair<PieceColorType, int> entry in plan.PlateCountsByColor)
             {
                 PieceColorType color = entry.Key;
@@ -932,8 +992,8 @@ namespace CarryBlockJam
                         color,
                         localOccupied,
                         blockedPlateCells);
-                    if (HasHiddenBoxes(boxPlacements))
-                        PrioritizeCandidatesNearHiddenBoxes(candidates, boxPlacements);
+                    if (HasHiddenPlates(placements))
+                        PrioritizeCandidatesNearHiddenPlates(candidates, placements);
                     else
                         Shuffle(candidates);
 
@@ -1045,28 +1105,29 @@ namespace CarryBlockJam
             return row <= 0 || row >= grid.Rows - 1;
         }
 
-        private static bool HasHiddenBoxes(BoardBoxPlacement[] boxPlacements)
+        private static bool HasHiddenPlates(List<BoardPlatePlacement> platePlacements)
         {
-            if (boxPlacements == null)
+            if (platePlacements == null)
                 return false;
 
-            for (int i = 0; i < boxPlacements.Length; i++)
+            for (int i = 0; i < platePlacements.Count; i++)
             {
-                if (boxPlacements[i] != null && boxPlacements[i].isHidden)
+                if (platePlacements[i] != null && platePlacements[i].isHidden)
                     return true;
             }
 
             return false;
         }
 
-        private static void PrioritizeCandidatesNearHiddenBoxes(
+        private static void PrioritizeCandidatesNearHiddenPlates(
             List<PlateSpawnCandidate> candidates,
-            BoardBoxPlacement[] boxPlacements)
+            List<BoardPlatePlacement> platePlacements)
         {
-            if (candidates == null || candidates.Count <= 1 || boxPlacements == null || boxPlacements.Length == 0)
+            if (candidates == null || candidates.Count <= 1 ||
+                platePlacements == null || platePlacements.Count == 0)
                 return;
 
-            HashSet<Vector2Int> preferredCells = BuildHiddenBoxSurroundingCells(boxPlacements);
+            HashSet<Vector2Int> preferredCells = BuildHiddenPlateSurroundingCells(platePlacements);
             if (preferredCells.Count == 0)
                 return;
 
@@ -1081,19 +1142,20 @@ namespace CarryBlockJam
             });
         }
 
-        private static HashSet<Vector2Int> BuildHiddenBoxSurroundingCells(BoardBoxPlacement[] boxPlacements)
+        private static HashSet<Vector2Int> BuildHiddenPlateSurroundingCells(
+            List<BoardPlatePlacement> platePlacements)
         {
             var preferredCells = new HashSet<Vector2Int>();
-            for (int i = 0; i < boxPlacements.Length; i++)
+            for (int i = 0; i < platePlacements.Count; i++)
             {
-                BoardBoxPlacement placement = boxPlacements[i];
+                BoardPlatePlacement placement = platePlacements[i];
                 if (placement == null || !placement.isHidden)
                     continue;
 
-                var boxCell = new Vector2Int(placement.row, placement.column);
+                var plateCell = new Vector2Int(placement.row, placement.column);
 
                 for (int directionIndex = 0; directionIndex < HiddenBoxSurroundingOffsets.Length; directionIndex++)
-                    preferredCells.Add(boxCell + HiddenBoxSurroundingOffsets[directionIndex]);
+                    preferredCells.Add(plateCell + HiddenBoxSurroundingOffsets[directionIndex]);
             }
 
             return preferredCells;
@@ -1707,15 +1769,37 @@ namespace CarryBlockJam
                 }
             }
 
-            AppendHiddenBoxPlacementsFromGrid(levelData, placements, usedCells);
+            // Grid Hidden flag now spawns plates (see MergeHiddenPlatePlacementsFromGrid).
             AppendCurtainBoxPlacementsFromGrid(levelData, placements, usedCells);
             AppendFrozenBoxPlacementsFromGrid(levelData, placements, usedCells);
             return placements.ToArray();
         }
 
-        private static void AppendHiddenBoxPlacementsFromGrid(
+        private BoardPlatePlacement[] MergeHiddenPlatePlacementsFromGrid(
+            BoardPlatePlacement[] existing)
+        {
+            LevelData levelData = ResolveLevelData();
+            var placements = existing != null && existing.Length > 0
+                ? new List<BoardPlatePlacement>(existing)
+                : new List<BoardPlatePlacement>();
+            var usedCells = new HashSet<Vector2Int>();
+
+            for (int i = 0; i < placements.Count; i++)
+            {
+                BoardPlatePlacement placement = placements[i];
+                if (placement == null)
+                    continue;
+
+                usedCells.Add(new Vector2Int(placement.row, placement.column));
+            }
+
+            AppendHiddenPlatePlacementsFromGrid(levelData, placements, usedCells);
+            return placements.ToArray();
+        }
+
+        private static void AppendHiddenPlatePlacementsFromGrid(
             LevelData levelData,
-            List<BoardBoxPlacement> placements,
+            List<BoardPlatePlacement> placements,
             HashSet<Vector2Int> usedCells)
         {
             if (levelData?.colorCells == null || placements == null || usedCells == null)
@@ -1728,18 +1812,33 @@ namespace CarryBlockJam
                     continue;
 
                 var gridCell = new Vector2Int(cell.row, cell.column);
-                if (!usedCells.Add(gridCell))
+
+                // Existing plate on a Hidden-painted cell becomes a hidden plate.
+                if (usedCells.Contains(gridCell))
+                {
+                    for (int placementIndex = 0; placementIndex < placements.Count; placementIndex++)
+                    {
+                        BoardPlatePlacement existing = placements[placementIndex];
+                        if (existing == null)
+                            continue;
+
+                        if (existing.row == cell.row && existing.column == cell.column)
+                            existing.isHidden = true;
+                    }
+
                     continue;
+                }
 
                 if (!PieceColorPalette.IsPaintable(cell.color))
                 {
                     Debug.LogWarning(
-                        $"[CarryBlockJam] Hidden cell [{cell.row},{cell.column}] needs a color to spawn a hidden box.");
-                    usedCells.Remove(gridCell);
+                        $"[CarryBlockJam] Hidden cell [{cell.row},{cell.column}] needs a color to spawn a hidden plate.");
                     continue;
                 }
 
-                placements.Add(BoardBoxPlacement.Create(cell.row, cell.column, cell.color, isHidden: true));
+                usedCells.Add(gridCell);
+                placements.Add(
+                    BoardPlatePlacement.Create(cell.row, cell.column, cell.color, isHidden: true));
             }
         }
 
