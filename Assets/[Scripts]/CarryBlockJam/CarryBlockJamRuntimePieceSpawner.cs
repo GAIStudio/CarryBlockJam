@@ -22,7 +22,7 @@ namespace CarryBlockJam
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
         private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_FrozenPlate.mat";
         private const string CurtainBoxModelPath = "Assets/[Models]/M_Box.fbx";
         private const string CurtainBoxMaterialPath = "Assets/[Materials]/Mat_Box.mat";
         private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
@@ -1023,7 +1023,11 @@ namespace CarryBlockJam
             foreach (KeyValuePair<PieceColorType, int> entry in plan.PlateCountsByColor)
             {
                 PieceColorType color = entry.Key;
-                int requiredCount = entry.Value;
+                int alreadyPlaced = CountPlacementsOfColor(placements, color);
+                int requiredCount = entry.Value - alreadyPlaced;
+                if (requiredCount <= 0)
+                    continue;
+
                 for (int plateIndex = 0; plateIndex < requiredCount; plateIndex++)
                 {
                     List<PlateSpawnCandidate> candidates = CollectPlateCandidates(
@@ -1156,6 +1160,24 @@ namespace CarryBlockJam
             }
 
             return false;
+        }
+
+        private static int CountPlacementsOfColor(
+            List<BoardPlatePlacement> platePlacements,
+            PieceColorType color)
+        {
+            if (platePlacements == null || !PieceColorPalette.IsPaintable(color))
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < platePlacements.Count; i++)
+            {
+                BoardPlatePlacement placement = platePlacements[i];
+                if (placement != null && placement.color == color)
+                    count++;
+            }
+
+            return count;
         }
 
         private static void PrioritizeCandidatesNearHiddenPlates(

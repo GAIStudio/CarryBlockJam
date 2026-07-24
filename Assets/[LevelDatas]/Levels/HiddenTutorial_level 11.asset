@@ -18,7 +18,7 @@ MonoBehaviour:
   colorCells:
   - row: 5
     column: 4
-    color: 4
+    color: 6
     flag: 1
     flagValue: 0
     direction: 0
@@ -58,7 +58,9 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 4
-        requiredPlateCount: 3
+        requiredPlateCount: 5
+      - color: 6
+        requiredPlateCount: 1
     disableAutoTables: 1
     tablePlacements: []
     platePlacements:
@@ -77,6 +79,14 @@ MonoBehaviour:
     - color: 6
       row: 2
       column: 2
+      count: 1
+    - color: 4
+      row: 6
+      column: 4
+      count: 1
+    - color: 4
+      row: 4
+      column: 3
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
@@ -99,7 +109,7 @@ MonoBehaviour:
     handPauseAtEnds: 0.25
     clickableCells: []
   - stageName: Stage 2
-    instruction: ' Collect plates around hidden tables to reveal them '
+    instruction: ' Collect plates around hidden plate to reveal them '
     hideHand: 0
     useGridHandPath: 1
     startCell: {x: 6, y: 5}
@@ -116,7 +126,7 @@ MonoBehaviour:
     hideHand: 0
     useGridHandPath: 1
     startCell: {x: 6, y: 3}
-    targetCell: {x: 5, y: 3}
+    targetCell: {x: 4, y: 3}
     startPositionOffset: {x: 0, y: 0, z: 0}
     targetPositionOffset: {x: 0, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}

@@ -17,7 +17,7 @@ namespace CarryBlockJam
     {
         private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
         private const string FrozenBoxPrefabPath = "Assets/[Prefabs]/IceV01.prefab";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
+        private const string FrozenPlateMaterialPath = "Assets/[Materials]/Mat_FrozenPlate.mat";
 
         private CarryBlockJamBoardPiece _platePiece;
         private Transform _plateVisualRoot;
@@ -408,15 +408,19 @@ namespace CarryBlockJam
 
         private static Material ResolveMaterial(BoardFrozenBoxVisualSettings settings)
         {
-            if (settings?.material != null)
-                return settings.material;
-
 #if UNITY_EDITOR
-            Material editorMaterial = AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
+            Material editorMaterial = AssetDatabase.LoadAssetAtPath<Material>(FrozenPlateMaterialPath);
             if (editorMaterial != null)
                 return editorMaterial;
 #endif
-            Material material = Resources.Load<Material>("Materials/Mat_Ice");
+            Material material = Resources.Load<Material>("Materials/Mat_FrozenPlate");
+            if (material != null)
+                return material;
+
+            if (settings?.material != null)
+                return settings.material;
+
+            material = Resources.Load<Material>("Materials/Mat_Ice");
             if (material == null)
                 material = Resources.Load<Material>("Materials/T_Ice");
             return material;
