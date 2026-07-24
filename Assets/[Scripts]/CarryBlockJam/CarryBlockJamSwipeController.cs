@@ -1973,9 +1973,11 @@ namespace CarryBlockJam
                     PlayCarrySfx(plateDeliverSound);
                     exitComponent.ConsumeOne(deliverColor);
                     CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
+                    CarryBlockJamCurtainPlate.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
+                    CarryBlockJamFrozenPlate.NotifyPlateCollected(arrivingPlate);
                     if (arrivingPlate != null)
                     {
                         arrivingPlate.gameObject.SetActive(false);
@@ -3768,6 +3770,9 @@ namespace CarryBlockJam
             if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
                 return false;
 
+            if (piece.IsFrozen || piece.IsColorHidden || piece.IsCurtained)
+                return false;
+
             int checkRow = atRow >= 0 ? atRow : piece.Row;
             int checkColumn = atColumn >= 0 ? atColumn : piece.Column;
             if (TutorialManager.Instance != null &&
@@ -4143,6 +4148,7 @@ namespace CarryBlockJam
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                 CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
+                CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
             }
 
             collection.OnComplete(() =>

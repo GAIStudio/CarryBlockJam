@@ -220,12 +220,20 @@ namespace CarryBlockJam
         public int column;
         public PieceColorType color = PieceColorType.Red;
         public bool isHidden;
+        public bool isFrozen;
+        public bool isCurtain;
+        public PieceColorType curtainColor = PieceColorType.Purple;
+        [Min(1)] public int unlockMoves = 3;
 
         public static BoardPlatePlacement Create(
             int row,
             int column,
             PieceColorType color,
-            bool isHidden = false)
+            bool isHidden = false,
+            bool isFrozen = false,
+            int unlockMoves = 3,
+            bool isCurtain = false,
+            PieceColorType curtainColor = PieceColorType.Purple)
         {
             return new BoardPlatePlacement
             {
@@ -233,7 +241,40 @@ namespace CarryBlockJam
                 column = column,
                 color = color,
                 isHidden = isHidden,
+                isFrozen = isFrozen,
+                isCurtain = isCurtain,
+                curtainColor = curtainColor,
+                unlockMoves = Mathf.Max(1, unlockMoves),
             };
+        }
+
+        public static BoardPlatePlacement CreateFrozen(
+            int row,
+            int column,
+            PieceColorType color,
+            int unlockMoves)
+        {
+            return Create(
+                row,
+                column,
+                color,
+                isHidden: false,
+                isFrozen: true,
+                unlockMoves: unlockMoves);
+        }
+
+        public static BoardPlatePlacement CreateCurtain(
+            int row,
+            int column,
+            PieceColorType plateColor,
+            PieceColorType curtainColor)
+        {
+            return Create(
+                row,
+                column,
+                plateColor,
+                isCurtain: true,
+                curtainColor: curtainColor);
         }
 
         public static BoardPlatePlacement[] CreateDefaults()

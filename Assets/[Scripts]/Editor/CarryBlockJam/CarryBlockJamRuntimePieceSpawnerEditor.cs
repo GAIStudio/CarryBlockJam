@@ -60,18 +60,18 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.Space(8f);
             CarryBlockJamFrozenBoxVisualSettingsEditorUtility.DrawFrozenBoxVisualSettings(
-                "Frozen Table Visual (All Levels)",
+                "Frozen Plate Visual (All Levels)",
                 _frozenTableVisual);
             EditorGUILayout.HelpBox(
-                "Shared for every level. Level Creator only chooses ice cell positions and unlock moves.",
+                "Shared for every level. Level Creator only chooses ice cell color, positions, and unlock moves.",
                 MessageType.None);
 
             EditorGUILayout.Space(8f);
             CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
-                "Curtain Table Visual (All Levels)",
+                "Curtain Plate Visual (All Levels)",
                 _curtainTableVisual);
             EditorGUILayout.HelpBox(
-                "Shared for every level. Level Creator only chooses curtain cell positions and color.",
+                "Shared for every level. Level Creator chooses curtain plate color and collect color.",
                 MessageType.None);
 
             EditorGUILayout.Space(8f);
