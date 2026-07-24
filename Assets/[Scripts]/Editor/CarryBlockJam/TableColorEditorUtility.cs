@@ -5,7 +5,7 @@ using UnityEngine;
 namespace CarryBlockJam.Editor
 {
     /// <summary>
-    /// Table color options from Mat_Table-{Color} under Assets/[Materials]/-Table Materials.
+    /// Table color options from Mat_Table-{Color} under Assets/[Materials].
     /// </summary>
     internal static class TableColorEditorUtility
     {

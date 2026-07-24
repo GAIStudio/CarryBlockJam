@@ -12,7 +12,7 @@ namespace CarryBlockJam
     /// </summary>
     public static class CarryBlockJamArtMaterialUtility
     {
-        public const string TableMaterialsFolder = "Assets/[Materials]/-Table Materials";
+        public const string TableMaterialsFolder = "Assets/[Materials]";
         public const string PlateMaterialsFolder = "Assets/[Materials]/-Plate Materials";
         public const string GateUpMaterialsFolder = "Assets/[Materials]/-GateUp Materials";
         public const string GateBottomMaterialsFolder = "Assets/[Materials]/-GateBottom Materials";
@@ -67,8 +67,10 @@ namespace CarryBlockJam
                 PieceColorType.Plum or PieceColorType.Hidden => "Purple",
                 PieceColorType.Brown => "Orange",
                 PieceColorType.Navy => "Blue",
-                PieceColorType.White => "LightBlue",
+                PieceColorType.White => "White",
                 PieceColorType.Grey => "Grey",
+                PieceColorType.Black => "Black",
+                PieceColorType.Black2 => "Black2",
                 _ => null,
             };
         }
@@ -88,6 +90,18 @@ namespace CarryBlockJam
             if (suffix.Equals("DarkGreen", System.StringComparison.OrdinalIgnoreCase))
             {
                 color = PieceColorType.GreenDark;
+                return true;
+            }
+
+            if (suffix.Equals("Black2", System.StringComparison.OrdinalIgnoreCase))
+            {
+                color = PieceColorType.Black2;
+                return true;
+            }
+
+            if (suffix.Equals("Black", System.StringComparison.OrdinalIgnoreCase))
+            {
+                color = PieceColorType.Black;
                 return true;
             }
 
@@ -113,11 +127,19 @@ namespace CarryBlockJam
 
 #if UNITY_EDITOR
             if (material == null && !string.IsNullOrEmpty(materialsFolder))
+            {
                 material = AssetDatabase.LoadAssetAtPath<Material>($"{materialsFolder}/{materialName}.mat");
+
+                // Color mats may live in typed subfolders (e.g. -Table Materials).
+                if (material == null)
+                    material = FindMaterialInFolder(materialsFolder, materialName);
+            }
 
             // Legacy flat folder fallback while assets migrate.
             if (material == null)
                 material = AssetDatabase.LoadAssetAtPath<Material>($"Assets/[Materials]/{materialName}.mat");
+            if (material == null)
+                material = FindMaterialInFolder("Assets/[Materials]", materialName);
 #endif
 
             if (material != null)
@@ -145,5 +167,31 @@ namespace CarryBlockJam
 
             return PieceColorPalette.GetMaterial(color);
         }
+
+#if UNITY_EDITOR
+        private static Material FindMaterialInFolder(string materialsFolder, string materialName)
+        {
+            if (string.IsNullOrEmpty(materialsFolder) || string.IsNullOrEmpty(materialName))
+                return null;
+
+            string[] guids = AssetDatabase.FindAssets($"{materialName} t:Material", new[] { materialsFolder });
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (!string.Equals(fileName, materialName, System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (material != null)
+                    return material;
+            }
+
+            return null;
+        }
+#endif
     }
 }
