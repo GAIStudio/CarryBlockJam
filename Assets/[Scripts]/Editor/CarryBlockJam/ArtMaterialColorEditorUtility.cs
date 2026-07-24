@@ -139,6 +139,8 @@ namespace CarryBlockJam.Editor
             return cache.AvailableTypes[index >= 0 ? index : 0];
         }
 
+        private static bool _projectChangeHooked;
+
         public static void InvalidateCache(string cacheKey = null)
         {
             if (string.IsNullOrEmpty(cacheKey))
@@ -158,23 +160,24 @@ namespace CarryBlockJam.Editor
 
         private static void EnsureCache(string cacheKey, string materialsFolder, string materialPrefix)
         {
+            EnsureProjectChangeHook();
+
             if (!Caches.TryGetValue(cacheKey, out ColorCache cache))
             {
                 cache = new ColorCache();
                 Caches[cacheKey] = cache;
             }
 
-            string stamp = BuildFolderStamp(materialsFolder, materialPrefix);
+            // Reuse cache across inspector redraws. Full folder scans were freezing Level Creator.
             if (cache.Built &&
-                cache.Stamp == stamp &&
                 cache.AvailableTypes != null &&
                 cache.DisplayNames != null)
                 return;
 
             cache.Built = true;
-            cache.Stamp = stamp;
             var foundColors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             CollectMaterialSuffixes(materialsFolder, materialPrefix, foundColors);
+            cache.Stamp = $"{materialsFolder}|{materialPrefix}|{string.Join(",", foundColors)}";
 
             var available = new List<PieceColorType>();
             foreach (string colorName in foundColors)
@@ -194,11 +197,13 @@ namespace CarryBlockJam.Editor
             cache.DisplayNames = display.ToArray();
         }
 
-        private static string BuildFolderStamp(string materialsFolder, string materialPrefix)
+        private static void EnsureProjectChangeHook()
         {
-            var suffixes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectMaterialSuffixes(materialsFolder, materialPrefix, suffixes);
-            return $"{materialsFolder}|{materialPrefix}|{string.Join(",", suffixes)}";
+            if (_projectChangeHooked)
+                return;
+
+            _projectChangeHooked = true;
+            EditorApplication.projectChanged += () => InvalidateCache();
         }
 
         private static void CollectMaterialSuffixes(
