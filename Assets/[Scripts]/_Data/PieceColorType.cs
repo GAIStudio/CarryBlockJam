@@ -31,6 +31,8 @@ namespace GAITemplate
         Plum,
         White,
         Hidden,
+        Black,
+        Black2,
     }
 
     public static class PieceColorPalette
@@ -106,6 +108,10 @@ namespace GAITemplate
                     return new Color(0.510f, 0.204f, 0.573f);
                 case PieceColorType.White:
                     return new Color(0.941f, 0.917f, 0.820f);
+                case PieceColorType.Black:
+                    return new Color(0.22f, 0.22f, 0.24f);
+                case PieceColorType.Black2:
+                    return new Color(0.10f, 0.10f, 0.12f);
                 default:
                     return Color.black;
             }

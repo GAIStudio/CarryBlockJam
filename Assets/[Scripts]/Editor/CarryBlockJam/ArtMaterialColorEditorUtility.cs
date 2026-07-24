@@ -18,6 +18,7 @@ namespace CarryBlockJam.Editor
         {
             public string[] DisplayNames;
             public PieceColorType[] AvailableTypes;
+            public string Stamp;
             public bool Built;
         }
 
@@ -163,26 +164,17 @@ namespace CarryBlockJam.Editor
                 Caches[cacheKey] = cache;
             }
 
-            if (cache.Built && cache.AvailableTypes != null && cache.DisplayNames != null)
+            string stamp = BuildFolderStamp(materialsFolder, materialPrefix);
+            if (cache.Built &&
+                cache.Stamp == stamp &&
+                cache.AvailableTypes != null &&
+                cache.DisplayNames != null)
                 return;
 
             cache.Built = true;
+            cache.Stamp = stamp;
             var foundColors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-            string[] guids = AssetDatabase.FindAssets("t:Material", new[] { materialsFolder });
-            var suffixRegex = new Regex(
-                $"^{Regex.Escape(materialPrefix)}-(.+)$",
-                RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-            for (int i = 0; i < guids.Length; i++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                string name = Path.GetFileNameWithoutExtension(path);
-                Match match = suffixRegex.Match(name);
-                if (!match.Success)
-                    continue;
-
-                foundColors.Add(match.Groups[1].Value);
-            }
+            CollectMaterialSuffixes(materialsFolder, materialPrefix, foundColors);
 
             var available = new List<PieceColorType>();
             foreach (string colorName in foundColors)
@@ -200,6 +192,38 @@ namespace CarryBlockJam.Editor
 
             cache.AvailableTypes = available.ToArray();
             cache.DisplayNames = display.ToArray();
+        }
+
+        private static string BuildFolderStamp(string materialsFolder, string materialPrefix)
+        {
+            var suffixes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectMaterialSuffixes(materialsFolder, materialPrefix, suffixes);
+            return $"{materialsFolder}|{materialPrefix}|{string.Join(",", suffixes)}";
+        }
+
+        private static void CollectMaterialSuffixes(
+            string materialsFolder,
+            string materialPrefix,
+            SortedSet<string> foundColors)
+        {
+            if (foundColors == null || string.IsNullOrEmpty(materialsFolder) || string.IsNullOrEmpty(materialPrefix))
+                return;
+
+            string[] guids = AssetDatabase.FindAssets("t:Material", new[] { materialsFolder });
+            var suffixRegex = new Regex(
+                $"^{Regex.Escape(materialPrefix)}-(.+)$",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                string name = Path.GetFileNameWithoutExtension(path);
+                Match match = suffixRegex.Match(name);
+                if (!match.Success)
+                    continue;
+
+                foundColors.Add(match.Groups[1].Value);
+            }
         }
 
         private static int CompareColors(PieceColorType a, PieceColorType b)
@@ -221,6 +245,10 @@ namespace CarryBlockJam.Editor
                 PieceColorType.Purple => 7,
                 PieceColorType.Pink => 8,
                 PieceColorType.Cherry => 9,
+                PieceColorType.Grey => 10,
+                PieceColorType.Black => 11,
+                PieceColorType.Black2 => 12,
+                PieceColorType.White => 13,
                 _ => 100 + (int)color,
             };
         }
