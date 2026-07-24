@@ -1971,6 +1971,7 @@ namespace CarryBlockJam
                 sequence.AppendCallback(() =>
                 {
                     PlayCarrySfx(plateDeliverSound);
+                    // VFX is owned by the gate exit — never the plate/CharTable pose.
                     exitComponent.ConsumeOne(deliverColor);
                     CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamCurtainPlate.NotifyPlatesDeliveredToExit(deliverColor, 1);
