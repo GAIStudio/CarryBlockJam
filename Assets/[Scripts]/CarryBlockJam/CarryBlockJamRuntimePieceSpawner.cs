@@ -22,7 +22,7 @@ namespace CarryBlockJam
         private const string TableModelPath = "Assets/[Models]/M_Table.fbx";
         private const string PlateModelPath = "Assets/[Models]/M_Plate.fbx";
         private const string FrozenBoxModelPath = "Assets/[Models]/M_Ice.fbx";
-        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_Ice.mat";
+        private const string FrozenBoxMaterialPath = "Assets/[Materials]/Mat_FrozenPlate.mat";
         private const string CurtainBoxModelPath = "Assets/[Models]/M_Box.fbx";
         private const string CurtainBoxMaterialPath = "Assets/[Materials]/Mat_Box.mat";
         private const string CurtainColorSpritePath = "Assets/[Sprites]/ColorSprite_Cricle.png";
@@ -35,21 +35,24 @@ namespace CarryBlockJam
         [SerializeField] private RuntimeAnimatorController stickmanAnimatorController;
 
         public RuntimeAnimatorController StickmanAnimatorController => stickmanAnimatorController;
+        public PieceColorType TableColor => ResolveTableVisualColor();
         public bool UsesCharTableCylinderVisual =>
             cylinderVisualPrefab != null &&
             cylinderVisualPrefab.name.IndexOf("CharTable", StringComparison.OrdinalIgnoreCase) >= 0;
 
-        [Header("Frozen Table Visual (All Levels)")]
+        [Header("Frozen Plate Visual (All Levels)")]
         [FormerlySerializedAs("frozenBoxVisual")]
         [SerializeField] private BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
 
-        [Header("Curtain Table Visual (All Levels)")]
+        [Header("Curtain Plate Visual (All Levels)")]
         [FormerlySerializedAs("curtainBoxVisual")]
         [SerializeField] private BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
         [Header("Table Visual (All Levels)")]
         [FormerlySerializedAs("boxVisual")]
         [SerializeField] private BoardPieceVisualSettings tableVisual = BoardPieceVisualSettings.CreateTableDefault();
+        [Tooltip("Shared color for every table. Set on the board/spawner prefab.")]
+        [SerializeField] private PieceColorType tableColor = PieceColorType.Grey;
 
         [Header("Plate Visual (All Levels)")]
         [SerializeField] private BoardPieceVisualSettings plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
@@ -111,12 +114,12 @@ namespace CarryBlockJam
         {
             BoardCurtainBoxVisualSettings settings =
                 ResolveCurtainBoxVisualSettings();
-            CarryBlockJamCurtainBox[] curtainBoxes =
-                GetComponentsInChildren<CarryBlockJamCurtainBox>(true);
-            for (int i = 0; i < curtainBoxes.Length; i++)
+            CarryBlockJamCurtainPlate[] curtainPlates =
+                GetComponentsInChildren<CarryBlockJamCurtainPlate>(true);
+            for (int i = 0; i < curtainPlates.Length; i++)
             {
-                if (curtainBoxes[i] != null)
-                    curtainBoxes[i].RefreshVisualSettings(settings);
+                if (curtainPlates[i] != null)
+                    curtainPlates[i].RefreshVisualSettings(settings);
             }
         }
 
@@ -260,6 +263,13 @@ namespace CarryBlockJam
             if (!Application.isPlaying)
                 EditorUtility.SetDirty(board);
 #endif
+
+            if (Application.isPlaying)
+            {
+                CarryBlockJamSwipeController swipe = GetComponent<CarryBlockJamSwipeController>();
+                if (swipe != null)
+                    swipe.NotifyLevelPiecesSpawned();
+            }
         }
 
         private void EnsurePiecesRoot()
@@ -409,10 +419,25 @@ namespace CarryBlockJam
             if (visualRoot == null)
                 return;
 
-#if UNITY_EDITOR
             if (stickmanMaterial == null)
-                stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
+            {
+                stickmanMaterial = Resources.Load<Material>("Materials/Mat_Stickman");
+#if UNITY_EDITOR
+                if (stickmanMaterial == null)
+                    stickmanMaterial = AssetDatabase.LoadAssetAtPath<Material>(StickmanMaterialPath);
 #endif
+            }
+
+            if (stickmanBowtieMaterial == null)
+            {
+                stickmanBowtieMaterial = Resources.Load<Material>("Materials/Mat_Bowtie");
+#if UNITY_EDITOR
+                if (stickmanBowtieMaterial == null)
+                    stickmanBowtieMaterial =
+                        AssetDatabase.LoadAssetAtPath<Material>(StickmanBowtieMaterialPath);
+#endif
+            }
+
             if (stickmanMaterial == null)
                 return;
 
@@ -505,7 +530,8 @@ namespace CarryBlockJam
                 boxObject.transform.localRotation = Quaternion.identity;
                 boxObject.transform.localScale = Vector3.one;
 
-                PieceColorType visualColor = placement.isHidden ? PieceColorType.Grey : placement.color;
+                // Shared table color comes from the spawner/prefab, not level placements.
+                PieceColorType visualColor = ResolveTableVisualColor();
                 GameObject visualObject = CreateBoxVisual(
                     tableVisual,
                     "Visual",
@@ -530,31 +556,11 @@ namespace CarryBlockJam
                         visualPiece.ApplyHidden(true);
 
                     CarryBlockJamHiddenBox hiddenBox = boxObject.AddComponent<CarryBlockJamHiddenBox>();
-                    hiddenBox.Bind(piece, visualObject != null ? visualObject.transform : null, visualPiece);
-                }
-                else if (placement.isCurtain)
-                {
-                    PieceColorType curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
-                        ? placement.curtainColor
-                        : placement.color;
-                    piece.SetCurtained(true);
-                    CarryBlockJamCurtainBox curtainBox = boxObject.AddComponent<CarryBlockJamCurtainBox>();
-                    curtainBox.Bind(
+                    hiddenBox.Bind(
                         piece,
                         visualObject != null ? visualObject.transform : null,
-                        curtainColor,
-                        CountRequiredExitPlatesForColor(curtainColor),
-                        ResolveCurtainBoxVisualSettings());
-                }
-                else if (placement.isFrozen)
-                {
-                    piece.SetFrozen(true);
-                    CarryBlockJamFrozenBox frozenBox = boxObject.AddComponent<CarryBlockJamFrozenBox>();
-                    frozenBox.Bind(
-                        piece,
-                        visualObject != null ? visualObject.transform : null,
-                        placement.unlockMoves,
-                        ResolveFrozenBoxVisualSettings());
+                        visualPiece,
+                        visualColor);
                 }
 
                 if (grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell) && cell != null)
@@ -571,6 +577,11 @@ namespace CarryBlockJam
 
         private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings() =>
             curtainTableVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
+
+        private PieceColorType ResolveTableVisualColor() =>
+            PieceColorPalette.IsPaintable(tableColor)
+                ? tableColor
+                : PieceColorType.Grey;
 
         private int CountRequiredExitPlatesForColor(PieceColorType color)
         {
@@ -639,7 +650,33 @@ namespace CarryBlockJam
                     plateVisual != null ? plateVisual.offset : new Vector3(0f, 0.75f, 0f),
                     new Vector3(0f, 1.15f, 0f));
 
-                if (placement.isHidden)
+                if (placement.isCurtain)
+                {
+                    PieceColorType curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
+                        ? placement.curtainColor
+                        : placement.color;
+                    piece.SetCurtained(true);
+                    CarryBlockJamCurtainPlate curtainPlate =
+                        plateObject.AddComponent<CarryBlockJamCurtainPlate>();
+                    curtainPlate.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        curtainColor,
+                        CountRequiredExitPlatesForColor(curtainColor),
+                        ResolveCurtainBoxVisualSettings());
+                }
+                else if (placement.isFrozen)
+                {
+                    piece.SetFrozen(true);
+                    CarryBlockJamFrozenPlate frozenPlate =
+                        plateObject.AddComponent<CarryBlockJamFrozenPlate>();
+                    frozenPlate.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        Mathf.Max(1, placement.unlockMoves),
+                        ResolveFrozenBoxVisualSettings());
+                }
+                else if (placement.isHidden)
                 {
                     piece.SetColorHidden(true);
                     if (visualObject != null)
@@ -839,8 +876,8 @@ namespace CarryBlockJam
             else
                 basePlacements = GenerateExitDrivenPlatePlacements(grid, occupied, boxPlacements);
 
-            // Level creator Hidden cells spawn as plates (same paint tool, plate runtime).
-            return MergeHiddenPlatePlacementsFromGrid(basePlacements);
+            // Level creator Hidden / Ice cells spawn as plates.
+            return MergeFlaggedPlatePlacementsFromGrid(basePlacements);
         }
 
         private readonly struct ExitDrivenSpawnPlan
@@ -962,18 +999,20 @@ namespace CarryBlockJam
             Vector2Int stickmanCell = GetStickmanCell();
             var blockedPlateCells = new HashSet<Vector2Int>(boxCells) { stickmanCell };
 
-            // Place grid Hidden plates first so auto plates can cluster around them.
+            // Place grid Hidden / Ice plates first so auto plates can cluster around them.
             var reservedCells = new HashSet<Vector2Int>(blockedPlateCells);
             foreach (Vector2Int occupiedCell in localOccupied)
                 reservedCells.Add(occupiedCell);
             AppendHiddenPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
+            AppendFrozenPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
+            AppendCurtainPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
             for (int i = 0; i < placements.Count; i++)
             {
-                BoardPlatePlacement hiddenPlacement = placements[i];
-                if (hiddenPlacement == null)
+                BoardPlatePlacement flaggedPlacement = placements[i];
+                if (flaggedPlacement == null)
                     continue;
 
-                var cell = new Vector2Int(hiddenPlacement.row, hiddenPlacement.column);
+                var cell = new Vector2Int(flaggedPlacement.row, flaggedPlacement.column);
                 localOccupied.Add(cell);
                 blockedPlateCells.Add(cell);
             }
@@ -984,7 +1023,11 @@ namespace CarryBlockJam
             foreach (KeyValuePair<PieceColorType, int> entry in plan.PlateCountsByColor)
             {
                 PieceColorType color = entry.Key;
-                int requiredCount = entry.Value;
+                int alreadyPlaced = CountPlacementsOfColor(placements, color);
+                int requiredCount = entry.Value - alreadyPlaced;
+                if (requiredCount <= 0)
+                    continue;
+
                 for (int plateIndex = 0; plateIndex < requiredCount; plateIndex++)
                 {
                     List<PlateSpawnCandidate> candidates = CollectPlateCandidates(
@@ -1117,6 +1160,24 @@ namespace CarryBlockJam
             }
 
             return false;
+        }
+
+        private static int CountPlacementsOfColor(
+            List<BoardPlatePlacement> platePlacements,
+            PieceColorType color)
+        {
+            if (platePlacements == null || !PieceColorPalette.IsPaintable(color))
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < platePlacements.Count; i++)
+            {
+                BoardPlatePlacement placement = platePlacements[i];
+                if (placement != null && placement.color == color)
+                    count++;
+            }
+
+            return count;
         }
 
         private static void PrioritizeCandidatesNearHiddenPlates(
@@ -1758,9 +1819,9 @@ namespace CarryBlockJam
                         row = placement.row,
                         column = placement.column,
                         color = placement.color,
-                        isHidden = placement.isHidden,
-                        isFrozen = placement.isFrozen,
-                        isCurtain = placement.isCurtain,
+                        isHidden = false,
+                        isFrozen = false,
+                        isCurtain = false,
                         curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
                             ? placement.curtainColor
                             : placement.color,
@@ -1769,13 +1830,11 @@ namespace CarryBlockJam
                 }
             }
 
-            // Grid Hidden flag now spawns plates (see MergeHiddenPlatePlacementsFromGrid).
-            AppendCurtainBoxPlacementsFromGrid(levelData, placements, usedCells);
-            AppendFrozenBoxPlacementsFromGrid(levelData, placements, usedCells);
+            // Grid Hidden / Ice / Curtain flags spawn plates (see MergeFlaggedPlatePlacementsFromGrid).
             return placements.ToArray();
         }
 
-        private BoardPlatePlacement[] MergeHiddenPlatePlacementsFromGrid(
+        private BoardPlatePlacement[] MergeFlaggedPlatePlacementsFromGrid(
             BoardPlatePlacement[] existing)
         {
             LevelData levelData = ResolveLevelData();
@@ -1794,6 +1853,8 @@ namespace CarryBlockJam
             }
 
             AppendHiddenPlatePlacementsFromGrid(levelData, placements, usedCells);
+            AppendFrozenPlatePlacementsFromGrid(levelData, placements, usedCells);
+            AppendCurtainPlatePlacementsFromGrid(levelData, placements, usedCells);
             return placements.ToArray();
         }
 
@@ -1842,54 +1903,9 @@ namespace CarryBlockJam
             }
         }
 
-        private static void AppendCurtainBoxPlacementsFromGrid(
+        private static void AppendFrozenPlatePlacementsFromGrid(
             LevelData levelData,
-            List<BoardBoxPlacement> placements,
-            HashSet<Vector2Int> usedCells)
-        {
-            if (levelData?.colorCells == null || placements == null || usedCells == null)
-                return;
-
-            for (int i = 0; i < levelData.colorCells.Length; i++)
-            {
-                LevelColorCell cell = levelData.colorCells[i];
-                if ((cell.flag & LevelCellFlag.Curtain) == 0)
-                    continue;
-
-                var gridCell = new Vector2Int(cell.row, cell.column);
-                if (!usedCells.Add(gridCell))
-                    continue;
-
-                if (!PieceColorPalette.IsPaintable(cell.color))
-                {
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a table color.");
-                    usedCells.Remove(gridCell);
-                    continue;
-                }
-
-                PieceColorType collectColor = PieceColorPalette.IsPaintable(cell.secondaryColor)
-                    ? cell.secondaryColor
-                    : cell.color;
-                if (!PieceColorPalette.IsPaintable(collectColor))
-                {
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a collect (plate) color.");
-                    usedCells.Remove(gridCell);
-                    continue;
-                }
-
-                placements.Add(BoardBoxPlacement.CreateCurtain(
-                    cell.row,
-                    cell.column,
-                    cell.color,
-                    collectColor));
-            }
-        }
-
-        private static void AppendFrozenBoxPlacementsFromGrid(
-            LevelData levelData,
-            List<BoardBoxPlacement> placements,
+            List<BoardPlatePlacement> placements,
             HashSet<Vector2Int> usedCells)
         {
             if (levelData?.colorCells == null || placements == null || usedCells == null)
@@ -1902,24 +1918,105 @@ namespace CarryBlockJam
                     continue;
 
                 var gridCell = new Vector2Int(cell.row, cell.column);
-                if (!usedCells.Add(gridCell))
-                    continue;
+                int unlockMoves = Mathf.Max(1, cell.flagValue);
 
-                PieceColorType color = cell.color;
-                if (!PieceColorPalette.IsPaintable(color))
+                // Existing plate on an Ice-painted cell becomes a frozen plate.
+                if (usedCells.Contains(gridCell))
                 {
-                    // Ice cells need a table color; fall back so M_Ice still spawns.
-                    color = PieceColorType.Pink;
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Frozen cell [{cell.row},{cell.column}] had no color; " +
-                        "using Pink so the ice table can spawn. Set a color in Level Creator.");
+                    for (int placementIndex = 0; placementIndex < placements.Count; placementIndex++)
+                    {
+                        BoardPlatePlacement existing = placements[placementIndex];
+                        if (existing == null)
+                            continue;
+
+                        if (existing.row == cell.row && existing.column == cell.column)
+                        {
+                            existing.isFrozen = true;
+                            existing.unlockMoves = unlockMoves;
+                        }
+                    }
+
+                    continue;
                 }
 
-                placements.Add(BoardBoxPlacement.CreateFrozen(
-                    cell.row,
-                    cell.column,
-                    color,
-                    Mathf.Max(1, cell.flagValue)));
+                if (!PieceColorPalette.IsPaintable(cell.color))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Ice cell [{cell.row},{cell.column}] needs a color to spawn a frozen plate.");
+                    continue;
+                }
+
+                usedCells.Add(gridCell);
+                placements.Add(
+                    BoardPlatePlacement.CreateFrozen(
+                        cell.row,
+                        cell.column,
+                        cell.color,
+                        unlockMoves));
+            }
+        }
+
+        private static void AppendCurtainPlatePlacementsFromGrid(
+            LevelData levelData,
+            List<BoardPlatePlacement> placements,
+            HashSet<Vector2Int> usedCells)
+        {
+            if (levelData?.colorCells == null || placements == null || usedCells == null)
+                return;
+
+            for (int i = 0; i < levelData.colorCells.Length; i++)
+            {
+                LevelColorCell cell = levelData.colorCells[i];
+                if ((cell.flag & LevelCellFlag.Curtain) == 0)
+                    continue;
+
+                var gridCell = new Vector2Int(cell.row, cell.column);
+
+                PieceColorType collectColor = PieceColorPalette.IsPaintable(cell.secondaryColor)
+                    ? cell.secondaryColor
+                    : cell.color;
+
+                // Existing plate on a Curtain-painted cell becomes a curtain plate.
+                if (usedCells.Contains(gridCell))
+                {
+                    for (int placementIndex = 0; placementIndex < placements.Count; placementIndex++)
+                    {
+                        BoardPlatePlacement existing = placements[placementIndex];
+                        if (existing == null)
+                            continue;
+
+                        if (existing.row == cell.row && existing.column == cell.column)
+                        {
+                            existing.isCurtain = true;
+                            if (PieceColorPalette.IsPaintable(collectColor))
+                                existing.curtainColor = collectColor;
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (!PieceColorPalette.IsPaintable(cell.color))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a plate color.");
+                    continue;
+                }
+
+                if (!PieceColorPalette.IsPaintable(collectColor))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a collect color.");
+                    continue;
+                }
+
+                usedCells.Add(gridCell);
+                placements.Add(
+                    BoardPlatePlacement.CreateCurtain(
+                        cell.row,
+                        cell.column,
+                        cell.color,
+                        collectColor));
             }
         }
 

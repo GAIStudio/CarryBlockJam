@@ -13,7 +13,7 @@ namespace CarryBlockJam
     {
         private const string BaseMaterialName = "Mat_Plate";
         private const string ResourcesFolder = "Materials/Plates";
-        private const string HiddenPlateMaterialPath = "Assets/[Materials]/Mat_HiddenTable.mat";
+        private const string HiddenPlateMaterialPath = "Assets/[Materials]/Mat_HiddenPlate.mat";
 
         public static void ApplyPlateColor(Transform plateRoot, PieceColorType color)
         {
@@ -75,7 +75,7 @@ namespace CarryBlockJam
             if (editorMaterial != null)
                 return editorMaterial;
 #endif
-            return Resources.Load<Material>("Materials/Mat_HiddenTable");
+            return Resources.Load<Material>("Materials/Mat_HiddenPlate");
         }
     }
 }

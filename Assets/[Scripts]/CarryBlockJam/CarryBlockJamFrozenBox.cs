@@ -408,10 +408,14 @@ namespace CarryBlockJam
                 return settings.material;
 
 #if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
-#else
-            return null;
+            Material editorMaterial = AssetDatabase.LoadAssetAtPath<Material>(FrozenBoxMaterialPath);
+            if (editorMaterial != null)
+                return editorMaterial;
 #endif
+            Material material = Resources.Load<Material>("Materials/Mat_Ice");
+            if (material == null)
+                material = Resources.Load<Material>("Materials/T_Ice");
+            return material;
         }
 
         private static void DisableParticles(GameObject overlay)

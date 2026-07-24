@@ -68,6 +68,7 @@ namespace CarryBlockJam
                 PieceColorType.Brown => "Orange",
                 PieceColorType.Navy => "Blue",
                 PieceColorType.White => "LightBlue",
+                PieceColorType.Grey => "Grey",
                 _ => null,
             };
         }
@@ -105,16 +106,19 @@ namespace CarryBlockJam
                 return cached;
 
             Material material = null;
+
+            // Prefer Resources so editor Play Mode and player builds resolve the same mats.
+            if (!string.IsNullOrEmpty(resourcesSubfolder))
+                material = Resources.Load<Material>($"{resourcesSubfolder}/{materialName}");
+
 #if UNITY_EDITOR
-            if (!string.IsNullOrEmpty(materialsFolder))
+            if (material == null && !string.IsNullOrEmpty(materialsFolder))
                 material = AssetDatabase.LoadAssetAtPath<Material>($"{materialsFolder}/{materialName}.mat");
 
             // Legacy flat folder fallback while assets migrate.
             if (material == null)
                 material = AssetDatabase.LoadAssetAtPath<Material>($"Assets/[Materials]/{materialName}.mat");
 #endif
-            if (material == null && !string.IsNullOrEmpty(resourcesSubfolder))
-                material = Resources.Load<Material>($"{resourcesSubfolder}/{materialName}");
 
             if (material != null)
                 MaterialCache[cacheKey] = material;
@@ -128,7 +132,7 @@ namespace CarryBlockJam
             PieceColorType color,
             string resourcesSubfolder)
         {
-            if (!PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey)
+            if (!PieceColorPalette.IsPaintable(color))
                 return PieceColorPalette.GetMaterial(color);
 
             string suffix = GetMaterialSuffix(color);

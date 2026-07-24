@@ -30,9 +30,9 @@ MonoBehaviour:
       maxPlateStacks: 2
     exits:
     - row: 0
-      column: 2
+      column: 3
       side: 0
-      startIndex: 2
+      startIndex: 3
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -40,14 +40,14 @@ MonoBehaviour:
       goals:
       - color: 1
         requiredPlateCount: 3
-      - color: 3
-        requiredPlateCount: 4
+      - color: 2
+        requiredPlateCount: 3
       - color: 6
         requiredPlateCount: 3
     - row: 12
-      column: 2
+      column: 1
       side: 1
-      startIndex: 2
+      startIndex: 1
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -59,25 +59,25 @@ MonoBehaviour:
         requiredPlateCount: 3
       - color: 1
         requiredPlateCount: 3
-    - row: 12
-      column: 6
-      side: 1
-      startIndex: 6
+    - row: 9
+      column: 0
+      side: 2
+      startIndex: 9
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
-      - color: 4
-        requiredPlateCount: 3
       - color: 3
-        requiredPlateCount: 4
+        requiredPlateCount: 3
       - color: 2
         requiredPlateCount: 3
-    - row: 0
-      column: 6
-      side: 0
-      startIndex: 6
+      - color: 3
+        requiredPlateCount: 3
+    - row: 5
+      column: 8
+      side: 3
+      startIndex: 5
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -88,54 +88,158 @@ MonoBehaviour:
       - color: 1
         requiredPlateCount: 3
       - color: 3
-        requiredPlateCount: 4
+        requiredPlateCount: 3
     disableAutoTables: 1
-    tablePlacements:
+    tablePlacements: []
+    platePlacements:
+    - color: 1
+      row: 4
+      column: 2
+      count: 0
+    - color: 1
+      row: 4
+      column: 1
+      count: 0
     - color: 1
       row: 3
       column: 1
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
-    - color: 2
-      row: 7
+      count: 0
+    - color: 1
+      row: 2
       column: 1
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
-    - color: 4
-      row: 8
-      column: 7
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
+      count: 0
+    - color: 1
+      row: 5
+      column: 1
+      count: 0
+    - color: 1
+      row: 6
+      column: 1
+      count: 0
     - color: 3
-      row: 4
-      column: 7
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
-    - color: 6
-      row: 10
+      row: 1
+      column: 1
+      count: 0
+    - color: 3
+      row: 1
+      column: 2
+      count: 0
+    - color: 3
+      row: 1
+      column: 3
+      count: 0
+    - color: 3
+      row: 1
       column: 4
-      isHidden: 0
-      isFrozen: 0
-      isCurtain: 0
-      curtainColor: 0
-      unlockMoves: 0
-    platePlacements: []
-    stickmanSpawnMode: 0
-    fixedStickmanCell:
+      count: 0
+    - color: 3
+      row: 0
+      column: 4
+      count: 0
+    - color: 2
+      row: 4
+      column: 4
+      count: 0
+    - color: 2
+      row: 3
+      column: 4
+      count: 0
+    - color: 2
+      row: 2
+      column: 4
+      count: 0
+    - color: 2
+      row: 5
+      column: 4
+      count: 0
+    - color: 2
       row: 6
       column: 4
+      count: 0
+    - color: 6
+      row: 3
+      column: 3
+      count: 0
+    - color: 6
+      row: 2
+      column: 3
+      count: 0
+    - color: 6
+      row: 2
+      column: 2
+      count: 0
+    - color: 6
+      row: 3
+      column: 2
+      count: 0
+    - color: 6
+      row: 5
+      column: 2
+      count: 0
+    - color: 6
+      row: 5
+      column: 3
+      count: 0
+    - color: 6
+      row: 6
+      column: 3
+      count: 0
+    - color: 6
+      row: 6
+      column: 2
+      count: 0
+    - color: 6
+      row: 7
+      column: 2
+      count: 0
+    - color: 1
+      row: 6
+      column: 0
+      count: 0
+    - color: 1
+      row: 7
+      column: 0
+      count: 0
+    - color: 1
+      row: 8
+      column: 0
+      count: 0
+    - color: 2
+      row: 9
+      column: 1
+      count: 0
+    - color: 2
+      row: 9
+      column: 2
+      count: 0
+    - color: 2
+      row: 8
+      column: 2
+      count: 0
+    - color: 3
+      row: 7
+      column: 4
+      count: 0
+    - color: 3
+      row: 8
+      column: 4
+      count: 0
+    - color: 3
+      row: 8
+      column: 5
+      count: 0
+    - color: 3
+      row: 7
+      column: 5
+      count: 0
+    - color: 2
+      row: 4
+      column: 5
+      count: 0
+    stickmanSpawnMode: 0
+    fixedStickmanCell:
+      row: 0
+      column: 3
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []
