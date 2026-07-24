@@ -39,7 +39,7 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 1
-        requiredPlateCount: 3
+        requiredPlateCount: 5
     disableAutoTables: 1
     tablePlacements: []
     platePlacements:
@@ -53,6 +53,14 @@ MonoBehaviour:
       count: 1
     - color: 1
       row: 9
+      column: 2
+      count: 1
+    - color: 1
+      row: 7
+      column: 5
+      count: 1
+    - color: 1
+      row: 7
       column: 2
       count: 1
     stickmanSpawnMode: 2
