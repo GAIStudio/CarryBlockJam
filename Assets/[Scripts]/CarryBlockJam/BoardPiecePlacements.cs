@@ -219,14 +219,20 @@ namespace CarryBlockJam
         public int row;
         public int column;
         public PieceColorType color = PieceColorType.Red;
+        public bool isHidden;
 
-        public static BoardPlatePlacement Create(int row, int column, PieceColorType color)
+        public static BoardPlatePlacement Create(
+            int row,
+            int column,
+            PieceColorType color,
+            bool isHidden = false)
         {
             return new BoardPlatePlacement
             {
                 row = row,
                 column = column,
                 color = color,
+                isHidden = isHidden,
             };
         }
 

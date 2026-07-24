@@ -1147,6 +1147,7 @@ namespace CarryBlockJam
                     exitComponent.ConsumeOne(deliverColor);
                     CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
+                    CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
                     if (arrivingPlate != null)
                     {
@@ -2564,6 +2565,7 @@ namespace CarryBlockJam
                 if (bounce != null)
                     collection.Join(bounce);
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
+                CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
             }
 
