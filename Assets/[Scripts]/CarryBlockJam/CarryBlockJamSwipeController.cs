@@ -24,6 +24,8 @@ namespace CarryBlockJam
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
         [SerializeField] private float tablePlateSettleDuration = 0.16f;
         [SerializeField] private float tablePlateAnimationSpeed = 1.4f;
+        [Tooltip("After delivering plates to a table, block picking them back up for this long so a fast second drag does not vacuum them immediately.")]
+        [SerializeField] private float tableDropCollectCooldown = 0.3f;
         [SerializeField] private float pickupPlateBounceDuration = 0.18f;
         [SerializeField] private float pickupPlateBounceHeight = 0.55f;
         [SerializeField] private float pickupPlateStagger = 0.025f;
@@ -104,6 +106,8 @@ namespace CarryBlockJam
         private CarryBlockJamStickmanAnimator _stickmanAnimator;
         private bool _stickmanMoving;
         private readonly List<CarryBlockJamBoardPiece> _carriedPlates = new List<CarryBlockJamBoardPiece>();
+        private readonly Dictionary<Vector2Int, float> _tableCollectCooldownUntil =
+            new Dictionary<Vector2Int, float>();
         private PieceColorType _dragCollectColor = PieceColorType.None;
         private bool _swipeStartedWithCarriedPlates;
         private TrailRenderer _charTableTrail;
@@ -1339,12 +1343,43 @@ namespace CarryBlockJam
 
         private bool HasCollectiblePlateAt(int row, int column, PieceColorType requiredColor)
         {
+            if (IsTableCollectOnCooldown(row, column))
+                return false;
+
             return TryResolveCollectiblePlate(
                 GetCellBoardPiece(row, column),
                 row,
                 column,
                 requiredColor,
                 out _);
+        }
+
+        private void ArmTableCollectCooldown(int row, int column)
+        {
+            if (_grid == null || !_grid.IsInside(row, column))
+                return;
+
+            float delay = Mathf.Max(0.05f, tableDropCollectCooldown);
+            Vector2Int key = new Vector2Int(row, column);
+            float until = Time.time + delay;
+            if (_tableCollectCooldownUntil.TryGetValue(key, out float existing))
+                until = Mathf.Max(until, existing);
+            _tableCollectCooldownUntil[key] = until;
+        }
+
+        private bool IsTableCollectOnCooldown(int row, int column)
+        {
+            Vector2Int key = new Vector2Int(row, column);
+            if (!_tableCollectCooldownUntil.TryGetValue(key, out float until))
+                return false;
+
+            if (Time.time >= until)
+            {
+                _tableCollectCooldownUntil.Remove(key);
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -1979,6 +2014,8 @@ namespace CarryBlockJam
             if (index >= plates.Count)
             {
                 _isAnimating = false;
+                if (targetBox != null)
+                    ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
                 if (onComplete != null)
                     onComplete.Invoke();
                 else
@@ -2031,6 +2068,9 @@ namespace CarryBlockJam
                 plate.StackOnPiece(basePiece);
                 if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
                     cell.Occupant = plate.gameObject;
+                // Brief lockout so an immediate second drag cannot vacuum plates
+                // back onto CharTable before the drop reads as intentional.
+                ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
             });
 
             Vector3 settlePunch = plate.transform.localScale * 0.12f;
@@ -3738,6 +3778,9 @@ namespace CarryBlockJam
 
         private void TryCollectAtCellDuringDrag(int row, int column)
         {
+            if (IsTableCollectOnCooldown(row, column))
+                return;
+
             CarryBlockJamBoardPiece occupant = GetCellBoardPiece(row, column);
             if (occupant == null)
                 return;
