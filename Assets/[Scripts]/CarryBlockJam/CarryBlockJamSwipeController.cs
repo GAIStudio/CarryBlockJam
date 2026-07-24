@@ -671,6 +671,59 @@ namespace CarryBlockJam
         }
 
         /// <summary>
+        /// Mid-drag gate magnet: when CharTable is carrying matching plates and
+        /// reaches a gate front cell, stop the drag immediately and deliver —
+        /// no finger release required. Does not change movement math; only
+        /// reacts after CharTable has already arrived on that cell.
+        /// </summary>
+        private bool TryMagnetDeliverAtGateDuringDrag()
+        {
+            if (!_trackingSwipe ||
+                _isAnimating ||
+                !HasCarriedPlates ||
+                _cylinder == null ||
+                _grid == null)
+                return false;
+
+            int gateRow;
+            int gateColumn;
+            CarryBlockJamExit exit;
+
+            if (TryResolveVisualMatchingExitCell(out Vector2Int exitCell) &&
+                TryResolveExitAtCell(exitCell.x, exitCell.y, out exit) &&
+                exit != null)
+            {
+                gateRow = exitCell.x;
+                gateColumn = exitCell.y;
+            }
+            else
+            {
+                UpdateDragFollowCellFromVisual();
+                gateRow = _dragFollowCell.x;
+                gateColumn = _dragFollowCell.y;
+                if (!TryResolveExitAtCell(gateRow, gateColumn, out exit) ||
+                    exit == null)
+                    return false;
+            }
+
+            if (!exit.CanAccept(CarriedColor) ||
+                exit.GetAcceptablePlateCount(CarriedColor) <= 0)
+                return false;
+
+            // Stick to the gate cell and end the active drag — magnet catch.
+            PlaceStickmanOnCell(gateRow, gateColumn);
+            SnapCylinderToLogicalCell();
+            _trackingSwipe = false;
+            ShowHighlights(false);
+            ResetOrthogonalDrag();
+            CompleteUnconsumedDirectDrag();
+            AbsorbCharTableTrail();
+            RefreshStickmanAnimation(moving: false);
+            SendCarriedPlatesToExit(exit, null);
+            return true;
+        }
+
+        /// <summary>
         /// Matching tables: pick up plates when CharTable is on the approach cell
         /// and the finger is on/into the table; deliver carried plates the same way.
         /// Gate delivery stays separate (front exit cell only).
@@ -2314,6 +2367,7 @@ namespace CarryBlockJam
                     rowStep,
                     columnStep);
                 TryCollectPlatesUnderCharTable();
+                TryMagnetDeliverAtGateDuringDrag();
                 RefreshStickmanAnimation(moving: false);
                 return;
             }
@@ -2377,6 +2431,8 @@ namespace CarryBlockJam
 
             // Quick on-cell freestanding pickup as CharTable overlaps each plate cell.
             TryCollectPlatesUnderCharTable();
+            if (TryMagnetDeliverAtGateDuringDrag())
+                return;
 
             // Reanchor from hysteresis follow cell — never Round() at borders.
             Vector2Int stopCell = IsValidCharTableSettleCell(
@@ -2933,6 +2989,7 @@ namespace CarryBlockJam
                 startColumn);
 
             TryCollectPlatesUnderCharTable();
+            TryMagnetDeliverAtGateDuringDrag();
         }
 
         private void ApplyDraggedCylinderPosition(
