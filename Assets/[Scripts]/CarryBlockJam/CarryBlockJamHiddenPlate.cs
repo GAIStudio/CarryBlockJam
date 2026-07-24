@@ -4,8 +4,14 @@ using UnityEngine;
 
 namespace CarryBlockJam
 {
+    /// <summary>
+    /// Hidden plate: shows HiddenTexture until surrounding (non-self) plates are collected,
+    /// then reveals its true color and becomes pickable.
+    /// Level creator still paints <see cref="LevelCellFlag.Hidden"/>; gameplay
+    /// interprets that as a plate instead of a table.
+    /// </summary>
     [DisallowMultipleComponent]
-    public sealed class CarryBlockJamHiddenBox : MonoBehaviour
+    public sealed class CarryBlockJamHiddenPlate : MonoBehaviour
     {
         private static readonly Vector2Int[] SurroundingOffsets =
         {
@@ -19,42 +25,36 @@ namespace CarryBlockJam
             new Vector2Int(1, 1),
         };
 
-        private CarryBlockJamBoardPiece _boxPiece;
+        private CarryBlockJamBoardPiece _platePiece;
         private Transform _visualRoot;
         private GamePiece _visualPiece;
-        private PieceColorType _revealColor = PieceColorType.Grey;
-        private readonly HashSet<CarryBlockJamBoardPiece> _surroundingPlates = new HashSet<CarryBlockJamBoardPiece>();
+        private readonly HashSet<CarryBlockJamBoardPiece> _surroundingPlates =
+            new HashSet<CarryBlockJamBoardPiece>();
         private bool _isRevealed;
 
         public bool IsRevealed => _isRevealed;
 
         public void Bind(
-            CarryBlockJamBoardPiece boxPiece,
+            CarryBlockJamBoardPiece platePiece,
             Transform visualRoot,
-            GamePiece visualPiece,
-            PieceColorType revealColor = PieceColorType.Grey)
+            GamePiece visualPiece)
         {
-            _boxPiece = boxPiece;
+            _platePiece = platePiece;
             _visualRoot = visualRoot;
             _visualPiece = visualPiece;
-            _revealColor = PieceColorPalette.IsPaintable(revealColor)
-                ? revealColor
-                : PieceColorType.Grey;
-        }
-
-        public void Bind(CarryBlockJamBoardPiece boxPiece, GamePiece visualPiece)
-        {
-            Bind(boxPiece, visualPiece != null ? visualPiece.transform : null, visualPiece);
         }
 
         public void RegisterSurroundingPlates(PuzzleGrid grid)
         {
             _surroundingPlates.Clear();
-            if (_boxPiece == null || grid == null)
+            if (_platePiece == null || grid == null)
                 return;
 
-            RegisterPlatesOnBoxStack();
             RegisterAdjacentPlates(grid);
+
+            // Nothing to wait for — reveal immediately.
+            if (_surroundingPlates.Count == 0)
+                Reveal();
         }
 
         public static void NotifyPlateCollected(CarryBlockJamBoardPiece plate)
@@ -62,14 +62,15 @@ namespace CarryBlockJam
             if (plate == null)
                 return;
 
-            CarryBlockJamHiddenBox[] hiddenBoxes = FindObjectsOfType<CarryBlockJamHiddenBox>();
-            for (int i = 0; i < hiddenBoxes.Length; i++)
-                hiddenBoxes[i].HandlePlateCollected(plate);
+            CarryBlockJamHiddenPlate[] hiddenPlates =
+                FindObjectsOfType<CarryBlockJamHiddenPlate>();
+            for (int i = 0; i < hiddenPlates.Length; i++)
+                hiddenPlates[i].HandlePlateCollected(plate);
         }
 
         private void HandlePlateCollected(CarryBlockJamBoardPiece plate)
         {
-            if (_isRevealed || plate == null)
+            if (_isRevealed || plate == null || plate == _platePiece)
                 return;
 
             if (!_surroundingPlates.Remove(plate))
@@ -81,16 +82,18 @@ namespace CarryBlockJam
 
         private void Reveal()
         {
-            if (_isRevealed || _boxPiece == null)
+            if (_isRevealed || _platePiece == null)
                 return;
 
             _isRevealed = true;
-            _boxPiece.RevealHiddenColor();
+            _platePiece.RevealHiddenColor();
 
             if (_visualRoot != null)
-                CarryBlockJamArtTableUtility.ApplyTableColor(_visualRoot, _revealColor);
+                CarryBlockJamArtPlateUtility.ApplyPlateColor(
+                    _visualRoot,
+                    _platePiece.TrueColor);
             else if (_visualPiece != null)
-                _visualPiece.ApplyColor(_revealColor);
+                _visualPiece.ApplyColor(_platePiece.TrueColor);
 
             if (_visualPiece != null)
                 _visualPiece.ApplyHidden(false);
@@ -98,29 +101,18 @@ namespace CarryBlockJam
             enabled = false;
         }
 
-        private void RegisterPlatesOnBoxStack()
-        {
-            CarryBlockJamBoardPiece current = _boxPiece.StackedAbove;
-            while (current != null)
-            {
-                if (current.Kind == CarryBlockJamPieceKind.Plate)
-                    _surroundingPlates.Add(current);
-
-                current = current.StackedAbove;
-            }
-        }
-
         private void RegisterAdjacentPlates(PuzzleGrid grid)
         {
             for (int directionIndex = 0; directionIndex < SurroundingOffsets.Length; directionIndex++)
             {
                 Vector2Int offset = SurroundingOffsets[directionIndex];
-                int row = _boxPiece.Row + offset.x;
-                int column = _boxPiece.Column + offset.y;
+                int row = _platePiece.Row + offset.x;
+                int column = _platePiece.Column + offset.y;
                 if (!grid.TryGetCell(row, column, out PuzzleCell cell) || cell?.Occupant == null)
                     continue;
 
-                CarryBlockJamBoardPiece piece = cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
+                CarryBlockJamBoardPiece piece =
+                    cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
                 if (piece == null)
                     continue;
 
@@ -130,11 +122,11 @@ namespace CarryBlockJam
 
         private void CollectPlatesFromStack(CarryBlockJamBoardPiece piece)
         {
-            CarryBlockJamBoardPiece basePiece = GetPickupBasePiece(piece);
-            CarryBlockJamBoardPiece current = basePiece;
+            CarryBlockJamBoardPiece current = GetPickupBasePiece(piece);
             while (current != null)
             {
-                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                if (current.Kind == CarryBlockJamPieceKind.Plate &&
+                    current != _platePiece)
                     _surroundingPlates.Add(current);
 
                 current = current.StackedAbove;
@@ -147,7 +139,8 @@ namespace CarryBlockJam
                 return null;
 
             CarryBlockJamBoardPiece current = piece;
-            while (current.StackedBelow != null && current.StackedBelow.Kind == CarryBlockJamPieceKind.Plate)
+            while (current.StackedBelow != null &&
+                   current.StackedBelow.Kind == CarryBlockJamPieceKind.Plate)
                 current = current.StackedBelow;
 
             return current;

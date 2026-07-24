@@ -1,3 +1,5 @@
+using CarryBlockJam;
+using GAITemplate;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,6 +15,7 @@ namespace CarryBlockJam.Editor
         private SerializedProperty _frozenTableVisual;
         private SerializedProperty _curtainTableVisual;
         private SerializedProperty _tableVisual;
+        private SerializedProperty _tableColor;
         private SerializedProperty _plateVisual;
         private SerializedProperty _randomizeTables;
         private SerializedProperty _tables;
@@ -28,6 +31,7 @@ namespace CarryBlockJam.Editor
             _frozenTableVisual = serializedObject.FindProperty("frozenTableVisual");
             _curtainTableVisual = serializedObject.FindProperty("curtainTableVisual");
             _tableVisual = serializedObject.FindProperty("tableVisual");
+            _tableColor = serializedObject.FindProperty("tableColor");
             _plateVisual = serializedObject.FindProperty("plateVisual");
             _randomizeTables = serializedObject.FindProperty("randomizeTables");
             _tables = serializedObject.FindProperty("tables");
@@ -49,7 +53,7 @@ namespace CarryBlockJam.Editor
             EditorGUILayout.EndVertical();
 
             EditorGUILayout.Space(8f);
-            DrawVisualSettings("Table Visual (All Levels)", _tableVisual);
+            DrawTableVisualSettings();
 
             EditorGUILayout.Space(8f);
             DrawVisualSettings("Plate Visual (All Levels)", _plateVisual);
@@ -88,6 +92,28 @@ namespace CarryBlockJam.Editor
                     spawner.RefreshCurtainVisuals();
                 EditorUtility.SetDirty(spawner);
             }
+        }
+
+        private void DrawTableVisualSettings()
+        {
+            EditorGUILayout.LabelField("Table Visual (All Levels)", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.PropertyField(_tableVisual.FindPropertyRelative("model"), new GUIContent("Model"));
+            EditorGUILayout.PropertyField(_tableVisual.FindPropertyRelative("material"), new GUIContent("Material"));
+            EditorGUILayout.PropertyField(_tableVisual.FindPropertyRelative("scale"), new GUIContent("Scale"));
+            EditorGUILayout.PropertyField(_tableVisual.FindPropertyRelative("offset"), new GUIContent("Offset"));
+
+            if (_tableColor != null)
+            {
+                PieceColorType color = (PieceColorType)_tableColor.enumValueIndex;
+                color = TableColorEditorUtility.DrawPopup("Table Color", color);
+                _tableColor.enumValueIndex = (int)color;
+            }
+
+            EditorGUILayout.HelpBox(
+                "Shared for every level. Level Creator only chooses table positions.",
+                MessageType.None);
+            EditorGUILayout.EndVertical();
         }
 
         private static void DrawVisualSettings(string title, SerializedProperty visualProperty)

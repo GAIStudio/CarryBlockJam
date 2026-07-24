@@ -68,6 +68,7 @@ namespace CarryBlockJam
                 PieceColorType.Brown => "Orange",
                 PieceColorType.Navy => "Blue",
                 PieceColorType.White => "LightBlue",
+                PieceColorType.Grey => "Grey",
                 _ => null,
             };
         }
@@ -131,7 +132,7 @@ namespace CarryBlockJam
             PieceColorType color,
             string resourcesSubfolder)
         {
-            if (!PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey)
+            if (!PieceColorPalette.IsPaintable(color))
                 return PieceColorPalette.GetMaterial(color);
 
             string suffix = GetMaterialSuffix(color);

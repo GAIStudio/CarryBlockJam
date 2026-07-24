@@ -8,6 +8,7 @@ namespace CarryBlockJam
 {
     /// <summary>
     /// Applies art table materials (base + color slot) onto M_Table visuals.
+    /// Shared table color is authored on the board/spawner prefab.
     /// </summary>
     public static class CarryBlockJamArtTableUtility
     {

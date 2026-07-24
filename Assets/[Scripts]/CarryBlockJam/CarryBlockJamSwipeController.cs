@@ -17,15 +17,15 @@ namespace CarryBlockJam
         [SerializeField] private float swipeThresholdPixels = 40f;
         [SerializeField] private float moveDurationPerCell = 0.1f;
         [SerializeField] private float exitTravelDuration = 0.18f;
-        [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
-        [SerializeField] private float gatePlateFlyDuration = 0.28f;
-        [SerializeField] private float gatePlateFlyHeight = 0.8f;
+        [SerializeField] private float exitPlateDeliveryDuration = 0.05f;
+        [SerializeField] private float gatePlateFlyDuration = 0.18f;
+        [SerializeField] private float gatePlateFlyHeight = 0.65f;
         [SerializeField] private float tablePlateJumpDuration = 0.3f;
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
         [SerializeField] private float tablePlateSettleDuration = 0.16f;
         [SerializeField] private float tablePlateAnimationSpeed = 1.4f;
         [Tooltip("After delivering plates to a table, block picking them back up for this long so a fast second drag does not vacuum them immediately.")]
-        [SerializeField] private float tableDropCollectCooldown = 0.3f;
+        [SerializeField] private float tableDropCollectCooldown = 0.55f;
         [SerializeField] private float pickupPlateBounceDuration = 0.18f;
         [SerializeField] private float pickupPlateBounceHeight = 0.55f;
         [SerializeField] private float pickupPlateStagger = 0.025f;
@@ -110,6 +110,12 @@ namespace CarryBlockJam
             new Dictionary<Vector2Int, float>();
         private PieceColorType _dragCollectColor = PieceColorType.None;
         private bool _swipeStartedWithCarriedPlates;
+        /// <summary>
+        /// Table cell we picked up from during this swipe — blocks putting those
+        /// plates straight back onto the same table in the same gesture.
+        /// </summary>
+        private bool _hasTablePickupBlockDeliver;
+        private Vector2Int _tablePickupBlockDeliverCell;
         private TrailRenderer _charTableTrail;
         private float _trailSessionCells;
         private float _trailSegmentProgressReported;
@@ -302,6 +308,7 @@ namespace CarryBlockJam
             _dragCornerTransitionElapsed = 0f;
             _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
             _swipeStartedWithCarriedPlates = HasCarriedPlates;
+            _hasTablePickupBlockDeliver = false;
             _trailSegmentProgressReported = 0f;
             _trackingSwipe = true;
             EnsureCharTableTrail();
@@ -744,23 +751,24 @@ namespace CarryBlockJam
                     out CarryBlockJamBoardPiece tableBox))
                 return false;
 
-            // Pickup from the table first (same drag-to-table gesture).
-            PieceColorType collectColor = GetRequiredCollectColor();
-            if (HasCollectiblePlateAt(tableRow, tableColumn, collectColor) ||
-                (collectColor == PieceColorType.None &&
-                 HasCollectiblePlateAt(tableRow, tableColumn, PieceColorType.None)))
+            // Empty CharTable: pickup from this table only (never pickup+deliver).
+            if (!HasCarriedPlates)
             {
-                TryCollectAtCellDuringDrag(tableRow, tableColumn);
+                PieceColorType collectColor = GetRequiredCollectColor();
+                if (HasCollectiblePlateAt(tableRow, tableColumn, collectColor) ||
+                    (collectColor == PieceColorType.None &&
+                     HasCollectiblePlateAt(tableRow, tableColumn, PieceColorType.None)))
+                {
+                    TryCollectAtCellDuringDrag(tableRow, tableColumn);
+                    return true;
+                }
+
+                return false;
             }
 
-            if (!HasCarriedPlates)
-                return false;
-
-            bool movedDuringDrag =
-                _cylinder.Row != _swipeStartRow ||
-                _cylinder.Column != _swipeStartColumn ||
-                HasLeftSwipeStartDuringDrag();
-            if (!_swipeStartedWithCarriedPlates && !movedDuringDrag)
+            // Already carrying (started loaded, or collected freestanding mid-drag).
+            // Only block if these plates were just taken from THIS table.
+            if (IsTableDeliverBlockedByRecentPickup(tableRow, tableColumn))
                 return false;
 
             if (!CanDeliverCarriedPlatesToCell(
@@ -775,7 +783,7 @@ namespace CarryBlockJam
                 !TryResolveDropTargetAtCell(tableRow, tableColumn, out tableBox))
                 return false;
 
-            if (tableBox == null || tableBox.Color != CarriedColor)
+            if (tableBox == null || !CanDeliverToTable(tableBox))
                 return false;
 
             AnimateCarriedPlatesToBox(tableBox);
@@ -890,13 +898,15 @@ namespace CarryBlockJam
         {
             if (!HasCarriedPlates)
                 return false;
-            if (HasCollectiblePlateAt(tableRow, tableColumn, CarriedColor))
+
+            // Don't put plates back on the same table we just emptied this swipe.
+            if (IsTableDeliverBlockedByRecentPickup(tableRow, tableColumn))
                 return false;
 
             if (_swipeStartedWithCarriedPlates)
                 return true;
 
-            // Collected earlier in this drag / swipe — allow drop after travel.
+            // Collected freestanding plates earlier in this drag — allow drop after travel.
             return pathCellsTraveled > 0 ||
                    currentRow != _swipeStartRow ||
                    currentColumn != _swipeStartColumn ||
@@ -1152,7 +1162,7 @@ namespace CarryBlockJam
                 CarryBlockJamBoardPiece piece = pieces[i];
                 if (piece == null || piece.Row != row || piece.Column != column)
                     continue;
-                if (piece.Kind == CarryBlockJamPieceKind.Box && piece.Color == CarriedColor)
+                if (piece.Kind == CarryBlockJamPieceKind.Box && CanDeliverToTable(piece))
                 {
                     targetBox = piece;
                     return true;
@@ -1367,6 +1377,22 @@ namespace CarryBlockJam
             _tableCollectCooldownUntil[key] = until;
         }
 
+        private void MarkTablePickupBlocksDeliver(int row, int column)
+        {
+            if (_grid == null || !_grid.IsInside(row, column))
+                return;
+
+            _hasTablePickupBlockDeliver = true;
+            _tablePickupBlockDeliverCell = new Vector2Int(row, column);
+        }
+
+        private bool IsTableDeliverBlockedByRecentPickup(int row, int column)
+        {
+            return _hasTablePickupBlockDeliver &&
+                   _tablePickupBlockDeliverCell.x == row &&
+                   _tablePickupBlockDeliverCell.y == column;
+        }
+
         private bool IsTableCollectOnCooldown(int row, int column)
         {
             Vector2Int key = new Vector2Int(row, column);
@@ -1437,7 +1463,11 @@ namespace CarryBlockJam
                 {
                     // Freestanding plates are walkable; tables stay blocked like other obstacles.
                     if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
+                    {
+                        if (IsBoxOwnedCell(nextRow, nextColumn))
+                            MarkTablePickupBlocksDeliver(nextRow, nextColumn);
                         break;
+                    }
 
                     row = nextRow;
                     column = nextColumn;
@@ -1500,7 +1530,11 @@ namespace CarryBlockJam
                 {
                     // Freestanding plates are walkable; tables stay blocked like other obstacles.
                     if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
+                    {
+                        if (IsBoxOwnedCell(nextRow, nextColumn))
+                            MarkTablePickupBlocksDeliver(nextRow, nextColumn);
                         break;
+                    }
 
                     currentRow = nextRow;
                     currentColumn = nextColumn;
@@ -1524,7 +1558,7 @@ namespace CarryBlockJam
                             (nextPiece != null && nextPiece.Kind == CarryBlockJamPieceKind.Box
                                 ? nextPiece
                                 : FindBoxAtCell(nextRow, nextColumn));
-                        if (dropBox != null && dropBox.Color == CarriedColor)
+                        if (dropBox != null && CanDeliverToTable(dropBox))
                             targetBox = dropBox;
                     }
 
@@ -1539,7 +1573,7 @@ namespace CarryBlockJam
                         currentRow,
                         currentColumn,
                         cylinderPath.Count) &&
-                    storageBox.Color == CarriedColor)
+                    CanDeliverToTable(storageBox))
                 {
                     targetBox = storageBox;
                     break;
@@ -1940,6 +1974,7 @@ namespace CarryBlockJam
                     exitComponent.ConsumeOne(deliverColor);
                     CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
+                    CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
                     if (arrivingPlate != null)
                     {
@@ -1996,6 +2031,9 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            // Lock collect as soon as delivery starts so a fast overlapping drag
+            // cannot pick plates back up mid-animation.
+            ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
             RefreshStickmanAnimation(moving: false);
             ClearCharTableTrail(resetHeaviness: true);
             Haptic.MediumTaptic();
@@ -3790,7 +3828,11 @@ namespace CarryBlockJam
                 return;
 
             if (pickupPieces.Count > 0)
+            {
+                if (IsBoxOwnedCell(row, column))
+                    MarkTablePickupBlocksDeliver(row, column);
                 AddPlatesToCarryStack(pickupPieces);
+            }
         }
 
         private void TryCollectAlongDragSegment(
@@ -3906,10 +3948,56 @@ namespace CarryBlockJam
                 return false;
 
             if (piece.Kind == CarryBlockJamPieceKind.Box)
-                return piece.Color == CarriedColor;
+                return CanDeliverToTable(piece);
 
             CarryBlockJamBoardPiece storageBox = GetStorageBox(piece);
-            return storageBox != null && storageBox.Color == CarriedColor;
+            return CanDeliverToTable(storageBox);
+        }
+
+        /// <summary>
+        /// Tables accept any color when empty, then only that stack color until cleared.
+        /// Locked (hidden/frozen/curtain) tables still block.
+        /// </summary>
+        private bool CanDeliverToTable(CarryBlockJamBoardPiece tableBox)
+        {
+            if (tableBox == null || tableBox.Kind != CarryBlockJamPieceKind.Box)
+                return false;
+
+            if (tableBox.IsColorHidden || tableBox.IsFrozen || tableBox.IsCurtained)
+                return false;
+
+            if (!HasCarriedPlates)
+                return false;
+
+            PieceColorType stackColor = GetTableStackPlateColor(tableBox);
+            if (stackColor == PieceColorType.None)
+                return true;
+
+            return stackColor == CarriedColor;
+        }
+
+        /// <summary>
+        /// Color of plates already stacked on a table, or None when the table is empty.
+        /// </summary>
+        private static PieceColorType GetTableStackPlateColor(CarryBlockJamBoardPiece tableBox)
+        {
+            if (tableBox == null)
+                return PieceColorType.None;
+
+            CarryBlockJamBoardPiece current = tableBox.StackedAbove;
+            while (current != null)
+            {
+                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                {
+                    PieceColorType color = current.TrueColor;
+                    if (color != PieceColorType.None)
+                        return color;
+                }
+
+                current = current.StackedAbove;
+            }
+
+            return PieceColorType.None;
         }
 
         private bool HasCarriedPlates => _carriedPlates.Count > 0;
@@ -4053,6 +4141,7 @@ namespace CarryBlockJam
                 if (bounce != null)
                     collection.Join(bounce);
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
+                CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
             }
 
@@ -5329,10 +5418,10 @@ namespace CarryBlockJam
             if (FindMatchingExit(row, column, carriedColor) != null)
                 return true;
 
-            return IsOrthogonallyAdjacentToMatchingTable(row, column, carriedColor);
+            return IsOrthogonallyAdjacentToAnyTable(row, column);
         }
 
-        private bool IsOrthogonallyAdjacentToMatchingTable(int row, int column, PieceColorType carriedColor)
+        private bool IsOrthogonallyAdjacentToAnyTable(int row, int column)
         {
             int[] rowOffsets = { -1, 1, 0, 0 };
             int[] colOffsets = { 0, 0, -1, 1 };
@@ -5354,7 +5443,7 @@ namespace CarryBlockJam
 
                 CarryBlockJamBoardPiece storageBox = GetStorageBox(piece) ??
                     (piece.Kind == CarryBlockJamPieceKind.Box ? piece : null);
-                if (storageBox != null && storageBox.Color == carriedColor)
+                if (CanDeliverToTable(storageBox))
                     return true;
             }
 
