@@ -30,9 +30,9 @@ MonoBehaviour:
       maxPlateStacks: 2
     exits:
     - row: 0
-      column: 2
+      column: 4
       side: 0
-      startIndex: 2
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -44,10 +44,10 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 1
         requiredPlateCount: 3
-    - row: 0
-      column: 6
-      side: 0
-      startIndex: 6
+    - row: 8
+      column: 0
+      side: 2
+      startIndex: 8
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -59,10 +59,10 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 6
         requiredPlateCount: 2
-    - row: 12
-      column: 4
-      side: 1
-      startIndex: 4
+    - row: 8
+      column: 8
+      side: 3
+      startIndex: 8
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -77,7 +77,7 @@ MonoBehaviour:
     disableAutoTables: 0
     tablePlacements:
     - color: 3
-      row: 9
+      row: 10
       column: 6
       isHidden: 1
       isFrozen: 0
@@ -85,15 +85,15 @@ MonoBehaviour:
       curtainColor: 0
       unlockMoves: 0
     - color: 6
-      row: 3
-      column: 6
+      row: 2
+      column: 7
       isHidden: 0
       isFrozen: 0
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
     - color: 2
-      row: 4
+      row: 2
       column: 1
       isHidden: 1
       isFrozen: 0
@@ -101,15 +101,15 @@ MonoBehaviour:
       curtainColor: 0
       unlockMoves: 0
     - color: 1
-      row: 9
-      column: 1
+      row: 10
+      column: 2
       isHidden: 0
       isFrozen: 0
       isCurtain: 0
       curtainColor: 1
       unlockMoves: 0
     platePlacements: []
-    stickmanSpawnMode: 2
+    stickmanSpawnMode: 0
     fixedStickmanCell:
       row: 0
       column: 3
