@@ -54,8 +54,8 @@ namespace CarryBlockJam
         [SerializeField] private float charTablePickupArcOutward = 1.05f;
         [Tooltip("Edge-on flip degrees at the soar apex (flat at start/end, vertical mid-flight).")]
         [SerializeField] private float charTablePickupFlipDegrees = 82f;
-        [Tooltip("Faster jump when picking plates off a normal table onto CharTable.")]
-        [SerializeField] private float charTableTablePickupDuration = 0.1f;
+        [Tooltip("Duration when picking plates off a normal table onto CharTable.")]
+        [SerializeField] private float charTableTablePickupDuration = 0.16f;
         [SerializeField] private float charTablePickupShrinkDuration = 0.06f;
         [Tooltip("Delay between each ground plate launch so fast pickups still read as a trail.")]
         [SerializeField] private float charTablePickupStagger = 0.07f;
@@ -2111,7 +2111,8 @@ namespace CarryBlockJam
             float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
             CarryBlockJamRuntimePieceSpawner spawner =
                 GetComponent<CarryBlockJamRuntimePieceSpawner>();
-            if (spawner != null && spawner.UsesCharTableCylinderVisual)
+            bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
+            if (usesCharTable)
             {
                 CarryBlockJamPrefabSettings settings =
                     board != null ? board.PrefabSettings : null;
@@ -2120,21 +2121,40 @@ namespace CarryBlockJam
                     : 3f;
                 tableAnimationSpeed *= Mathf.Max(0.01f, charTableSpeed);
             }
-            float jumpDuration = Mathf.Max(
-                0.01f,
-                Mathf.Max(exitTravelDuration, tablePlateJumpDuration) / tableAnimationSpeed);
-            Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 270f, 0f);
 
             Sequence landing = DOTween.Sequence();
-            landing.Append(plate.transform.DOJump(
-                stackWorldTarget,
-                Mathf.Max(0.01f, tablePlateJumpHeight),
-                1,
-                jumpDuration).SetEase(Ease.OutQuad));
-            landing.Join(plate.transform.DORotate(
-                spinTarget,
-                jumpDuration,
-                RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
+            if (usesCharTable)
+            {
+                // Same curvy soar as table → CharTable pickup.
+                CarryBlockJamBoardPiece stackBase = basePiece;
+                landing.Append(BuildTableTransferSoarTween(
+                    plate,
+                    index,
+                    () => stackBase != null
+                        ? stackBase.transform.TransformPoint(
+                            stackBase.GetStackAttachLocalPosition(plate))
+                        : stackWorldTarget,
+                    () => stackBase != null
+                        ? stackBase.transform.rotation
+                        : Quaternion.identity));
+            }
+            else
+            {
+                float jumpDuration = Mathf.Max(
+                    0.01f,
+                    Mathf.Max(exitTravelDuration, tablePlateJumpDuration) / tableAnimationSpeed);
+                Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 270f, 0f);
+                landing.Append(plate.transform.DOJump(
+                    stackWorldTarget,
+                    Mathf.Max(0.01f, tablePlateJumpHeight),
+                    1,
+                    jumpDuration).SetEase(Ease.OutQuad));
+                landing.Join(plate.transform.DORotate(
+                    spinTarget,
+                    jumpDuration,
+                    RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
+            }
+
             landing.AppendCallback(() =>
             {
                 Haptic.MediumTaptic();
@@ -4108,44 +4128,28 @@ namespace CarryBlockJam
             return bounce;
         }
 
-        private Tween AnimatePlateOntoCharTable(
+        /// <summary>
+        /// Shared curvy cubic soar for table ↔ CharTable transfers (tall arc, mid
+        /// scale dip, light edge-on flip). End pose is sampled live so moving
+        /// stack/CharTable targets stay locked during flight.
+        /// </summary>
+        private Tween BuildTableTransferSoarTween(
             CarryBlockJamBoardPiece plate,
-            int pickupIndex,
-            Vector3 targetLocal,
-            bool fromTable)
+            int index,
+            System.Func<Vector3> getEndWorld,
+            System.Func<Quaternion> getEndRotation)
         {
-            CarryBlockJamPrefabSettings settings =
-                board != null ? board.PrefabSettings : null;
-            float settingsDuration = settings != null
-                ? settings.charTablePickupDuration
-                : charTablePickupDuration;
-
-            // Table → CharTable: tight hop. Ground → CharTable: tall curvy soar with
-            // mid-flight scale-down/up + edge-on flip (reads as a trail when staggered).
-            float duration = fromTable
-                ? Mathf.Max(0.05f, charTableTablePickupDuration)
-                : Mathf.Max(0.18f, settingsDuration);
-            float shrinkDuration = fromTable
-                ? Mathf.Max(0.02f, charTablePickupShrinkDuration * 0.55f)
-                : 0f;
-            float heightJitter = fromTable ? 0f : (0.22f * ((pickupIndex % 3) - 1));
-            float outwardJitter = fromTable ? 0f : (0.14f * ((pickupIndex % 4) - 1.5f));
-            float arcHeight = fromTable
-                ? Mathf.Max(0.12f, charTablePickupArcHeight * 0.18f)
-                : Mathf.Max(0.75f, charTablePickupArcHeight + heightJitter);
-            float arcOutward = fromTable
-                ? 0.04f
-                : Mathf.Max(0.4f, charTablePickupArcOutward + outwardJitter);
-            float midBlend = fromTable ? 0.45f : 0.16f + 0.04f * (pickupIndex % 3);
-            float mid2Blend = fromTable ? 0.75f : 0.58f + 0.03f * (pickupIndex % 3);
-            float sideBow = fromTable ? 0.04f : 0.28f + 0.12f * (pickupIndex % 3);
-            float shrinkMul = fromTable
-                ? Mathf.Clamp(charTablePickupShrinkScale + 0.15f, 0.55f, 0.95f)
-                : Mathf.Clamp(charTablePickupShrinkScale, 0.4f, 0.85f);
-            float flipDegrees = fromTable
-                ? 0f
-                : Mathf.Clamp(charTablePickupFlipDegrees, 0f, 110f);
-            float sideSign = pickupIndex % 2 == 0 ? 1f : -1f;
+            float duration = Mathf.Max(0.08f, charTableTablePickupDuration);
+            float heightJitter = 0.08f * ((index % 3) - 1);
+            float outwardJitter = 0.06f * ((index % 4) - 1.5f);
+            float arcHeight = Mathf.Max(1.4f, charTablePickupArcHeight * 1.56f + heightJitter);
+            float arcOutward = Mathf.Max(0.18f, charTablePickupArcOutward * 0.38f + outwardJitter);
+            float midBlend = 0.28f + 0.03f * (index % 3);
+            float mid2Blend = 0.68f;
+            float sideBow = 0.12f + 0.05f * (index % 3);
+            float shrinkMul = Mathf.Clamp(charTablePickupShrinkScale + 0.1f, 0.5f, 0.95f);
+            float flipDegrees = Mathf.Clamp(charTablePickupFlipDegrees * 0.45f, 0f, 55f);
+            float sideSign = index % 2 == 0 ? 1f : -1f;
 
             Vector3 restScale = plate.transform.localScale;
             if (restScale == Vector3.zero)
@@ -4153,37 +4157,31 @@ namespace CarryBlockJam
             Vector3 shrunkScale = restScale * shrinkMul;
             Vector3 startWorld = plate.transform.position;
             Quaternion startRotation = plate.transform.rotation;
-            Transform attachRoot = GetCarryAttachRoot();
+            float shrinkDuration = Mathf.Max(0.02f, charTablePickupShrinkDuration * 0.55f);
 
             Sequence placement = DOTween.Sequence();
-            if (fromTable)
-            {
-                // Brief shrink on the table before the hop.
-                placement.Append(
-                    plate.transform.DOScale(shrunkScale, shrinkDuration).SetEase(Ease.OutBack));
-            }
+            placement.Append(
+                plate.transform.DOScale(shrunkScale, shrinkDuration).SetEase(Ease.OutBack));
 
-            // World-space flight that tracks CharTable's live stack slot, so settle
-            // snap-back never leaves plates floating in the between cell.
             float flight = 0f;
             Tween pathTween = DOTween.To(
                     () => flight,
                     value => flight = value,
                     1f,
                     duration)
-                .SetEase(fromTable ? Ease.InOutSine : Ease.OutSine)
+                .SetEase(Ease.InOutSine)
                 .OnUpdate(() =>
                 {
-                    if (plate == null || attachRoot == null)
+                    if (plate == null || getEndWorld == null || getEndRotation == null)
                         return;
 
-                    Vector3 endWorld = attachRoot.TransformPoint(targetLocal);
+                    Vector3 endWorld = getEndWorld();
+                    Quaternion endRotation = getEndRotation();
                     Vector3 mid = Vector3.Lerp(startWorld, endWorld, midBlend);
                     mid.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight;
 
                     Vector3 mid2 = Vector3.Lerp(startWorld, endWorld, mid2Blend);
-                    mid2.y = Mathf.Max(startWorld.y, endWorld.y) +
-                             arcHeight * (fromTable ? 0.35f : 0.52f);
+                    mid2.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight * 0.62f;
 
                     Vector3 away = startWorld - endWorld;
                     away.y = 0f;
@@ -4208,22 +4206,160 @@ namespace CarryBlockJam
                         mid2 += Vector3.left * (0.15f * sideSign);
                     }
 
-                    plate.transform.position = fromTable
-                        ? EvaluateQuadraticBezier(startWorld, mid, endWorld, flight)
-                        : EvaluateCubicBezier(startWorld, mid, mid2, endWorld, flight);
+                    plate.transform.position = EvaluateCubicBezier(
+                        startWorld, mid, mid2, endWorld, flight);
 
-                    // Scale down at apex, restore on land — matches the curvy soar read.
                     float apex = Mathf.Sin(flight * Mathf.PI);
-                    if (fromTable)
-                        plate.transform.localScale = Vector3.Lerp(shrunkScale, restScale, flight);
+                    plate.transform.localScale = Vector3.Lerp(
+                        Vector3.Lerp(shrunkScale, restScale, flight),
+                        shrunkScale,
+                        apex * 0.55f);
+
+                    Quaternion baseRotation = Quaternion.Slerp(startRotation, endRotation, flight);
+                    if (flipDegrees > 0.01f)
+                    {
+                        Quaternion soarTilt = Quaternion.AngleAxis(flipDegrees * apex, lateral);
+                        plate.transform.rotation = soarTilt * baseRotation;
+                    }
                     else
-                        plate.transform.localScale = Vector3.Lerp(restScale, shrunkScale, apex);
+                    {
+                        plate.transform.rotation = baseRotation;
+                    }
+                });
+
+            placement.Append(pathTween);
+            placement.OnComplete(() =>
+            {
+                if (plate == null)
+                    return;
+
+                if (getEndWorld != null)
+                    plate.transform.position = getEndWorld();
+                if (getEndRotation != null)
+                    plate.transform.rotation = getEndRotation();
+                plate.transform.localScale = restScale;
+            });
+            return placement;
+        }
+
+        private Tween AnimatePlateOntoCharTable(
+            CarryBlockJamBoardPiece plate,
+            int pickupIndex,
+            Vector3 targetLocal,
+            bool fromTable)
+        {
+            Transform attachRoot = GetCarryAttachRoot();
+            if (fromTable)
+            {
+                return BuildTableTransferSoarTween(
+                    plate,
+                    pickupIndex,
+                    () =>
+                    {
+                        Transform root = GetCarryAttachRoot();
+                        return root != null
+                            ? root.TransformPoint(targetLocal)
+                            : plate.transform.position;
+                    },
+                    () =>
+                    {
+                        Transform root = GetCarryAttachRoot();
+                        return root != null ? root.rotation : Quaternion.identity;
+                    })
+                    .OnComplete(() =>
+                    {
+                        if (plate == null)
+                            return;
+
+                        Transform root = GetCarryAttachRoot();
+                        plate.transform.SetParent(root, false);
+                        plate.transform.localPosition = targetLocal;
+                        plate.transform.localRotation = Quaternion.identity;
+                    });
+            }
+
+            CarryBlockJamPrefabSettings settings =
+                board != null ? board.PrefabSettings : null;
+            float settingsDuration = settings != null
+                ? settings.charTablePickupDuration
+                : charTablePickupDuration;
+
+            // Ground → CharTable: tall soar with mid-flight scale-down/up + edge-on flip.
+            float duration = Mathf.Max(0.18f, settingsDuration);
+            float heightJitter = 0.22f * ((pickupIndex % 3) - 1);
+            float outwardJitter = 0.14f * ((pickupIndex % 4) - 1.5f);
+            float arcHeight = Mathf.Max(0.75f, charTablePickupArcHeight + heightJitter);
+            float arcOutward = Mathf.Max(0.4f, charTablePickupArcOutward + outwardJitter);
+            float midBlend = 0.16f + 0.04f * (pickupIndex % 3);
+            float mid2Blend = 0.58f + 0.03f * (pickupIndex % 3);
+            float sideBow = 0.28f + 0.12f * (pickupIndex % 3);
+            float shrinkMul = Mathf.Clamp(charTablePickupShrinkScale, 0.4f, 0.85f);
+            float flipDegrees = Mathf.Clamp(charTablePickupFlipDegrees, 0f, 110f);
+            float sideSign = pickupIndex % 2 == 0 ? 1f : -1f;
+
+            Vector3 restScale = plate.transform.localScale;
+            if (restScale == Vector3.zero)
+                restScale = Vector3.one;
+            Vector3 shrunkScale = restScale * shrinkMul;
+            Vector3 startWorld = plate.transform.position;
+            Quaternion startRotation = plate.transform.rotation;
+
+            Sequence placement = DOTween.Sequence();
+
+            // World-space flight that tracks CharTable's live stack slot, so settle
+            // snap-back never leaves plates floating in the between cell.
+            float flight = 0f;
+            Tween pathTween = DOTween.To(
+                    () => flight,
+                    value => flight = value,
+                    1f,
+                    duration)
+                .SetEase(Ease.OutSine)
+                .OnUpdate(() =>
+                {
+                    if (plate == null || attachRoot == null)
+                        return;
+
+                    Vector3 endWorld = attachRoot.TransformPoint(targetLocal);
+                    Vector3 mid = Vector3.Lerp(startWorld, endWorld, midBlend);
+                    mid.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight;
+
+                    Vector3 mid2 = Vector3.Lerp(startWorld, endWorld, mid2Blend);
+                    mid2.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight * 0.52f;
+
+                    Vector3 away = startWorld - endWorld;
+                    away.y = 0f;
+                    Vector3 lateral = Vector3.right;
+                    if (away.sqrMagnitude > 0.0001f)
+                    {
+                        away.Normalize();
+                        mid += away * arcOutward;
+                        mid2 += away * (arcOutward * 0.35f);
+                        Vector3 side = Vector3.Cross(Vector3.up, away);
+                        if (side.sqrMagnitude > 0.0001f)
+                        {
+                            side.Normalize();
+                            lateral = side;
+                            mid += side * (sideBow * sideSign);
+                            mid2 += side * (sideBow * -0.55f * sideSign);
+                        }
+                    }
+                    else
+                    {
+                        mid += Vector3.right * (0.25f * sideSign);
+                        mid2 += Vector3.left * (0.15f * sideSign);
+                    }
+
+                    plate.transform.position = EvaluateCubicBezier(
+                        startWorld, mid, mid2, endWorld, flight);
+
+                    float apex = Mathf.Sin(flight * Mathf.PI);
+                    plate.transform.localScale = Vector3.Lerp(restScale, shrunkScale, apex);
 
                     Quaternion landRotation = attachRoot.rotation;
                     Quaternion baseRotation = Quaternion.Slerp(startRotation, landRotation, flight);
                     if (flipDegrees > 0.01f)
                     {
-                        // Flat on floor → edge-on at peak → flat on CharTable.
                         Quaternion soarTilt = Quaternion.AngleAxis(flipDegrees * apex, lateral);
                         plate.transform.rotation = soarTilt * baseRotation;
                     }
@@ -4246,16 +4382,6 @@ namespace CarryBlockJam
                 plate.transform.localScale = restScale;
             });
             return placement;
-        }
-
-        private static Vector3 EvaluateQuadraticBezier(
-            Vector3 a,
-            Vector3 b,
-            Vector3 c,
-            float t)
-        {
-            float u = 1f - t;
-            return (u * u * a) + (2f * u * t * b) + (t * t * c);
         }
 
         private static Vector3 EvaluateCubicBezier(
