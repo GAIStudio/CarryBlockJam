@@ -69,16 +69,20 @@ namespace CarryBlockJam
         [SerializeField] private float failurePlateFlyHeight = 1.25f;
         [SerializeField] private float failurePlateSpreadStagger = 0.04f;
         [SerializeField] private float failureUiDelay = 1.4f;
-        [Header("CharTable Smoke Trail")]
+        [Header("CharTable Wind Trail")]
         [SerializeField] private bool enableCharTableTrail = true;
-        [SerializeField] private Color charTableTrailColor = new Color(0.38f, 0.38f, 0.4f, 0.8f);
-        [SerializeField] private float charTableTrailMinWidth = 0.1f;
-        [SerializeField] private float charTableTrailMaxWidth = 0.2f;
-        [SerializeField] private float charTableTrailMinTime = 0.14f;
-        [SerializeField] private float charTableTrailMaxTime = 0.55f;
+        [Tooltip("Defaults to Epic Toon FX WindlinesSpeedy when left empty.")]
+        [SerializeField] private GameObject charTableTrailVfxPrefab;
+        [SerializeField] private float charTableTrailVfxScale = 1.1f;
+        [SerializeField] private float charTableTrailMinEmission = 22f;
+        [SerializeField] private float charTableTrailMaxEmission = 40f;
+        [SerializeField] private float charTableTrailRateOverDistance = 16f;
+        [SerializeField] private float charTableTrailExhaustSpeed = 3f;
+        [SerializeField] private float charTableTrailExhaustSize = 0.55f;
         [SerializeField] private float charTableTrailCellsForMaxHeavy = 10f;
-        [SerializeField] private float charTableTrailHeight = 0.12f;
-        [SerializeField] private float charTableTrailAbsorbDuration = 0.1f;
+        [SerializeField] private float charTableTrailHeight = 0.18f;
+        [SerializeField] private float charTableTrailRearOffset = 0.55f;
+        [SerializeField] private float charTableTrailAbsorbDuration = 0.12f;
         [Header("CharTable Idle Hints")]
         [SerializeField] private bool enableCharTableIdleHints = true;
         [SerializeField] private float charTableIdleShakeDelay = 3f;
@@ -129,10 +133,19 @@ namespace CarryBlockJam
         /// </summary>
         private bool _hasTablePickupBlockDeliver;
         private Vector2Int _tablePickupBlockDeliverCell;
-        private TrailRenderer _charTableTrail;
+        private ParticleSystem _charTableTrailParticles;
         private float _trailSessionCells;
         private float _trailSegmentProgressReported;
         private Tween _charTableTrailAbsorbTween;
+        private Vector3 _charTableTrailLastWorldPos;
+        private bool _charTableTrailHasLastPos;
+        private Vector3 _charTableTrailExhaustDir = Vector3.back;
+        private int _charTableTrailConfigVersion;
+        private const int CharTableTrailExhaustConfigVersion = 6;
+        private static GameObject _cachedCharTableTrailVfxPrefab;
+        private const string CharTableTrailVfxResourcePath = "particles/WindlinesSpeedy";
+        private const string CharTableTrailVfxEditorPath =
+            "Assets/Packages/Particles/Epic Toon FX/Prefabs/Environment/Weather/Wind & Leaves/WindlinesSpeedy.prefab";
         private Tween _charTableIdleShakeTween;
         private ParticleSystem _charTableHintParticles;
         private bool _charTableStartHintPlayed;
@@ -325,6 +338,13 @@ namespace CarryBlockJam
             _trailSegmentProgressReported = 0f;
             _trackingSwipe = true;
             EnsureCharTableTrail();
+            KillCharTableTrailAbsorbTween();
+            _charTableTrailHasLastPos = false;
+            if (_cylinder != null)
+            {
+                _charTableTrailLastWorldPos = _cylinder.transform.position;
+                _charTableTrailHasLastPos = true;
+            }
             EnsureHighlightRoot();
             ShowHighlights(false);
             RefreshStickmanAnimation(moving: false);
@@ -1789,6 +1809,12 @@ namespace CarryBlockJam
             Haptic.HeavyTaptic();
             EnsureCharTableTrail();
             KillCharTableTrailAbsorbTween();
+            _charTableTrailHasLastPos = false;
+            if (_cylinder != null)
+            {
+                _charTableTrailLastWorldPos = _cylinder.transform.position;
+                _charTableTrailHasLastPos = true;
+            }
             SetCharTableTrailEmitting(true);
 
             if (_cylinder.Row >= 0 && _cylinder.Column >= 0 && _grid.IsInside(_cylinder.Row, _cylinder.Column))
@@ -4649,6 +4675,7 @@ namespace CarryBlockJam
         {
             _cylinder = null;
             _charTableHintParticles = null;
+            _charTableTrailParticles = null;
             _charTableStartHintPlayed = false;
             _lastPlayerInputTime = -1f;
             _charTableVisualRestCaptured = false;
@@ -5001,85 +5028,261 @@ namespace CarryBlockJam
 
         private void EnsureCharTableTrail()
         {
-            if (!UsesCharTableTrail())
+            if (!UsesCharTableTrail() || _cylinder == null)
                 return;
 
-            if (_charTableTrail != null)
+            // Remove legacy smoke TrailRenderer if a previous build left one around.
+            Transform legacySmoke = _cylinder.transform.Find("CharTableSmokeTrail");
+            if (legacySmoke != null)
+                Destroy(legacySmoke.gameObject);
+
+            Transform piecesRoot = GetPiecesRoot();
+            if (piecesRoot == null)
+                piecesRoot = _cylinder.transform;
+
+            if (_charTableTrailParticles != null)
             {
-                if (_charTableTrail.transform.parent != _cylinder.transform)
-                    _charTableTrail.transform.SetParent(_cylinder.transform, false);
-                _charTableTrail.transform.localPosition =
-                    new Vector3(0f, charTableTrailHeight, 0f);
-                _charTableTrail.alignment = LineAlignment.View;
-                ApplyCharTableTrailMaterial();
-                RefreshCharTableTrailHeaviness();
+                if (_charTableTrailConfigVersion != CharTableTrailExhaustConfigVersion)
+                {
+                    Destroy(_charTableTrailParticles.gameObject);
+                    _charTableTrailParticles = null;
+                }
+                else
+                {
+                    Transform trailTransform = _charTableTrailParticles.transform;
+                    if (trailTransform.parent != piecesRoot)
+                        trailTransform.SetParent(piecesRoot, true);
+                    ApplyCharTableTrailExhaustPose();
+                    RefreshCharTableTrailHeaviness();
+                    return;
+                }
+            }
+
+            GameObject prefab = ResolveCharTableTrailVfxPrefab();
+            if (prefab == null)
+            {
+                Debug.LogWarning(
+                    "[CarryBlockJam] CharTable trail prefab missing (WindlinesSpeedy).");
                 return;
             }
 
-            Transform existing = _cylinder.transform.Find("CharTableSmokeTrail");
-            GameObject trailObject = existing != null
-                ? existing.gameObject
-                : new GameObject("CharTableSmokeTrail");
-            if (existing == null)
-                trailObject.transform.SetParent(_cylinder.transform, false);
+            // Destroy any old instance under CharTable or pieces root.
+            Transform existingUnderCylinder = _cylinder.transform.Find("CharTableWindTrail");
+            if (existingUnderCylinder != null)
+                Destroy(existingUnderCylinder.gameObject);
+            Transform existingUnderRoot = piecesRoot.Find("CharTableWindTrail");
+            if (existingUnderRoot != null)
+                Destroy(existingUnderRoot.gameObject);
 
-            trailObject.transform.localPosition = new Vector3(0f, charTableTrailHeight, 0f);
-            trailObject.transform.localRotation = Quaternion.identity;
-            trailObject.transform.localScale = Vector3.one;
+            // Parent to board pieces root (not CharTable) so CharTable's Y-squash
+            // scale does not hide / flatten the exhaust particles.
+            GameObject trailObject = Instantiate(prefab, piecesRoot, false);
+            trailObject.name = "CharTableWindTrail";
+            trailObject.SetActive(true);
 
-            _charTableTrail = trailObject.GetComponent<TrailRenderer>();
-            if (_charTableTrail == null)
-                _charTableTrail = trailObject.AddComponent<TrailRenderer>();
+            _charTableTrailParticles = trailObject.GetComponent<ParticleSystem>();
+            if (_charTableTrailParticles == null)
+                _charTableTrailParticles = trailObject.GetComponentInChildren<ParticleSystem>(true);
+            if (_charTableTrailParticles == null)
+                return;
 
-            ApplyCharTableTrailMaterial();
-
-            _charTableTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _charTableTrail.receiveShadows = false;
-            // View alignment so the ribbon faces the camera (TransformZ was
-            // edge-on / invisible with the tilted gameplay camera).
-            _charTableTrail.alignment = LineAlignment.View;
-            _charTableTrail.textureMode = LineTextureMode.Stretch;
-            _charTableTrail.numCapVertices = 2;
-            _charTableTrail.numCornerVertices = 2;
-            _charTableTrail.minVertexDistance = 0.025f;
-            _charTableTrail.autodestruct = false;
-            _charTableTrail.allowOcclusionWhenDynamic = false;
-            _charTableTrail.sortingOrder = 50;
-            _charTableTrail.emitting = false;
-            _charTableTrail.Clear();
+            ConfigureCharTableTrailParticles(_charTableTrailParticles);
+            _charTableTrailConfigVersion = CharTableTrailExhaustConfigVersion;
+            _charTableTrailHasLastPos = false;
+            ApplyCharTableTrailExhaustPose();
+            SetCharTableTrailEmitting(false);
             RefreshCharTableTrailHeaviness();
         }
 
-        private void ApplyCharTableTrailMaterial()
+        private GameObject ResolveCharTableTrailVfxPrefab()
         {
-            if (_charTableTrail == null)
+            if (charTableTrailVfxPrefab != null)
+                return charTableTrailVfxPrefab;
+
+#if UNITY_EDITOR
+            // Prefer the package prefab in editor — Resources copies can miss materials.
+            if (_cachedCharTableTrailVfxPrefab == null)
+            {
+                _cachedCharTableTrailVfxPrefab =
+                    UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                        CharTableTrailVfxEditorPath);
+            }
+#endif
+
+            if (_cachedCharTableTrailVfxPrefab == null)
+                _cachedCharTableTrailVfxPrefab =
+                    Resources.Load<GameObject>(CharTableTrailVfxResourcePath);
+
+            return _cachedCharTableTrailVfxPrefab;
+        }
+
+        private void ConfigureCharTableTrailParticles(ParticleSystem particles)
+        {
+            if (particles == null)
                 return;
 
-            Shader trailShader =
-                Shader.Find("Mobile/Particles/Alpha Blended") ??
-                Shader.Find("Particles/Standard Unlit") ??
-                Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
-                Shader.Find("Legacy Shaders/Particles/Alpha Blended") ??
-                Shader.Find("Sprites/Default");
-            if (trailShader == null)
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            // WindlinesSpeedy defaults to centered Stretch billboards — that draws
+            // lines both ahead and behind the spawn point (both table edges).
+            // Rebuild as a one-way rearward exhaust jet.
+            ParticleSystem.MainModule main = particles.main;
+            main.playOnAwake = false;
+            main.loop = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+            main.startDelay = 0f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.28f, 0.48f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(
+                Mathf.Max(1.3f, charTableTrailExhaustSpeed * 0.85f),
+                Mathf.Max(2f, charTableTrailExhaustSpeed * 1.25f));
+            float size = Mathf.Max(0.18f, charTableTrailExhaustSize);
+            main.startSize3D = true;
+            // Thin elongated streaks that still read as wind lines without
+            // bidirectional Stretch rendering.
+            main.startSizeX = new ParticleSystem.MinMaxCurve(size * 0.14f, size * 0.24f);
+            main.startSizeY = new ParticleSystem.MinMaxCurve(size * 0.8f, size * 1.1f);
+            main.startSizeZ = new ParticleSystem.MinMaxCurve(size * 0.14f, size * 0.24f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.45f, 0.46f, 0.48f, 0.85f));
+            main.gravityModifier = 0f;
+            main.maxParticles = 110;
+            main.emitterVelocityMode = ParticleSystemEmitterVelocityMode.Transform;
+
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.enabled = true;
+            emission.rateOverTime = Mathf.Max(0f, charTableTrailMinEmission * 0.35f);
+            emission.rateOverDistance = Mathf.Max(0f, charTableTrailRateOverDistance);
+            emission.SetBursts(System.Array.Empty<ParticleSystem.Burst>());
+
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.enabled = true;
+            // Point-cone jet: only fires along emitter +Z (aimed behind CharTable).
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 8f;
+            shape.radius = 0.04f;
+            shape.radiusThickness = 1f;
+            shape.length = 0.01f;
+            shape.arc = 360f;
+            shape.position = Vector3.zero;
+            shape.rotation = Vector3.zero;
+            shape.scale = Vector3.one;
+            shape.alignToDirection = false;
+            shape.randomDirectionAmount = 0f;
+            shape.sphericalDirectionAmount = 0f;
+            shape.randomPositionAmount = 0f;
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = particles.velocityOverLifetime;
+            velocity.enabled = false;
+
+            ParticleSystem.LimitVelocityOverLifetimeModule limitVelocity =
+                particles.limitVelocityOverLifetime;
+            limitVelocity.enabled = false;
+
+            ParticleSystem.InheritVelocityModule inherit = particles.inheritVelocity;
+            inherit.enabled = false;
+
+            ParticleSystem.ForceOverLifetimeModule force = particles.forceOverLifetime;
+            force.enabled = false;
+
+            ParticleSystem.ExternalForcesModule externalForces = particles.externalForces;
+            externalForces.enabled = false;
+
+            ParticleSystem.NoiseModule noise = particles.noise;
+            noise.enabled = false;
+
+            ParticleSystem.CollisionModule collision = particles.collision;
+            collision.enabled = false;
+
+            ParticleSystem.TriggerModule trigger = particles.trigger;
+            trigger.enabled = false;
+
+            ParticleSystem.SubEmittersModule subEmitters = particles.subEmitters;
+            subEmitters.enabled = false;
+
+            ParticleSystem.TextureSheetAnimationModule sheets = particles.textureSheetAnimation;
+            // Keep authored sheet if present; do not force-disable.
+
+            ParticleSystem.LightsModule lights = particles.lights;
+            lights.enabled = false;
+
+            ParticleSystem.TrailModule trails = particles.trails;
+            trails.enabled = false;
+
+            ParticleSystem.ColorOverLifetimeModule colorOverLifetime = particles.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            var fade = new Gradient();
+            fade.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(0.5f, 0.5f, 0.52f), 0f),
+                    new GradientColorKey(new Color(0.32f, 0.33f, 0.35f), 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.85f, 0f),
+                    new GradientAlphaKey(0.55f, 0.35f),
+                    new GradientAlphaKey(0.2f, 0.7f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+            colorOverLifetime.color = fade;
+
+            ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = particles.sizeOverLifetime;
+            sizeOverLifetime.enabled = true;
+            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
+                1f,
+                new AnimationCurve(
+                    new Keyframe(0f, 0.9f),
+                    new Keyframe(0.2f, 1f),
+                    new Keyframe(1f, 0.25f)));
+
+            ParticleSystem.RotationOverLifetimeModule rotationOverLifetime =
+                particles.rotationOverLifetime;
+            rotationOverLifetime.enabled = false;
+
+            ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
+            if (renderer != null)
+            {
+                renderer.enabled = true;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sortingOrder = 100;
+                // Keep Billboard so streaks stay one-sided (Stretch looked both-way).
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.lengthScale = 1f;
+                renderer.velocityScale = 0f;
+                renderer.cameraVelocityScale = 0f;
+                renderer.maxParticleSize = 5f;
+                renderer.minParticleSize = 0f;
+                renderer.pivot = Vector3.zero;
+                renderer.alignment = ParticleSystemRenderSpace.View;
+            }
+
+            float scale = Mathf.Max(0.7f, charTableTrailVfxScale);
+            particles.transform.localScale = Vector3.one * scale;
+        }
+
+        private void ApplyCharTableTrailExhaustPose()
+        {
+            if (_charTableTrailParticles == null || _cylinder == null)
                 return;
 
-            Material material = _charTableTrail.material;
-            if (material == null || material.shader != trailShader)
-                material = new Material(trailShader);
+            Vector3 back = _charTableTrailExhaustDir;
+            back.y = 0f;
+            if (back.sqrMagnitude < 0.0001f)
+                back = Vector3.back;
+            else
+                back.Normalize();
 
-            // Mid gray smoke — avoid near-white values that read as chalk.
-            Color smoke = charTableTrailColor;
-            material.color = smoke;
-            if (material.HasProperty("_BaseColor"))
-                material.SetColor("_BaseColor", smoke);
-            if (material.HasProperty("_Color"))
-                material.SetColor("_Color", smoke);
-            if (material.HasProperty("_TintColor"))
-                material.SetColor("_TintColor", smoke);
-
-            _charTableTrail.material = material;
-            _charTableTrail.sharedMaterial = material;
+            Transform trailTransform = _charTableTrailParticles.transform;
+            trailTransform.position =
+                _cylinder.transform.position +
+                Vector3.up * charTableTrailHeight +
+                back * Mathf.Max(0f, charTableTrailRearOffset);
+            // Cone emits along +Z — aim that axis opposite travel (exhaust).
+            trailTransform.rotation = Quaternion.LookRotation(back, Vector3.up);
+            float scale = Mathf.Max(0.5f, charTableTrailVfxScale);
+            trailTransform.localScale = Vector3.one * scale;
         }
 
         private void UpdateCharTableTrailDuringDrag(float segmentProgress)
@@ -5091,8 +5294,28 @@ namespace CarryBlockJam
             }
 
             EnsureCharTableTrail();
-            if (_charTableTrail == null)
+            if (_charTableTrailParticles == null || _cylinder == null)
                 return;
+
+            Vector3 worldPos = _cylinder.transform.position;
+            bool movedThisFrame = false;
+            if (_charTableTrailHasLastPos)
+            {
+                Vector3 move = worldPos - _charTableTrailLastWorldPos;
+                move.y = 0f;
+                if (move.sqrMagnitude > 0.00005f)
+                {
+                    _charTableTrailExhaustDir = -move.normalized;
+                    movedThisFrame = true;
+                }
+            }
+            else
+            {
+                _charTableTrailHasLastPos = true;
+            }
+
+            _charTableTrailLastWorldPos = worldPos;
+            ApplyCharTableTrailExhaustPose();
 
             float progress = Mathf.Max(0f, segmentProgress);
             float delta = Mathf.Max(0f, progress - _trailSegmentProgressReported);
@@ -5105,7 +5328,11 @@ namespace CarryBlockJam
 
             RefreshCharTableTrailHeaviness();
 
-            bool moving = progress > 0.02f || _dragCornerTransitionActive;
+            bool moving =
+                movedThisFrame ||
+                progress > 0.005f ||
+                delta > 0.0001f ||
+                _dragCornerTransitionActive;
             if (moving)
             {
                 KillCharTableTrailAbsorbTween();
@@ -5120,94 +5347,94 @@ namespace CarryBlockJam
 
         private void RefreshCharTableTrailHeaviness()
         {
-            if (_charTableTrail == null)
+            if (_charTableTrailParticles == null)
                 return;
 
             float maxCells = Mathf.Max(1f, charTableTrailCellsForMaxHeavy);
             float heavy = Mathf.Clamp01(_trailSessionCells / maxCells);
             float eased = heavy * heavy * (3f - 2f * heavy);
 
-            // Exhaust-thin but still camera-visible. Width is driven by
-            // widthMultiplier (Unity's real scale); keep length/time unchanged.
-            float width = Mathf.Lerp(charTableTrailMinWidth, charTableTrailMaxWidth, eased);
-            _charTableTrail.alignment = LineAlignment.View;
-            _charTableTrail.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 1f),
-                new Keyframe(0.55f, 0.75f),
-                new Keyframe(1f, 0.2f));
-            _charTableTrail.widthMultiplier = width;
-            _charTableTrail.startWidth = width;
-            _charTableTrail.endWidth = width * 0.4f;
-            _charTableTrail.time = Mathf.Lerp(charTableTrailMinTime, charTableTrailMaxTime, eased);
-            _charTableTrail.minVertexDistance = 0.025f;
+            float emission = Mathf.Lerp(
+                Mathf.Max(8f, charTableTrailMinEmission * 0.35f),
+                Mathf.Max(8f, charTableTrailMaxEmission * 0.5f),
+                eased);
+            ParticleSystem.EmissionModule emissionModule = _charTableTrailParticles.emission;
+            emissionModule.rateOverTime = emission;
+            emissionModule.rateOverDistance =
+                Mathf.Max(0f, charTableTrailRateOverDistance) * Mathf.Lerp(0.9f, 1.3f, eased);
 
-            Color smoke = charTableTrailColor;
-            float startAlpha = Mathf.Lerp(0.55f, Mathf.Clamp(smoke.a, 0.55f, 0.9f), eased);
-            var gradient = new Gradient();
-            gradient.SetKeys(
-                new[]
-                {
-                    new GradientColorKey(smoke, 0f),
-                    new GradientColorKey(
-                        new Color(smoke.r * 0.8f, smoke.g * 0.8f, smoke.b * 0.8f, smoke.a),
-                        1f),
-                },
-                new[]
-                {
-                    new GradientAlphaKey(startAlpha, 0f),
-                    new GradientAlphaKey(startAlpha * 0.55f, 0.45f),
-                    new GradientAlphaKey(0f, 1f),
-                });
-            _charTableTrail.colorGradient = gradient;
+            float scale = Mathf.Max(0.7f, charTableTrailVfxScale) *
+                          Mathf.Lerp(0.95f, 1.15f, eased);
+            _charTableTrailParticles.transform.localScale = Vector3.one * scale;
         }
 
         private void SetCharTableTrailEmitting(bool emitting)
         {
-            if (_charTableTrail == null)
+            if (_charTableTrailParticles == null)
                 return;
 
-            _charTableTrail.emitting = emitting && UsesCharTableTrail();
+            bool shouldEmit = emitting && UsesCharTableTrail();
+            if (shouldEmit)
+            {
+                if (!_charTableTrailParticles.isPlaying)
+                    _charTableTrailParticles.Play(true);
+            }
+            else if (_charTableTrailParticles.isEmitting)
+            {
+                _charTableTrailParticles.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
         }
 
         private void AbsorbCharTableTrail()
         {
-            if (_charTableTrail == null)
+            if (_charTableTrailParticles == null)
                 return;
 
-            _charTableTrail.emitting = false;
+            _charTableTrailParticles.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             if (_charTableTrailAbsorbTween != null && _charTableTrailAbsorbTween.IsActive())
                 return;
 
-            if (_charTableTrail.positionCount <= 0 && _charTableTrail.time <= 0.01f)
+            if (!_charTableTrailParticles.IsAlive(true))
+            {
+                _charTableTrailHasLastPos = false;
                 return;
+            }
 
             float duration = Mathf.Max(0.04f, charTableTrailAbsorbDuration);
-            float startTime = Mathf.Max(0.01f, _charTableTrail.time);
-            float startWidth = Mathf.Max(0.01f, _charTableTrail.widthMultiplier);
+            ParticleSystem.EmissionModule emissionModule = _charTableTrailParticles.emission;
+            float startRate = emissionModule.rateOverTime.constant;
+            if (startRate <= 0.01f)
+                startRate = Mathf.Max(0.01f, charTableTrailMinEmission);
+            float startDistance = emissionModule.rateOverDistance.constant;
 
             _charTableTrailAbsorbTween = DOTween
                 .To(
                     () => 0f,
                     t =>
                     {
-                        if (_charTableTrail == null)
+                        if (_charTableTrailParticles == null)
                             return;
 
-                        // Ease harder toward the end so the trail snaps away quickly.
                         float remain = (1f - t) * (1f - t);
-                        _charTableTrail.time = startTime * remain;
-                        _charTableTrail.widthMultiplier = startWidth * remain;
+                        ParticleSystem.EmissionModule emission =
+                            _charTableTrailParticles.emission;
+                        emission.rateOverTime = startRate * remain;
+                        emission.rateOverDistance = startDistance * remain;
                     },
                     1f,
                     duration)
                 .SetEase(Ease.InCubic)
                 .OnComplete(() =>
                 {
-                    if (_charTableTrail == null)
-                        return;
+                    if (_charTableTrailParticles != null)
+                    {
+                        _charTableTrailParticles.Stop(
+                            true,
+                            ParticleSystemStopBehavior.StopEmittingAndClear);
+                        RefreshCharTableTrailHeaviness();
+                    }
 
-                    _charTableTrail.Clear();
-                    RefreshCharTableTrailHeaviness();
+                    _charTableTrailHasLastPos = false;
                     _charTableTrailAbsorbTween = null;
                 });
         }
@@ -5231,11 +5458,11 @@ namespace CarryBlockJam
             }
 
             KillCharTableTrailAbsorbTween();
-            if (_charTableTrail == null)
+            _charTableTrailHasLastPos = false;
+            if (_charTableTrailParticles == null)
                 return;
 
-            _charTableTrail.emitting = false;
-            _charTableTrail.Clear();
+            _charTableTrailParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             RefreshCharTableTrailHeaviness();
         }
 
