@@ -68,10 +68,10 @@ namespace CarryBlockJam.Editor
 
             EditorGUILayout.Space(8f);
             CarryBlockJamCurtainBoxVisualSettingsEditorUtility.DrawCurtainBoxVisualSettings(
-                "Curtain Plate Visual (All Levels)",
+                "Color-Accept Table Badge (All Levels)",
                 _curtainTableVisual);
             EditorGUILayout.HelpBox(
-                "Shared for every level. Level Creator chooses curtain plate color and collect color.",
+                "Shared for every level. Level Creator paints Color Table cells and chooses the Accept Color.",
                 MessageType.None);
 
             EditorGUILayout.Space(8f);

@@ -1973,8 +1973,6 @@ namespace CarryBlockJam
                     PlayCarrySfx(plateDeliverSound);
                     // VFX is owned by the gate exit — never the plate/CharTable pose.
                     exitComponent.ConsumeOne(deliverColor);
-                    CarryBlockJamCurtainBox.NotifyPlatesDeliveredToExit(deliverColor, 1);
-                    CarryBlockJamCurtainPlate.NotifyPlatesDeliveredToExit(deliverColor, 1);
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
@@ -3961,8 +3959,8 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Tables accept any color when empty, then only that stack color until cleared.
-        /// Locked (hidden/frozen/curtain) tables still block.
+        /// Empty tables: any color unless color-accept locked.
+        /// Occupied tables: only the stack color (and color-accept lock must still match).
         /// </summary>
         private bool CanDeliverToTable(CarryBlockJamBoardPiece tableBox)
         {
@@ -3973,6 +3971,11 @@ namespace CarryBlockJam
                 return false;
 
             if (!HasCarriedPlates)
+                return false;
+
+            CarryBlockJamColorAcceptTable colorAccept =
+                tableBox.GetComponent<CarryBlockJamColorAcceptTable>();
+            if (colorAccept != null && !colorAccept.AcceptsColor(CarriedColor))
                 return false;
 
             PieceColorType stackColor = GetTableStackPlateColor(tableBox);

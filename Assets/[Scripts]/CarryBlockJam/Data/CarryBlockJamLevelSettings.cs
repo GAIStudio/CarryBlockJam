@@ -31,7 +31,7 @@ namespace CarryBlockJam
         public List<CarryBlockJamExitDefinition> exits = new List<CarryBlockJamExitDefinition>();
 
         [Header("Tables")]
-        [Tooltip("When enabled, tables are not auto-generated from exits. Only painted Hidden/Ice/Curtain cells and tablePlacements are used.")]
+        [Tooltip("When enabled, tables are not auto-generated from exits. Only painted Color Table cells and tablePlacements are used.")]
         public bool disableAutoTables = false;
 
         [FormerlySerializedAs("boxPlacements")]

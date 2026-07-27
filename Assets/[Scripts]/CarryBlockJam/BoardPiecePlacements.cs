@@ -125,7 +125,7 @@ namespace CarryBlockJam
         [FormerlySerializedAs("autoFitToBox")]
         public bool autoFitToTable = true;
         [Min(0.1f)] public float coverPadding = 1.05f;
-        [Header("Curtain Badge")]
+        [Header("Color Badge")]
         public Vector3 badgeOffset;
         public Vector3 badgeScale = new Vector3(0.85f, 0.85f, 0.85f);
         public Vector3 badgeRotation = new Vector3(90f, 180f, 0f);

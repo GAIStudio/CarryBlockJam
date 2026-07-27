@@ -21,8 +21,8 @@ namespace GAITemplate
         // Tunnel'dan çıkacak piece'lerin renk sırası. Yalnızca Tunnel flag'li cell'de anlamlı.
         public PieceColorType[] tunnelPieces;
 
-        // Curtain: plate color that must be delivered to unlock. Table color stays in `color`.
-        // When None on old assets, runtime falls back to `color`.
+        // Color Table (Curtain flag): Accept Color is `color`.
+        // Legacy curtain levels may still store Collect Color in secondaryColor.
         public PieceColorType secondaryColor;
     }
 

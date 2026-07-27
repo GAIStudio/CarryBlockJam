@@ -197,7 +197,7 @@ namespace GAITemplate.Editor
             DrawToolButton(CellTool.None,   "None");
             DrawToolButton(CellTool.Hidden, "Hidden");
             DrawToolButton(CellTool.Ice,    "Ice");
-            DrawToolButton(CellTool.Curtain, "Curtain");
+            DrawToolButton(CellTool.Curtain, "Color Table");
             if (!isSlide)
                 DrawToolButton(CellTool.Tunnel, "Tunnel");
             GUILayout.EndHorizontal();
@@ -212,9 +212,8 @@ namespace GAITemplate.Editor
                     "Ice cell + color spawns a frozen CarryBlockJam plate. Set unlock moves below the cell. " +
                     "Each collected plate counts down until the ice melts and the plate can be picked up.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Curtain cell: set Plate Color and Collect Color separately. " +
-                    "Collect Color is the plate color that unlocks the curtain when delivered to its exit. " +
-                    "Curtain look is shared on CarryBlockJamRuntimePieceSpawner.",
+                    "Color Table cell: set Accept Color. Spawns a table that only accepts plates of that color. " +
+                    "Badge sprite look is shared on CarryBlockJamRuntimePieceSpawner.",
                 _ => $"Cell'e tıklayınca {_activeTool} bit'i toggle olur. Birden fazla flag aynı cell'de bulunabilir.",
             };
             EditorGUILayout.HelpBox(hint, MessageType.None);
@@ -307,18 +306,12 @@ namespace GAITemplate.Editor
             // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
             if (!isTunnel)
             {
-                bool isCurtain = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
-                if (isCurtain && IsCarryBlockJamGrid())
+                bool isColorTable = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
+                if (isColorTable && IsCarryBlockJamGrid())
                 {
-                    EditorGUILayout.LabelField("Plate", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField("Accept", EditorStyles.miniLabel);
                     _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
                         _cellColors[row, column],
-                        includeNone: true,
-                        GUILayout.Width(70f));
-
-                    EditorGUILayout.LabelField("Collect", EditorStyles.miniLabel);
-                    _cellSecondaryColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
-                        _cellSecondaryColors[row, column],
                         includeNone: true,
                         GUILayout.Width(70f));
                 }
@@ -364,7 +357,7 @@ namespace GAITemplate.Editor
                 return (PieceColorType)EditorGUILayout.EnumPopup(current, GUILayout.Width(70f));
 
             // Hidden / Ice cell colors paint plate materials (plate runtime).
-            // Curtain uses dedicated Plate + Collect pickers in DrawCell.
+            // Color Table uses a dedicated Accept Color picker in DrawCell.
             bool isSpecialPlateCell =
                 (flags & LevelCellFlag.Hidden) != 0 ||
                 (flags & LevelCellFlag.Ice) != 0;
@@ -494,13 +487,16 @@ namespace GAITemplate.Editor
                     _cellSecondaryColors[row, column] = PieceColorType.None;
                 }
 
-                // Curtain: seed collect color from plate color when unset (old single-color levels).
-                if (bit == LevelCellFlag.Curtain &&
-                    _cellSecondaryColors[row, column] == PieceColorType.None &&
-                    _cellColors[row, column] != PieceColorType.None)
+                // Color Table is a table mechanic — clear plate-only flags on the same cell.
+                if (bit == LevelCellFlag.Curtain)
                 {
-                    _cellSecondaryColors[row, column] = _cellColors[row, column];
+                    _cellFlags[row, column] &= ~(LevelCellFlag.Hidden | LevelCellFlag.Ice);
+                    _cellFlagValues[row, column] = 0;
                 }
+
+                // Plate flags clear Color Table on the same cell.
+                if (bit == LevelCellFlag.Hidden || bit == LevelCellFlag.Ice)
+                    _cellFlags[row, column] &= ~LevelCellFlag.Curtain;
             }
         }
 
@@ -631,8 +627,8 @@ namespace GAITemplate.Editor
             EditorGUILayout.Space(6f);
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
             EditorGUILayout.HelpBox(
-                "Frozen ice and curtain look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
-                "In Level Creator only paint Ice/Curtain cells (and unlock moves / plate + collect colors).",
+                "Frozen ice and Color Table badge look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
+                "In Level Creator paint Ice cells (unlock moves) or Color Table cells (Accept Color).",
                 MessageType.None);
             EditorGUILayout.Space(6f);
 
@@ -716,20 +712,20 @@ namespace GAITemplate.Editor
                     new GUIContent(
                         "No Auto Tables",
                         "When ticked, tables are not auto-generated from exits. " +
-                        "Only manual tablePlacements appear — or none. " +
-                        "Hidden, Ice, and Curtain paint plates, not tables."));
+                        "Only manual tablePlacements and Color Table cells appear — or none. " +
+                        "Hidden and Ice paint plates. Color Table paints a single-color accept table."));
             }
 
             bool noAuto = disableAutoTablesProperty != null && disableAutoTablesProperty.boolValue;
             EditorGUILayout.HelpBox(
                 noAuto
-                    ? "Auto table generation is off. Use tablePlacements for tables. " +
-                      "Hidden / Ice / Curtain cells spawn plates."
+                    ? "Auto table generation is off. Use tablePlacements or Color Table cells for tables. " +
+                      "Hidden / Ice cells spawn plates."
                     : "By default, missing tables are auto-generated to match exits. " +
                       "Use tablePlacements for manual tables. " +
                       "Hidden plates reveal when surrounding plates are collected. " +
                       "Frozen plates unlock after N collected plates. " +
-                      "Curtain plates open when all plates of the Collect Color are delivered to the matching exit.",
+                      "Color Table cells spawn a table that only accepts plates of the Accept Color.",
                 MessageType.Info);
 
             EditorGUILayout.EndVertical();
@@ -1060,18 +1056,18 @@ namespace GAITemplate.Editor
             LevelCreatorUtility.ReadDirectionsIntoGrid(_levelData, _cellDirections);
             LevelCreatorUtility.ReadTunnelPiecesIntoGrid(_levelData, _cellTunnelPieces);
 
-            // Old curtain cells only stored one color — seed Collect from Plate when missing.
+            // Legacy curtain cells may only have Collect in secondaryColor — promote to Accept Color.
             for (int row = 0; row < _rows; row++)
             {
                 for (int column = 0; column < _columns; column++)
                 {
                     if ((_cellFlags[row, column] & LevelCellFlag.Curtain) == 0)
                         continue;
-                    if (_cellSecondaryColors[row, column] != PieceColorType.None)
+                    if (_cellColors[row, column] != PieceColorType.None)
                         continue;
-                    if (_cellColors[row, column] == PieceColorType.None)
+                    if (_cellSecondaryColors[row, column] == PieceColorType.None)
                         continue;
-                    _cellSecondaryColors[row, column] = _cellColors[row, column];
+                    _cellColors[row, column] = _cellSecondaryColors[row, column];
                 }
             }
 

@@ -44,7 +44,8 @@ namespace CarryBlockJam
         [FormerlySerializedAs("frozenBoxVisual")]
         [SerializeField] private BoardFrozenBoxVisualSettings frozenTableVisual = BoardFrozenBoxVisualSettings.CreateDefault();
 
-        [Header("Curtain Plate Visual (All Levels)")]
+        [Header("Color-Accept Table Badge (All Levels)")]
+        [Tooltip("Badge sprite on tables that only accept one plate color (replaces curtain).")]
         [FormerlySerializedAs("curtainBoxVisual")]
         [SerializeField] private BoardCurtainBoxVisualSettings curtainTableVisual = BoardCurtainBoxVisualSettings.CreateDefault();
 
@@ -112,14 +113,13 @@ namespace CarryBlockJam
 
         public void RefreshCurtainVisuals()
         {
-            BoardCurtainBoxVisualSettings settings =
-                ResolveCurtainBoxVisualSettings();
-            CarryBlockJamCurtainPlate[] curtainPlates =
-                GetComponentsInChildren<CarryBlockJamCurtainPlate>(true);
-            for (int i = 0; i < curtainPlates.Length; i++)
+            BoardCurtainBoxVisualSettings settings = ResolveCurtainBoxVisualSettings();
+            CarryBlockJamColorAcceptTable[] colorTables =
+                GetComponentsInChildren<CarryBlockJamColorAcceptTable>(true);
+            for (int i = 0; i < colorTables.Length; i++)
             {
-                if (curtainPlates[i] != null)
-                    curtainPlates[i].RefreshVisualSettings(settings);
+                if (colorTables[i] != null)
+                    colorTables[i].RefreshVisualSettings(settings);
             }
         }
 
@@ -563,6 +563,20 @@ namespace CarryBlockJam
                         visualColor);
                 }
 
+                if (placement.isCurtain)
+                {
+                    PieceColorType acceptedColor = PieceColorPalette.IsPaintable(placement.curtainColor)
+                        ? placement.curtainColor
+                        : placement.color;
+                    CarryBlockJamColorAcceptTable colorTable =
+                        boxObject.AddComponent<CarryBlockJamColorAcceptTable>();
+                    colorTable.Bind(
+                        piece,
+                        visualObject != null ? visualObject.transform : null,
+                        acceptedColor,
+                        ResolveCurtainBoxVisualSettings());
+                }
+
                 if (grid.TryGetCell(placement.row, placement.column, out PuzzleCell cell) && cell != null)
                     cell.Occupant = boxObject;
 
@@ -650,22 +664,7 @@ namespace CarryBlockJam
                     plateVisual != null ? plateVisual.offset : new Vector3(0f, 0.75f, 0f),
                     new Vector3(0f, 1.15f, 0f));
 
-                if (placement.isCurtain)
-                {
-                    PieceColorType curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
-                        ? placement.curtainColor
-                        : placement.color;
-                    piece.SetCurtained(true);
-                    CarryBlockJamCurtainPlate curtainPlate =
-                        plateObject.AddComponent<CarryBlockJamCurtainPlate>();
-                    curtainPlate.Bind(
-                        piece,
-                        visualObject != null ? visualObject.transform : null,
-                        curtainColor,
-                        CountRequiredExitPlatesForColor(curtainColor),
-                        ResolveCurtainBoxVisualSettings());
-                }
-                else if (placement.isFrozen)
+                if (placement.isFrozen)
                 {
                     piece.SetFrozen(true);
                     CarryBlockJamFrozenPlate frozenPlate =
@@ -1005,7 +1004,6 @@ namespace CarryBlockJam
                 reservedCells.Add(occupiedCell);
             AppendHiddenPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
             AppendFrozenPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
-            AppendCurtainPlatePlacementsFromGrid(ResolveLevelData(), placements, reservedCells);
             for (int i = 0; i < placements.Count; i++)
             {
                 BoardPlatePlacement flaggedPlacement = placements[i];
@@ -1821,7 +1819,7 @@ namespace CarryBlockJam
                         color = placement.color,
                         isHidden = false,
                         isFrozen = false,
-                        isCurtain = false,
+                        isCurtain = placement.isCurtain,
                         curtainColor = PieceColorPalette.IsPaintable(placement.curtainColor)
                             ? placement.curtainColor
                             : placement.color,
@@ -1830,8 +1828,64 @@ namespace CarryBlockJam
                 }
             }
 
-            // Grid Hidden / Ice / Curtain flags spawn plates (see MergeFlaggedPlatePlacementsFromGrid).
+            AppendColorAcceptTablesFromGrid(levelData, placements, usedCells);
             return placements.ToArray();
+        }
+
+        private static void AppendColorAcceptTablesFromGrid(
+            LevelData levelData,
+            List<BoardBoxPlacement> placements,
+            HashSet<Vector2Int> usedCells)
+        {
+            if (levelData?.colorCells == null || placements == null || usedCells == null)
+                return;
+
+            for (int i = 0; i < levelData.colorCells.Length; i++)
+            {
+                LevelColorCell cell = levelData.colorCells[i];
+                if ((cell.flag & LevelCellFlag.Curtain) == 0)
+                    continue;
+
+                var gridCell = new Vector2Int(cell.row, cell.column);
+                PieceColorType acceptedColor = PieceColorPalette.IsPaintable(cell.color)
+                    ? cell.color
+                    : cell.secondaryColor;
+
+                if (!PieceColorPalette.IsPaintable(acceptedColor))
+                {
+                    Debug.LogWarning(
+                        $"[CarryBlockJam] Color-accept table cell [{cell.row},{cell.column}] needs an Accept Color.");
+                    continue;
+                }
+
+                // Upgrade an existing manual table on this cell.
+                if (usedCells.Contains(gridCell))
+                {
+                    for (int placementIndex = 0; placementIndex < placements.Count; placementIndex++)
+                    {
+                        BoardBoxPlacement existing = placements[placementIndex];
+                        if (existing == null)
+                            continue;
+
+                        if (existing.row == cell.row && existing.column == cell.column)
+                        {
+                            existing.isCurtain = true;
+                            existing.curtainColor = acceptedColor;
+                            existing.color = acceptedColor;
+                        }
+                    }
+
+                    continue;
+                }
+
+                usedCells.Add(gridCell);
+                placements.Add(
+                    BoardBoxPlacement.CreateCurtain(
+                        cell.row,
+                        cell.column,
+                        acceptedColor,
+                        acceptedColor));
+            }
         }
 
         private BoardPlatePlacement[] MergeFlaggedPlatePlacementsFromGrid(
@@ -1854,7 +1908,7 @@ namespace CarryBlockJam
 
             AppendHiddenPlatePlacementsFromGrid(levelData, placements, usedCells);
             AppendFrozenPlatePlacementsFromGrid(levelData, placements, usedCells);
-            AppendCurtainPlatePlacementsFromGrid(levelData, placements, usedCells);
+            // Curtain cells now spawn color-accept tables (see AppendColorAcceptTablesFromGrid).
             return placements.ToArray();
         }
 
@@ -1953,70 +2007,6 @@ namespace CarryBlockJam
                         cell.column,
                         cell.color,
                         unlockMoves));
-            }
-        }
-
-        private static void AppendCurtainPlatePlacementsFromGrid(
-            LevelData levelData,
-            List<BoardPlatePlacement> placements,
-            HashSet<Vector2Int> usedCells)
-        {
-            if (levelData?.colorCells == null || placements == null || usedCells == null)
-                return;
-
-            for (int i = 0; i < levelData.colorCells.Length; i++)
-            {
-                LevelColorCell cell = levelData.colorCells[i];
-                if ((cell.flag & LevelCellFlag.Curtain) == 0)
-                    continue;
-
-                var gridCell = new Vector2Int(cell.row, cell.column);
-
-                PieceColorType collectColor = PieceColorPalette.IsPaintable(cell.secondaryColor)
-                    ? cell.secondaryColor
-                    : cell.color;
-
-                // Existing plate on a Curtain-painted cell becomes a curtain plate.
-                if (usedCells.Contains(gridCell))
-                {
-                    for (int placementIndex = 0; placementIndex < placements.Count; placementIndex++)
-                    {
-                        BoardPlatePlacement existing = placements[placementIndex];
-                        if (existing == null)
-                            continue;
-
-                        if (existing.row == cell.row && existing.column == cell.column)
-                        {
-                            existing.isCurtain = true;
-                            if (PieceColorPalette.IsPaintable(collectColor))
-                                existing.curtainColor = collectColor;
-                        }
-                    }
-
-                    continue;
-                }
-
-                if (!PieceColorPalette.IsPaintable(cell.color))
-                {
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a plate color.");
-                    continue;
-                }
-
-                if (!PieceColorPalette.IsPaintable(collectColor))
-                {
-                    Debug.LogWarning(
-                        $"[CarryBlockJam] Curtain cell [{cell.row},{cell.column}] needs a collect color.");
-                    continue;
-                }
-
-                usedCells.Add(gridCell);
-                placements.Add(
-                    BoardPlatePlacement.CreateCurtain(
-                        cell.row,
-                        cell.column,
-                        cell.color,
-                        collectColor));
             }
         }
 

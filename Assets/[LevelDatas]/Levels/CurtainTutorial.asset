@@ -86,7 +86,7 @@ MonoBehaviour:
   tutorialTextWorldPosition: {x: 0, y: 0, z: -7}
   tutorialStages:
   - stageName: 1
-    instruction: 'Clear plates of a certain color to unlock clothed tables '
+    instruction: 'Rest  plates of a certain color to certain tables '
     hideHand: 1
     useGridHandPath: 0
     startCell: {x: 3, y: 3}
