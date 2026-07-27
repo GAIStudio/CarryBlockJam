@@ -39,9 +39,9 @@ MonoBehaviour:
   charTableOffset: {x: 0, y: 0.65, z: 0}
   charTableRotation: {x: 0, y: 0, z: 0}
   charTableScale: {x: 1, y: 0.65, z: 1}
-  charTablePlateOffset: {x: 0, y: 1.25, z: 0}
+  charTablePlateOffset: {x: 0, y: 0.9, z: -0.08}
   charTablePlateStackStep: 0.18
-  charTablePickupDuration: 0.14
+  charTablePickupDuration: 0.34
   charTablePickupOutsideDistance: 0.5
   charTablePickupLift: 0.18
   charTableDropAnimationSpeed: 3

@@ -29,15 +29,24 @@ namespace CarryBlockJam
                 CarryBlockJamArtMaterialUtility.TableMaterialsFolder,
                 BaseMaterialName,
                 ResourcesFolder);
-            Material colorMaterial = CarryBlockJamArtMaterialUtility.LoadColoredMaterial(
-                CarryBlockJamArtMaterialUtility.TableMaterialsFolder,
-                BaseMaterialName,
-                color,
-                ResourcesFolder);
+
+            // Default / Grey tables use baked Mat_Table (TexBake_Table), not Mat_Table-Grey.
+            bool useBakedDefault =
+                !PieceColorPalette.IsPaintable(color) || color == PieceColorType.Grey;
+            Material colorMaterial = useBakedDefault
+                ? baseMaterial
+                : CarryBlockJamArtMaterialUtility.LoadColoredMaterial(
+                    CarryBlockJamArtMaterialUtility.TableMaterialsFolder,
+                    BaseMaterialName,
+                    color,
+                    ResourcesFolder);
+
             if (colorMaterial == null)
                 colorMaterial = baseMaterial;
             if (baseMaterial == null)
                 baseMaterial = colorMaterial;
+            if (baseMaterial == null && colorMaterial == null)
+                return;
 
             Material[] materials = renderer.sharedMaterials;
             if (materials == null || materials.Length == 0)
@@ -46,9 +55,11 @@ namespace CarryBlockJam
                 return;
             }
 
-            if (materials.Length == 1)
+            if (useBakedDefault || materials.Length == 1)
             {
-                materials[0] = colorMaterial != null ? colorMaterial : baseMaterial;
+                // Single look: baked Mat_Table on every slot.
+                for (int i = 0; i < materials.Length; i++)
+                    materials[i] = baseMaterial != null ? baseMaterial : colorMaterial;
             }
             else
             {
