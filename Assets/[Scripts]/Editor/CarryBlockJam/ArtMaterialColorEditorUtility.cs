@@ -30,16 +30,34 @@ namespace CarryBlockJam.Editor
             string materialsFolder,
             string materialPrefix,
             string label,
-            PieceColorType currentValue)
+            PieceColorType currentValue,
+            bool includeNone = false,
+            string noneLabel = "None")
         {
             EnsureCache(cacheKey, materialsFolder, materialPrefix);
             ColorCache cache = Caches[cacheKey];
             if (cache.AvailableTypes == null || cache.AvailableTypes.Length == 0)
-                return currentValue;
+                return includeNone && currentValue == PieceColorType.None ? PieceColorType.None : currentValue;
 
-            int currentIndex = IndexOfOrDefault(cache, currentValue);
-            int selectedIndex = EditorGUILayout.Popup(label, currentIndex, cache.DisplayNames);
-            return cache.AvailableTypes[Mathf.Clamp(selectedIndex, 0, cache.AvailableTypes.Length - 1)];
+            if (!includeNone)
+            {
+                int currentIndex = IndexOfOrDefault(cache, currentValue);
+                int selectedIndex = EditorGUILayout.Popup(label, currentIndex, cache.DisplayNames);
+                return cache.AvailableTypes[Mathf.Clamp(selectedIndex, 0, cache.AvailableTypes.Length - 1)];
+            }
+
+            var names = new string[cache.DisplayNames.Length + 1];
+            names[0] = noneLabel;
+            for (int i = 0; i < cache.DisplayNames.Length; i++)
+                names[i + 1] = cache.DisplayNames[i];
+
+            int indexWithNone = currentValue == PieceColorType.None
+                ? 0
+                : IndexOfOrDefault(cache, currentValue) + 1;
+            int selected = EditorGUILayout.Popup(label, indexWithNone, names);
+            if (selected <= 0)
+                return PieceColorType.None;
+            return cache.AvailableTypes[Mathf.Clamp(selected - 1, 0, cache.AvailableTypes.Length - 1)];
         }
 
         public static PieceColorType DrawPopup(

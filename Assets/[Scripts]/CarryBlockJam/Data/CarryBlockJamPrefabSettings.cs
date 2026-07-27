@@ -49,14 +49,14 @@ namespace CarryBlockJam
         [Tooltip("Local scale applied to M_CharTable.")]
         public Vector3 charTableScale = Vector3.one;
 
-        [Tooltip("Local position of the first carried plate on the CharTable tabletop.")]
-        public Vector3 charTablePlateOffset = new Vector3(0f, 0.45f, 0f);
+        [Tooltip("Local position of the first carried plate on the CharTable tabletop. Y = height on face; X/Z = slide on the face.")]
+        public Vector3 charTablePlateOffset = new Vector3(0f, 0.9f, -0.08f);
 
         [Tooltip("Vertical distance between plates stacked on CharTable.")]
         public float charTablePlateStackStep = 0.18f;
 
         [Tooltip("Total time for a collected plate to reach CharTable.")]
-        public float charTablePickupDuration = 0.16f;
+        public float charTablePickupDuration = 0.18f;
 
         [Tooltip("Distance from the tabletop edge used by the plate approach animation.")]
         public float charTablePickupOutsideDistance = 0.5f;

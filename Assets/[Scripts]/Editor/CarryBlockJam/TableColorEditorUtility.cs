@@ -18,7 +18,9 @@ namespace CarryBlockJam.Editor
                 CarryBlockJamArtMaterialUtility.TableMaterialsFolder,
                 MaterialPrefix,
                 label,
-                currentValue);
+                currentValue,
+                includeNone: true,
+                noneLabel: "Default (Baked)");
 
         public static PieceColorType DrawPopup(Rect rect, string label, PieceColorType currentValue) =>
             ArtMaterialColorEditorUtility.DrawPopup(

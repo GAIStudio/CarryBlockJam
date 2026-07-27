@@ -111,7 +111,8 @@ namespace CarryBlockJam.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "Shared for every level. Level Creator only chooses table positions.",
+                "Shared for every level. Default (Baked) uses Mat_Table + TexBake_Table. " +
+                "Level Creator only chooses table positions.",
                 MessageType.None);
             EditorGUILayout.EndVertical();
         }

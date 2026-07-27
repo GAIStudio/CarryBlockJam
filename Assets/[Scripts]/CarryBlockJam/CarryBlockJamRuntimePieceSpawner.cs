@@ -52,8 +52,8 @@ namespace CarryBlockJam
         [Header("Table Visual (All Levels)")]
         [FormerlySerializedAs("boxVisual")]
         [SerializeField] private BoardPieceVisualSettings tableVisual = BoardPieceVisualSettings.CreateTableDefault();
-        [Tooltip("Shared color for every table. Set on the board/spawner prefab.")]
-        [SerializeField] private PieceColorType tableColor = PieceColorType.Grey;
+        [Tooltip("Shared color for every table. None = baked Mat_Table (TexBake_Table).")]
+        [SerializeField] private PieceColorType tableColor = PieceColorType.None;
 
         [Header("Plate Visual (All Levels)")]
         [SerializeField] private BoardPieceVisualSettings plateVisual = BoardPieceVisualSettings.CreatePlateDefault();
@@ -592,10 +592,7 @@ namespace CarryBlockJam
         private BoardCurtainBoxVisualSettings ResolveCurtainBoxVisualSettings() =>
             curtainTableVisual ?? BoardCurtainBoxVisualSettings.CreateDefault();
 
-        private PieceColorType ResolveTableVisualColor() =>
-            PieceColorPalette.IsPaintable(tableColor)
-                ? tableColor
-                : PieceColorType.Grey;
+        private PieceColorType ResolveTableVisualColor() => tableColor;
 
         private int CountRequiredExitPlatesForColor(PieceColorType color)
         {

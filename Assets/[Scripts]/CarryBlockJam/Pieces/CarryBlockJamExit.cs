@@ -24,24 +24,37 @@ namespace CarryBlockJam
         [SerializeField] private Vector3 modelScale = Vector3.one;
         [SerializeField] private float labelBounceDuration = 0.28f;
         [SerializeField] private float labelBounceScale = 1.35f;
+        [SerializeField] private float gateDeliveryBounceHeight = 0.14f;
+        [SerializeField] private float gateDeliveryBounceDuration = 0.24f;
+        [SerializeField] private float gateCompleteBounceHeight = 0.26f;
+        [SerializeField] private float gateCompleteBounceDuration = 0.42f;
         [SerializeField] private string gateCompleteSound = "SFX_Interact_Fabric";
-        [Tooltip("Layer Lab fx_special_particle sparkle burst when a plate lands on the gate.")]
+        [Tooltip("Star splash when a plate lands on the gate (defaults to VFX_Star_Splash).")]
         [SerializeField] private GameObject plateDeliverVfxPrefab;
-        [Tooltip("Star splash when the gate finishes its last plate (Particle VFX).")]
+        [Tooltip("Confetti blast when the gate finishes its last plate (defaults to ConfettiBlastRainbow).")]
         [SerializeField] private GameObject gateCompleteVfxPrefab;
-        [SerializeField] private float labelDecreaseVfxScale = 0.5f;
-        [SerializeField] private float gateCompleteVfxScale = 0.32f;
+        [SerializeField] private float labelDecreaseVfxScale = 0.28f;
+        [SerializeField] private float gateCompleteVfxScale = 0.85f;
         [SerializeField] private float plateDeliverVfxHeight = 0.85f;
+        [Tooltip("Delay after the label hits x0 before confetti / gate-finish FX.")]
+        [SerializeField] private float gateFinishLabelDelay = 0.3f;
 
-        private const string PlateDeliverVfxResourcePath = "particles/GatePlateDeliverVfx";
-        private const string GateCompleteVfxResourcePath = "particles/GateCompleteVfx";
+        private const string PlateDeliverVfxResourcePath = "particles/VFX_Star_Splash";
+        private const string GateCompleteVfxResourcePath = "particles/ConfettiBlastRainbow";
         private const string SpecialParticleTextureResourcePath = "particles/fx_special_particle_white";
 #if UNITY_EDITOR
         private const string SpecialParticleTextureEditorPath =
             "Assets/Layer Lab/GUI Pro-CasualGame/ResourcesData/Particles/Texture/fx_special_particle_white.png";
+        private const string PlateDeliverVfxEditorPath =
+            "Assets/Packages/Particles/Particle VFX/Prefabs/VFX_Star_Splash.prefab";
+        private const string GateCompleteVfxEditorPath =
+            "Assets/Packages/Particles/Epic Toon FX/Prefabs/Environment/Confetti/Blast/ConfettiBlastRainbow.prefab";
 #endif
 
         private Vector3 _goalLabelRestScale;
+        private Transform _gateBounceTransform;
+        private Vector3 _gateBounceRestWorldPosition;
+        private bool _hasGateBounceRest;
         private static GameObject _cachedPlateDeliverVfxPrefab;
         private static GameObject _cachedGateCompleteVfxPrefab;
         private static Texture2D _specialParticleTexture;
@@ -97,6 +110,7 @@ namespace CarryBlockJam
                 CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
 
             CaptureGoalLabelRestScale();
+            CaptureGateBounceRestPose();
             RefreshVisuals();
         }
 
@@ -120,6 +134,7 @@ namespace CarryBlockJam
                 CarryBlockJamExitLabelUtility.ApplyArtGateLabelPlacement(goalLabel.transform, side, labelSettings);
 
             CaptureGoalLabelRestScale();
+            CaptureGateBounceRestPose();
             RefreshVisuals();
         }
 
@@ -164,7 +179,7 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Consumes a single matching plate and refreshes the goal label (x3 → x2 → x1 → hide).
+        /// Consumes a single matching plate and refreshes the goal label (x3 → x2 → x1 → x0 → finish).
         /// </summary>
         public int ConsumeOne(PieceColorType color)
         {
@@ -173,25 +188,37 @@ namespace CarryBlockJam
 
             PieceColorType fxColor = color;
             remainingPlateCount--;
-            bool labelFinished = false;
+
+            // Last plate of the last goal: show x0 + delivery VFX, then finish after a short delay.
+            bool willFinishGate = remainingPlateCount == 0 && currentGoalIndex >= goals.Count - 1;
+            if (willFinishGate)
+            {
+                RefreshVisuals(); // still active goal, remaining 0 → label "x0"
+                AnimateGoalLabelChange();
+                PlayPlateDeliveryVfx(fxColor);
+                PlayGateDeliveryBounce();
+                float delay = Mathf.Max(0.05f, gateFinishLabelDelay);
+                DOVirtual.DelayedCall(delay, () =>
+                {
+                    if (this == null)
+                        return;
+
+                    AdvanceGoal(); // hides label / marks completed
+                    PlayGateCompleteSfx();
+                    PlayGateCompleteVfx();
+                    PlayGateCompleteBounce();
+                }).SetTarget(this);
+                return 1;
+            }
+
             if (remainingPlateCount == 0)
-            {
                 AdvanceGoal();
-                labelFinished = IsCompleted;
-            }
             else
-            {
                 RefreshVisuals();
-            }
 
             AnimateGoalLabelChange();
             PlayPlateDeliveryVfx(fxColor);
-            if (labelFinished)
-            {
-                PlayGateCompleteSfx();
-                PlayGateCompleteVfx();
-            }
-
+            PlayGateDeliveryBounce();
             return 1;
         }
 
@@ -204,45 +231,94 @@ namespace CarryBlockJam
 
         /// <summary>
         /// Plays the per-plate gate delivery burst at the gate mesh (not CharTable).
-        /// Uses Layer Lab <c>fx_special_particle</c> via a runtime one-shot system.
+        /// Uses <c>VFX_Star_Splash</c> (stars only; soft splash bubbles stripped).
         /// </summary>
         public void PlayPlateDeliveryVfx(PieceColorType color)
         {
-            float scale = Mathf.Clamp(labelDecreaseVfxScale, 0.35f, 0.7f);
-            SpawnSpecialParticleBurst(
+            GameObject prefab = ResolvePlateDeliverVfxPrefab();
+            if (prefab == null)
+                return;
+
+            float scale = Mathf.Clamp(labelDecreaseVfxScale, 0.12f, 0.55f);
+            SpawnGateVfx(
+                prefab,
                 GetGateVfxOrigin(plateDeliverVfxHeight),
                 scale,
-                ResolveLabelParticleColor(color));
+                ResolveLabelParticleColor(color),
+                particleCountMultiplier: 1f,
+                particleSizeMultiplier: 0.8f,
+                preserveAuthoring: true,
+                configureSpecialParticleBurst: false,
+                stripSplashBubbles: true,
+                keepOnlyCoinEmitters: false);
+        }
+
+        private GameObject ResolvePlateDeliverVfxPrefab()
+        {
+            if (plateDeliverVfxPrefab != null)
+                return plateDeliverVfxPrefab;
+
+            if (_cachedPlateDeliverVfxPrefab == null)
+                _cachedPlateDeliverVfxPrefab = Resources.Load<GameObject>(PlateDeliverVfxResourcePath);
+
+#if UNITY_EDITOR
+            if (_cachedPlateDeliverVfxPrefab == null)
+            {
+                _cachedPlateDeliverVfxPrefab =
+                    UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(PlateDeliverVfxEditorPath);
+            }
+#endif
+
+            return _cachedPlateDeliverVfxPrefab;
         }
 
         private void PlayGateCompleteVfx()
         {
             GameObject prefab = ResolveGateCompleteVfxPrefab();
             if (prefab == null)
+            {
+                Debug.LogWarning("[CarryBlockJam] Gate complete confetti prefab missing (ConfettiBlastRainbow).");
                 return;
+            }
 
-            float scale = Mathf.Clamp(gateCompleteVfxScale, 0.12f, 0.4f);
+            // Epic Toon FX ConfettiBlastRainbow — keep authored -90° spray, spawn on gate mesh.
+            float scale = Mathf.Clamp(gateCompleteVfxScale, 0.5f, 1.2f);
             SpawnGateVfx(
                 prefab,
-                GetGateVfxOrigin(0.55f),
+                GetGateVfxOrigin(0.25f),
                 scale,
                 Color.white,
-                particleCountMultiplier: 2.8f,
-                particleSizeMultiplier: 0.7f,
-                preserveAuthoring: false,
+                particleCountMultiplier: 1.4f,
+                particleSizeMultiplier: 1f,
+                preserveAuthoring: true,
                 configureSpecialParticleBurst: false,
-                stripSplashBubbles: true);
+                stripSplashBubbles: true,
+                keepOnlyCoinEmitters: false,
+                applyColorfulConfetti: false,
+                preservePrefabTransform: true);
         }
 
         private GameObject ResolveGateCompleteVfxPrefab()
         {
-            if (gateCompleteVfxPrefab != null)
-                return gateCompleteVfxPrefab;
+            // Always prefer the current ConfettiBlastRainbow resource (ignore stale cache/overrides).
+            GameObject loaded = Resources.Load<GameObject>(GateCompleteVfxResourcePath);
+#if UNITY_EDITOR
+            if (loaded == null)
+            {
+                loaded =
+                    UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(GateCompleteVfxEditorPath);
+            }
+#endif
+            if (loaded != null)
+            {
+                _cachedGateCompleteVfxPrefab = loaded;
+                return loaded;
+            }
 
-            if (_cachedGateCompleteVfxPrefab == null)
-                _cachedGateCompleteVfxPrefab = Resources.Load<GameObject>(GateCompleteVfxResourcePath);
+            if (_cachedGateCompleteVfxPrefab != null)
+                return _cachedGateCompleteVfxPrefab;
 
-            return _cachedGateCompleteVfxPrefab;
+            return gateCompleteVfxPrefab;
         }
 
         private void SpawnSpecialParticleBurst(Vector3 worldPosition, float scale, Color tint)
@@ -382,7 +458,10 @@ namespace CarryBlockJam
             float particleSizeMultiplier = 1f,
             bool preserveAuthoring = false,
             bool configureSpecialParticleBurst = false,
-            bool stripSplashBubbles = false)
+            bool stripSplashBubbles = false,
+            bool keepOnlyCoinEmitters = false,
+            bool applyColorfulConfetti = false,
+            bool preservePrefabTransform = false)
         {
             if (prefab == null)
                 return;
@@ -391,13 +470,33 @@ namespace CarryBlockJam
             GameObject instance = Object.Instantiate(prefab);
             instance.name = prefab.name;
             instance.SetActive(false);
-            instance.transform.position = worldPosition;
-            instance.transform.rotation = Quaternion.identity;
+
             float clampedScale = Mathf.Max(0.05f, scale);
-            instance.transform.localScale = Vector3.one * clampedScale;
+            if (preservePrefabTransform)
+            {
+                // Keep authored spray rotation/scale, but pin position to the gate origin.
+                // Prefab localPosition (e.g. y=1.73) must NOT be rotated in — with -90° X
+                // that offset becomes a world-Z shift and confetti appears away from the gate.
+                Transform prefabTransform = prefab.transform;
+                Quaternion authoredRotation = prefabTransform.localRotation;
+                Vector3 authoredScale = prefabTransform.localScale;
+                if (authoredScale == Vector3.zero)
+                    authoredScale = Vector3.one;
+
+                instance.transform.SetPositionAndRotation(worldPosition, authoredRotation);
+                instance.transform.localScale = authoredScale * clampedScale;
+            }
+            else
+            {
+                instance.transform.position = worldPosition;
+                instance.transform.rotation = Quaternion.identity;
+                instance.transform.localScale = Vector3.one * clampedScale;
+            }
 
             StripParticleAudio(instance);
-            if (stripSplashBubbles)
+            if (keepOnlyCoinEmitters)
+                StripNonCoinEmitters(instance);
+            else if (stripSplashBubbles)
                 StripSplashBubbleEmitters(instance);
 
             ParticleSystem[] systems = instance.GetComponentsInChildren<ParticleSystem>(true);
@@ -410,7 +509,10 @@ namespace CarryBlockJam
                 ParticleSystem particles = systems[i];
                 if (particles == null)
                     continue;
-                if (stripSplashBubbles && IsSplashBubbleEmitter(particles.transform))
+                if (ShouldSkipGateVfxEmitter(
+                        particles.transform,
+                        stripSplashBubbles,
+                        keepOnlyCoinEmitters))
                     continue;
 
                 if (configureSpecialParticleBurst)
@@ -437,10 +539,20 @@ namespace CarryBlockJam
                 }
                 else
                 {
+                    // Keep authored simulation space / look — only bump density if requested.
+                    var main = particles.main;
+                    main.playOnAwake = false;
+                    if (main.loop)
+                        main.loop = false;
+                    if (!Mathf.Approximately(countMul, 1f) || !Mathf.Approximately(sizeMul, 1f))
+                        BoostParticleDensity(particles, countMul, sizeMul);
+                    if (applyColorfulConfetti && IsConfettiEmitter(particles.transform))
+                        ApplyColorfulConfettiColors(particles);
+
                     ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
                     if (renderer != null)
                     {
-                        renderer.sortingOrder = 80;
+                        renderer.sortingOrder = 120;
                         renderer.maxParticleSize = 5f;
                     }
                 }
@@ -463,7 +575,10 @@ namespace CarryBlockJam
             {
                 if (systems[i] == null)
                     continue;
-                if (stripSplashBubbles && IsSplashBubbleEmitter(systems[i].transform))
+                if (ShouldSkipGateVfxEmitter(
+                        systems[i].transform,
+                        stripSplashBubbles,
+                        keepOnlyCoinEmitters))
                     continue;
                 systems[i].Clear(true);
                 systems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -473,12 +588,105 @@ namespace CarryBlockJam
             {
                 if (systems[i] == null)
                     continue;
-                if (stripSplashBubbles && IsSplashBubbleEmitter(systems[i].transform))
+                if (ShouldSkipGateVfxEmitter(
+                        systems[i].transform,
+                        stripSplashBubbles,
+                        keepOnlyCoinEmitters))
                     continue;
                 systems[i].Play(true);
             }
 
             Object.Destroy(instance, destroyAfter);
+        }
+
+        private static bool ShouldSkipGateVfxEmitter(
+            Transform target,
+            bool stripSplashBubbles,
+            bool keepOnlyCoinEmitters)
+        {
+            if (target == null)
+                return true;
+
+            if (keepOnlyCoinEmitters)
+                return !IsCoinEmitter(target);
+
+            return stripSplashBubbles && IsSplashBubbleEmitter(target);
+        }
+
+        /// <summary>
+        /// Disables Splash / Stars / bubble children so only coin emitters remain.
+        /// </summary>
+        private static void StripNonCoinEmitters(GameObject root)
+        {
+            if (root == null)
+                return;
+
+            Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < transforms.Length; i++)
+            {
+                Transform child = transforms[i];
+                if (child == null || child == root.transform)
+                    continue;
+                if (IsCoinEmitter(child))
+                    continue;
+
+                ParticleSystem particles = child.GetComponent<ParticleSystem>();
+                if (particles == null)
+                    continue;
+
+                particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particles.Clear(true);
+                child.gameObject.SetActive(false);
+            }
+        }
+
+        private static bool IsCoinEmitter(Transform target)
+        {
+            if (target == null)
+                return false;
+
+            string name = target.name;
+            return name.IndexOf("Coin", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Coind", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsConfettiEmitter(Transform target)
+        {
+            if (target == null)
+                return false;
+
+            return target.name.IndexOf("Confetti", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void ApplyColorfulConfettiColors(ParticleSystem particles)
+        {
+            if (particles == null)
+                return;
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(1f, 0.2f, 0.25f), 0f),
+                    new GradientColorKey(new Color(1f, 0.55f, 0.1f), 0.18f),
+                    new GradientColorKey(new Color(1f, 0.9f, 0.15f), 0.34f),
+                    new GradientColorKey(new Color(0.25f, 0.9f, 0.35f), 0.5f),
+                    new GradientColorKey(new Color(0.2f, 0.65f, 1f), 0.66f),
+                    new GradientColorKey(new Color(0.55f, 0.3f, 1f), 0.82f),
+                    new GradientColorKey(new Color(1f, 0.3f, 0.75f), 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(1f, 1f),
+                });
+
+            var main = particles.main;
+            var startColor = new ParticleSystem.MinMaxGradient(gradient)
+            {
+                mode = ParticleSystemGradientMode.RandomColor
+            };
+            main.startColor = startColor;
         }
 
         /// <summary>
@@ -622,15 +830,19 @@ namespace CarryBlockJam
                 return false;
 
             string name = target.name;
-            // Keep star emitters and the Star_Splash root; only remove soft Splash/bubble children.
+            // Keep star / confetti emitters; only remove soft Splash/bubble children.
             if (name.IndexOf("Star", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            if (name.IndexOf("Confetti", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return false;
 
             return name.IndexOf("Splash", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                    name.IndexOf("Bubble", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Cloud", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                    name.Equals("Circle", System.StringComparison.OrdinalIgnoreCase) ||
                    name.IndexOf("Ring", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Orb", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                   name.IndexOf("Orb", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Glow", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void BoostParticleDensity(
@@ -934,6 +1146,105 @@ namespace CarryBlockJam
             Sequence bounce = DOTween.Sequence().SetTarget(labelTransform);
             bounce.Append(labelTransform.DOScale(enlargedScale, duration * 0.4f).SetEase(Ease.OutBack));
             bounce.Append(labelTransform.DOScale(_goalLabelRestScale, duration * 0.6f).SetEase(Ease.OutBounce));
+        }
+
+        private void PlayGateDeliveryBounce()
+        {
+            PlayGateBounce(gateDeliveryBounceHeight, gateDeliveryBounceDuration);
+        }
+
+        private void PlayGateCompleteBounce()
+        {
+            PlayGateBounce(gateCompleteBounceHeight, gateCompleteBounceDuration);
+        }
+
+        /// <summary>
+        /// World-space up/down bounce on the gate mesh (not the goal label).
+        /// Particles spawn in world space so they are unaffected by this motion.
+        /// </summary>
+        private void PlayGateBounce(float height, float duration)
+        {
+            Transform bounceTarget = ResolveGateBounceTransform();
+            if (bounceTarget == null)
+                return;
+
+            if (!_hasGateBounceRest)
+                CaptureGateBounceRestPose();
+
+            bounceTarget.DOKill();
+            bounceTarget.position = _gateBounceRestWorldPosition;
+
+            float bounceDuration = Mathf.Max(0.01f, duration);
+            float bounceHeight = Mathf.Max(0.01f, height);
+            Vector3 peak = _gateBounceRestWorldPosition + Vector3.up * bounceHeight;
+
+            Sequence sequence = DOTween.Sequence().SetTarget(bounceTarget);
+            sequence.Append(
+                bounceTarget.DOMove(peak, bounceDuration * 0.38f).SetEase(Ease.OutQuad));
+            sequence.Append(
+                bounceTarget.DOMove(_gateBounceRestWorldPosition, bounceDuration * 0.62f)
+                    .SetEase(Ease.OutBounce));
+        }
+
+        private Transform ResolveGateBounceTransform()
+        {
+            if (_gateBounceTransform != null)
+                return _gateBounceTransform;
+
+            if (gateVisual != null)
+            {
+                _gateBounceTransform = gateVisual.transform;
+                return _gateBounceTransform;
+            }
+
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            Transform bestGate = null;
+            float bestVolume = -1f;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null ||
+                    !renderer.enabled ||
+                    renderer is ParticleSystemRenderer ||
+                    renderer.GetComponent<TMP_Text>() != null)
+                    continue;
+
+                if (goalLabel != null &&
+                    (renderer.transform == goalLabel.transform ||
+                     renderer.transform.IsChildOf(goalLabel.transform)))
+                    continue;
+
+                if (!IsLikelyGateMesh(renderer.transform))
+                    continue;
+
+                Bounds bounds = renderer.bounds;
+                float volume = bounds.size.x * bounds.size.y * bounds.size.z;
+                if (volume > bestVolume)
+                {
+                    bestVolume = volume;
+                    bestGate = renderer.transform;
+                }
+            }
+
+            _gateBounceTransform = bestGate != null ? bestGate : transform;
+            return _gateBounceTransform;
+        }
+
+        private void CaptureGateBounceRestPose()
+        {
+            Transform bounceTarget = ResolveGateBounceTransform();
+            if (bounceTarget == null)
+                return;
+
+            _gateBounceRestWorldPosition = bounceTarget.position;
+            _hasGateBounceRest = true;
+        }
+
+        private void OnDestroy()
+        {
+            DOTween.Kill(this);
+            if (_gateBounceTransform != null)
+                _gateBounceTransform.DOKill();
         }
     }
 }

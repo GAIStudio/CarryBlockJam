@@ -17,8 +17,8 @@ namespace CarryBlockJam
         [SerializeField] private float swipeThresholdPixels = 40f;
         [SerializeField] private float moveDurationPerCell = 0.1f;
         [SerializeField] private float exitTravelDuration = 0.18f;
-        [SerializeField] private float exitPlateDeliveryDuration = 0.05f;
-        [SerializeField] private float gatePlateFlyDuration = 0.18f;
+        [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
+        [SerializeField] private float gatePlateFlyDuration = 0.2f;
         [SerializeField] private float gatePlateFlyHeight = 0.65f;
         [SerializeField] private float tablePlateJumpDuration = 0.3f;
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
@@ -43,13 +43,23 @@ namespace CarryBlockJam
         [SerializeField] private float dragCellCrossThreshold = 0.65f;
         [SerializeField, Min(0.2f)] private float dragFollowGain = 0.92f;
         [SerializeField, Min(1f)] private float dragFollowSpeed = 16f;
-        [SerializeField] private float charTablePickupDuration = 0.16f;
+        [SerializeField] private float charTablePickupDuration = 0.18f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
+        [Tooltip("How small plates get on the grid before the arc jump onto CharTable.")]
+        [SerializeField] private float charTablePickupShrinkScale = 0.72f;
+        [Tooltip("Peak height of the curvy jump when collecting freestanding ground plates.")]
+        [SerializeField] private float charTablePickupArcHeight = 1.05f;
+        [Tooltip("How far the arc peak stays away from CharTable for ground-plate pickup.")]
+        [SerializeField] private float charTablePickupArcOutward = 0.55f;
+        [Tooltip("Faster jump when picking plates off a normal table onto CharTable.")]
+        [SerializeField] private float charTableTablePickupDuration = 0.1f;
+        [SerializeField] private float charTablePickupShrinkDuration = 0.05f;
+        [SerializeField] private float charTablePickupStagger = 0.04f;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.9f, 0.40f);
-        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 1.3f, 0f);
+        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 0.9f, -0.08f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
         [SerializeField] private float failurePlateDropDuration = 0.35f;
@@ -1072,7 +1082,22 @@ namespace CarryBlockJam
             void OnArrived()
             {
                 if (pickupPieces.Count > 0)
-                    AddPlatesToCarryStack(pickupPieces, notifyTutorialComplete: false);
+                {
+                    bool fromTable = false;
+                    for (int i = 0; i < path.Count; i++)
+                    {
+                        if (IsBoxOwnedCell(path[i].x, path[i].y))
+                        {
+                            fromTable = true;
+                            break;
+                        }
+                    }
+
+                    AddPlatesToCarryStack(
+                        pickupPieces,
+                        notifyTutorialComplete: false,
+                        fromTable: fromTable);
+                }
 
                 FinishTutorialStageAtTarget(target);
             }
@@ -1123,7 +1148,10 @@ namespace CarryBlockJam
                     List<CarryBlockJamBoardPiece> leftover =
                         ExtractPickupPlates(occupant, target.x, target.y);
                     if (leftover != null && leftover.Count > 0)
-                        AddPlatesToCarryStack(leftover, notifyTutorialComplete: false);
+                        AddPlatesToCarryStack(
+                            leftover,
+                            notifyTutorialComplete: false,
+                            fromTable: IsBoxOwnedCell(target.x, target.y));
                 }
             }
 
@@ -1486,7 +1514,9 @@ namespace CarryBlockJam
             {
                 MoveConnectedCylinder(path, () =>
                 {
-                    AddPlatesToCarryStack(pickupPieces);
+                    AddPlatesToCarryStack(
+                        pickupPieces,
+                        fromTable: _hasTablePickupBlockDeliver);
                 });
                 return;
             }
@@ -1614,7 +1644,9 @@ namespace CarryBlockJam
                 MoveConnectedCylinder(cylinderPath, () =>
                 {
                     if (pickupPieces.Count > 0)
-                        AddPlatesToCarryStack(pickupPieces);
+                        AddPlatesToCarryStack(
+                            pickupPieces,
+                            fromTable: _hasTablePickupBlockDeliver);
 
                     if (targetBox != null && HasCarriedPlates)
                     {
@@ -1942,7 +1974,6 @@ namespace CarryBlockJam
             RefreshStickmanAnimation(moving: false);
             if (!HasCarriedPlates)
                 ClearCharTableTrail(resetHeaviness: true);
-            Haptic.MediumTaptic();
 
             Sequence sequence = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
@@ -1970,6 +2001,7 @@ namespace CarryBlockJam
                     flyDuration).SetEase(Ease.InQuad));
                 sequence.AppendCallback(() =>
                 {
+                    Haptic.MediumTaptic();
                     PlayCarrySfx(plateDeliverSound);
                     // VFX is owned by the gate exit — never the plate/CharTable pose.
                     exitComponent.ConsumeOne(deliverColor);
@@ -2037,7 +2069,6 @@ namespace CarryBlockJam
             ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
             RefreshStickmanAnimation(moving: false);
             ClearCharTableTrail(resetHeaviness: true);
-            Haptic.MediumTaptic();
             AnimateNextPlateToBox(plates, 0, targetBox, onComplete);
         }
 
@@ -2103,6 +2134,7 @@ namespace CarryBlockJam
                 RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
             landing.AppendCallback(() =>
             {
+                Haptic.MediumTaptic();
                 PlayCarrySfx(plateDeliverSound);
                 plate.StackOnPiece(basePiece);
                 if (_grid.TryGetCell(targetBox.Row, targetBox.Column, out PuzzleCell cell) && cell != null)
@@ -3835,7 +3867,11 @@ namespace CarryBlockJam
             {
                 if (IsBoxOwnedCell(row, column))
                     MarkTablePickupBlocksDeliver(row, column);
-                AddPlatesToCarryStack(pickupPieces);
+                AddPlatesToCarryStack(
+                    pickupPieces,
+                    pickupRow: row,
+                    pickupColumn: column,
+                    fromTable: IsBoxOwnedCell(row, column));
             }
         }
 
@@ -4014,7 +4050,10 @@ namespace CarryBlockJam
         private PieceColorType CarriedColor =>
             HasCarriedPlates ? _carriedPlates[0].Color : PieceColorType.None;
 
-        private Tween AddPlateToCarryStack(CarryBlockJamBoardPiece plate, int pickupIndex)
+        private Tween AddPlateToCarryStack(
+            CarryBlockJamBoardPiece plate,
+            int pickupIndex,
+            bool fromTable)
         {
             if (plate == null)
                 return null;
@@ -4036,7 +4075,8 @@ namespace CarryBlockJam
                     plate,
                     pickupIndex,
                     startPosition,
-                    targetPosition);
+                    targetPosition,
+                    fromTable);
             }
 
             float animationSpeed = Mathf.Max(0.01f, pickupPlateAnimationSpeed);
@@ -4083,50 +4123,69 @@ namespace CarryBlockJam
             CarryBlockJamBoardPiece plate,
             int pickupIndex,
             Vector3 startPosition,
-            Vector3 targetPosition)
+            Vector3 targetPosition,
+            bool fromTable)
         {
             CarryBlockJamPrefabSettings settings =
                 board != null ? board.PrefabSettings : null;
-            float outsideDistance = settings != null
-                ? settings.charTablePickupOutsideDistance
-                : charTablePickupOutsideDistance;
-            float pickupLift = settings != null
-                ? settings.charTablePickupLift
-                : charTablePickupLift;
-            float pickupDuration = settings != null
+            float settingsDuration = settings != null
                 ? settings.charTablePickupDuration
                 : charTablePickupDuration;
 
-            Vector3 outsideDirection = startPosition - targetPosition;
-            outsideDirection.y = 0f;
-            if (outsideDirection.sqrMagnitude < 0.001f)
-                outsideDirection = pickupIndex % 2 == 0 ? Vector3.right : Vector3.left;
-            else
-                outsideDirection.Normalize();
+            // Table → CharTable: snappier, closer arc. Ground → CharTable: wider curve.
+            float duration = fromTable
+                ? Mathf.Max(0.05f, charTableTablePickupDuration)
+                : Mathf.Max(0.06f, settingsDuration);
+            float shrinkDuration = Mathf.Max(0.02f, charTablePickupShrinkDuration);
+            float arcHeight = fromTable
+                ? Mathf.Max(0.2f, charTablePickupArcHeight * 0.55f)
+                : Mathf.Max(0.25f, charTablePickupArcHeight);
+            float arcOutward = fromTable
+                ? 0.08f
+                : Mathf.Max(0.15f, charTablePickupArcOutward);
+            float midBlend = fromTable ? 0.5f : 0.32f;
+            float sideBow = fromTable ? 0.08f : 0.18f;
+            float shrinkMul = Mathf.Clamp(charTablePickupShrinkScale, 0.45f, 0.95f);
 
-            Vector3 outsidePosition =
-                targetPosition +
-                outsideDirection * Mathf.Max(0.05f, outsideDistance) +
-                Vector3.up * Mathf.Max(0.02f, pickupLift);
-            float duration = Mathf.Max(0.04f, pickupDuration);
+            Vector3 restScale = plate.transform.localScale;
+            if (restScale == Vector3.zero)
+                restScale = Vector3.one;
+            Vector3 shrunkScale = restScale * shrinkMul;
+
+            Vector3 mid = Vector3.Lerp(startPosition, targetPosition, midBlend);
+            mid.y = Mathf.Max(startPosition.y, targetPosition.y) + arcHeight;
+
+            Vector3 awayFromCharTable = startPosition - targetPosition;
+            awayFromCharTable.y = 0f;
+            if (awayFromCharTable.sqrMagnitude > 0.0001f)
+            {
+                awayFromCharTable.Normalize();
+                mid += awayFromCharTable * arcOutward;
+
+                Vector3 side = Vector3.Cross(Vector3.up, awayFromCharTable);
+                if (side.sqrMagnitude > 0.0001f)
+                {
+                    side.Normalize();
+                    mid += side * (sideBow * (pickupIndex % 2 == 0 ? 1f : -1f));
+                }
+            }
+            else
+            {
+                mid += Vector3.right * (0.2f * (pickupIndex % 2 == 0 ? 1f : -1f));
+            }
 
             Sequence placement = DOTween.Sequence();
-            placement.SetDelay(0.015f * pickupIndex);
-            placement.Append(plate.transform.DOLocalMove(
-                outsidePosition,
-                duration * 0.55f).SetEase(Ease.OutQuad));
-            placement.Append(plate.transform.DOLocalMove(
-                targetPosition,
-                duration * 0.45f).SetEase(Ease.InQuad));
-            placement.Insert(0f, plate.transform.DOLocalRotate(
-                Vector3.zero,
+            placement.Append(plate.transform.DOScale(shrunkScale, shrinkDuration).SetEase(Ease.OutQuad));
+            placement.Append(plate.transform.DOLocalPath(
+                new[] { mid, targetPosition },
                 duration,
+                PathType.CatmullRom,
+                PathMode.Ignore).SetEase(Ease.InOutSine));
+            placement.Join(plate.transform.DOScale(restScale, duration).SetEase(Ease.OutBack));
+            placement.Join(plate.transform.DOLocalRotate(
+                Vector3.zero,
+                shrinkDuration + duration,
                 RotateMode.Fast).SetEase(Ease.OutQuad));
-            placement.Join(plate.transform.DOPunchScale(
-                plate.transform.localScale * 0.08f,
-                0.06f,
-                4,
-                0.4f));
             return placement;
         }
 
@@ -4134,7 +4193,8 @@ namespace CarryBlockJam
             List<CarryBlockJamBoardPiece> plates,
             int pickupRow = -1,
             int pickupColumn = -1,
-            bool notifyTutorialComplete = false)
+            bool notifyTutorialComplete = false,
+            bool fromTable = false)
         {
             if (plates == null || plates.Count == 0)
                 return;
@@ -4142,13 +4202,38 @@ namespace CarryBlockJam
             if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
                 _plateCollectionTween.Complete();
 
+            CarryBlockJamRuntimePieceSpawner spawner =
+                GetComponent<CarryBlockJamRuntimePieceSpawner>();
+            bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
+
             Sequence collection = DOTween.Sequence();
             for (int i = 0; i < plates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = plates[i];
-                Tween bounce = AddPlateToCarryStack(plate, i);
+                Tween bounce = AddPlateToCarryStack(plate, i, fromTable);
                 if (bounce != null)
-                    collection.Join(bounce);
+                {
+                    bounce.OnStart(() =>
+                    {
+                        Haptic.LightTaptic();
+                        PlayCarrySfx(plateCollectSound);
+                    });
+
+                    if (usesCharTable)
+                    {
+                        if (i > 0)
+                            collection.AppendInterval(Mathf.Max(0.02f, charTablePickupStagger));
+                        collection.Append(bounce);
+                    }
+                    else
+                        collection.Join(bounce);
+                }
+                else
+                {
+                    Haptic.LightTaptic();
+                    PlayCarrySfx(plateCollectSound);
+                }
+
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                 CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
@@ -4162,14 +4247,11 @@ namespace CarryBlockJam
                 _plateCollectionTween = null;
             });
             _plateCollectionTween = collection;
-            Haptic.LightTaptic();
-            PlayCarrySfx(plateCollectSound);
             EnsureCharTableTrail();
             RefreshCharTableTrailHeaviness();
             if (!_trackingSwipe)
                 RefreshStickmanAnimation(moving: false);
 
-            // Tutorial stages advance only when the start→target move finishes, never from pickup alone.
             if (notifyTutorialComplete &&
                 TutorialManager.Instance != null &&
                 TutorialManager.Instance.IsActive &&
@@ -4220,8 +4302,11 @@ namespace CarryBlockJam
                 ? settings.charTablePlateStackStep
                 : carriedPlateStackStep;
 
-            // Keep every plate on the same X/Z center and change only stack height.
-            return baseOffset + Vector3.up * (stackStep * stackIndex);
+            // Y = height on CharTable face; X/Z slide on the face only.
+            return new Vector3(
+                baseOffset.x,
+                baseOffset.y + stackStep * stackIndex,
+                baseOffset.z);
         }
 
         private Transform GetCarryAttachRoot()
