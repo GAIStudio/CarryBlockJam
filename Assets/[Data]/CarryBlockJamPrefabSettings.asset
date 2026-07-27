@@ -41,7 +41,7 @@ MonoBehaviour:
   charTableScale: {x: 1, y: 0.65, z: 1}
   charTablePlateOffset: {x: 0, y: 0.9, z: -0.08}
   charTablePlateStackStep: 0.18
-  charTablePickupDuration: 0.18
+  charTablePickupDuration: 0.34
   charTablePickupOutsideDistance: 0.5
   charTablePickupLift: 0.18
   charTableDropAnimationSpeed: 3

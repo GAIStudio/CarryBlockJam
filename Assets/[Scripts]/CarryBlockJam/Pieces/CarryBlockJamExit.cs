@@ -189,11 +189,20 @@ namespace CarryBlockJam
             PieceColorType fxColor = color;
             remainingPlateCount--;
 
-            // Last plate of the last goal: show x0 + delivery VFX, then finish after a short delay.
+            // Last plate of the last goal: complete the gate for win logic immediately,
+            // but keep "x0" visible briefly, then play confetti after a short delay.
+            // (If AdvanceGoal is delayed, TryTriggerSuccess can miss IsCompleted and never win.)
             bool willFinishGate = remainingPlateCount == 0 && currentGoalIndex >= goals.Count - 1;
             if (willFinishGate)
             {
-                RefreshVisuals(); // still active goal, remaining 0 → label "x0"
+                AdvanceGoal();
+                if (goalLabel != null)
+                {
+                    goalLabel.gameObject.SetActive(true);
+                    goalLabel.text = "x0";
+                    CaptureGoalLabelRestScale();
+                }
+
                 AnimateGoalLabelChange();
                 PlayPlateDeliveryVfx(fxColor);
                 PlayGateDeliveryBounce();
@@ -203,7 +212,12 @@ namespace CarryBlockJam
                     if (this == null)
                         return;
 
-                    AdvanceGoal(); // hides label / marks completed
+                    if (goalLabel != null)
+                    {
+                        goalLabel.text = string.Empty;
+                        goalLabel.gameObject.SetActive(false);
+                    }
+
                     PlayGateCompleteSfx();
                     PlayGateCompleteVfx();
                     PlayGateCompleteBounce();

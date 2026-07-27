@@ -56,7 +56,7 @@ namespace CarryBlockJam
         public float charTablePlateStackStep = 0.18f;
 
         [Tooltip("Total time for a collected plate to reach CharTable.")]
-        public float charTablePickupDuration = 0.18f;
+        public float charTablePickupDuration = 0.34f;
 
         [Tooltip("Distance from the tabletop edge used by the plate approach animation.")]
         public float charTablePickupOutsideDistance = 0.5f;
