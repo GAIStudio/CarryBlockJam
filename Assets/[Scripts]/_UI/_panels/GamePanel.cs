@@ -15,6 +15,9 @@ namespace GAITemplate
         public TextMeshProUGUI timerText;
         [HideInInspector] int inGameCurrency;
 
+        // CPI / playable: timer UI and countdown fail are disabled.
+        private const bool TimerFeatureEnabled = false;
+
         private Tween tween;
         private TextMeshProUGUI _moneyText;
         private Button _restartButton;
@@ -127,6 +130,15 @@ namespace GAITemplate
             _timerEnabled = false;
             _remainingSeconds = 0f;
 
+            if (timerPanel != null)
+                timerPanel.SetActive(false);
+
+            if (timerText != null)
+                timerText.text = string.Empty;
+
+            if (!TimerFeatureEnabled)
+                return;
+
             CarryBlockJamLevelSettings settings = LevelManager.instance != null
                 ? LevelManager.instance.currentLevelData?.carryBlockJam
                 : null;
@@ -136,11 +148,7 @@ namespace GAITemplate
                 timerPanel.SetActive(_timerEnabled);
 
             if (!_timerEnabled)
-            {
-                if (timerText != null)
-                    timerText.text = string.Empty;
                 return;
-            }
 
             _remainingSeconds = settings.timeLimitSeconds;
             _timerRunning = true;
@@ -149,7 +157,7 @@ namespace GAITemplate
 
         private void UpdateTimer()
         {
-            if (!_timerRunning || !_timerEnabled)
+            if (!TimerFeatureEnabled || !_timerRunning || !_timerEnabled)
                 return;
 
             _remainingSeconds -= Time.deltaTime;
