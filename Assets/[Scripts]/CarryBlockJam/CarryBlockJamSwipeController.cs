@@ -78,17 +78,17 @@ namespace CarryBlockJam
         [Tooltip("Defaults to Epic Toon FX SoapBubbleEmitter when left empty.")]
         [SerializeField] private GameObject charTableTrailVfxPrefab;
         [SerializeField] private float charTableTrailVfxScale = 1.15f;
-        [SerializeField] private float charTableTrailMinEmission = 10f;
-        [SerializeField] private float charTableTrailMaxEmission = 52f;
-        [SerializeField] private float charTableTrailRateOverDistance = 12f;
-        [SerializeField] private float charTableTrailMaxRateOverDistance = 34f;
-        [SerializeField] private float charTableTrailExhaustSpeed = 2.6f;
-        [SerializeField] private float charTableTrailMaxExhaustSpeed = 4.2f;
-        [SerializeField] private float charTableTrailExhaustSize = 0.72f;
-        [SerializeField] private float charTableTrailMaxExhaustSize = 1.15f;
-        [SerializeField] private float charTableTrailMinLifetime = 0.22f;
-        [SerializeField] private float charTableTrailMaxLifetime = 0.75f;
-        [SerializeField] private float charTableTrailCellsForMaxHeavy = 6f;
+        [SerializeField] private float charTableTrailMinEmission = 7f;
+        [SerializeField] private float charTableTrailMaxEmission = 24f;
+        [SerializeField] private float charTableTrailRateOverDistance = 8f;
+        [SerializeField] private float charTableTrailMaxRateOverDistance = 16f;
+        [SerializeField] private float charTableTrailExhaustSpeed = 2.2f;
+        [SerializeField] private float charTableTrailMaxExhaustSpeed = 3.4f;
+        [SerializeField] private float charTableTrailExhaustSize = 0.62f;
+        [SerializeField] private float charTableTrailMaxExhaustSize = 0.85f;
+        [SerializeField] private float charTableTrailMinLifetime = 0.16f;
+        [SerializeField] private float charTableTrailMaxLifetime = 0.5f;
+        [SerializeField] private float charTableTrailCellsForMaxHeavy = 8f;
         [SerializeField] private float charTableTrailHeight = 0.18f;
         [SerializeField] private float charTableTrailRearOffset = 0.55f;
         [SerializeField] private float charTableTrailAbsorbDuration = 0.12f;
@@ -150,7 +150,7 @@ namespace CarryBlockJam
         private bool _charTableTrailHasLastPos;
         private Vector3 _charTableTrailExhaustDir = Vector3.back;
         private int _charTableTrailConfigVersion;
-        private const int CharTableTrailExhaustConfigVersion = 11;
+        private const int CharTableTrailExhaustConfigVersion = 15;
         private static GameObject _cachedCharTableTrailVfxPrefab;
         private const string CharTableTrailVfxResourcePath = "particles/SoapBubbleEmitter";
         private const string CharTableTrailVfxEditorPath =
@@ -5222,8 +5222,8 @@ namespace CarryBlockJam
             ParticleSystem.ShapeModule shape = particles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 10f;
-            shape.radius = 0.05f;
+            shape.angle = 5f;
+            shape.radius = 0.03f;
             shape.radiusThickness = 1f;
             shape.length = 0.08f;
             shape.arc = 360f;
@@ -5252,8 +5252,8 @@ namespace CarryBlockJam
             if (noise.enabled)
             {
                 noise.strength = new ParticleSystem.MinMaxCurve(
-                    Mathf.Min(noise.strength.constant, 0.15f));
-                noise.strengthMultiplier = Mathf.Min(noise.strengthMultiplier, 0.35f);
+                    Mathf.Min(noise.strength.constant, 0.08f));
+                noise.strengthMultiplier = Mathf.Min(noise.strengthMultiplier, 0.2f);
             }
 
             ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
@@ -5422,7 +5422,7 @@ namespace CarryBlockJam
                 Mathf.Max(0.25f, charTableTrailMaxExhaustSize),
                 eased);
             main.startSize = new ParticleSystem.MinMaxCurve(size * 0.72f, size);
-            main.maxParticles = Mathf.RoundToInt(Mathf.Lerp(80f, 220f, eased));
+            main.maxParticles = Mathf.RoundToInt(Mathf.Lerp(60f, 140f, eased));
 
             float emission = Mathf.Lerp(
                 Mathf.Max(2f, charTableTrailMinEmission * 0.45f),
@@ -5437,7 +5437,7 @@ namespace CarryBlockJam
             emissionModule.rateOverDistance = distanceRate;
 
             float scale = Mathf.Max(0.6f, charTableTrailVfxScale * 0.8f) *
-                          Mathf.Lerp(0.95f, 1.25f, eased);
+                          Mathf.Lerp(0.95f, 1.05f, eased);
             _charTableTrailParticles.transform.localScale = Vector3.one * scale;
         }
 
