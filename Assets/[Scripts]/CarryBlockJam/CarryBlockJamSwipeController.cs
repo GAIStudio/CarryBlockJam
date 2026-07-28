@@ -18,7 +18,7 @@ namespace CarryBlockJam
         [SerializeField] private float moveDurationPerCell = 0.1f;
         [SerializeField] private float exitTravelDuration = 0.18f;
         [SerializeField] private float exitPlateDeliveryDuration = 0.07f;
-        [SerializeField] private float gatePlateFlyDuration = 0.2f;
+        [SerializeField] private float gatePlateFlyDuration = 0.14f;
         [SerializeField] private float gatePlateFlyHeight = 0.65f;
         [SerializeField] private float tablePlateJumpDuration = 0.3f;
         [SerializeField] private float tablePlateJumpHeight = 0.65f;
@@ -73,6 +73,8 @@ namespace CarryBlockJam
         [SerializeField] private float failurePlateFlyHeight = 1.25f;
         [SerializeField] private float failurePlateSpreadStagger = 0.04f;
         [SerializeField] private float failureUiDelay = 1.4f;
+        [Tooltip("Pause after the last gate finishes before showing the level-complete UI.")]
+        [SerializeField] private float successUiDelay = 0.85f;
         [Header("CharTable Wind Trail")]
         [SerializeField] private bool enableCharTableTrail = true;
         [Tooltip("Defaults to Epic Toon FX SoapBubbleEmitter when left empty.")]
@@ -2104,49 +2106,23 @@ namespace CarryBlockJam
             if (!HasCarriedPlates)
                 ClearCharTableTrail(resetHeaviness: true);
 
-            Sequence sequence = DOTween.Sequence();
-            for (int i = 0; i < plates.Count; i++)
-            {
-                CarryBlockJamBoardPiece plate = plates[i];
-                if (plate == null)
-                    continue;
+            // Keep the queue on CharTable until each plate launches — do not
+            // reparent the whole stack up front (that left plates floating mid-air).
+            RestackPendingExitPlates(plates, 0);
+            AnimateNextPlateToExit(plates, 0, exitComponent, deliverColor);
+        }
 
-                CarryBlockJamBoardPiece arrivingPlate = plate;
-                plate.transform.SetParent(GetPiecesRoot(), true);
-                Vector3 targetPosition = exitComponent.transform.position + Vector3.up * (0.05f * i);
-                float flyDuration = Mathf.Max(exitPlateDeliveryDuration, gatePlateFlyDuration);
-                Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 360f, 0f);
-                sequence.Append(plate.transform.DOJump(
-                    targetPosition,
-                    Mathf.Max(0.01f, gatePlateFlyHeight),
-                    1,
-                    flyDuration).SetEase(Ease.InOutQuad));
-                sequence.Join(plate.transform.DORotate(
-                    spinTarget,
-                    flyDuration,
-                    RotateMode.FastBeyond360).SetEase(Ease.InOutQuad));
-                sequence.Join(plate.transform.DOScale(
-                    plate.transform.localScale * 0.35f,
-                    flyDuration).SetEase(Ease.InQuad));
-                sequence.AppendCallback(() =>
-                {
-                    Haptic.MediumTaptic();
-                    PlayCarrySfx(plateDeliverSound);
-                    // VFX is owned by the gate exit — never the plate/CharTable pose.
-                    exitComponent.ConsumeOne(deliverColor);
-                    CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
-                    CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
-                    CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
-                    CarryBlockJamFrozenPlate.NotifyPlateCollected(arrivingPlate);
-                    if (arrivingPlate != null)
-                    {
-                        arrivingPlate.gameObject.SetActive(false);
-                        Destroy(arrivingPlate.gameObject);
-                    }
-                });
-            }
+        private void AnimateNextPlateToExit(
+            List<CarryBlockJamBoardPiece> plates,
+            int index,
+            CarryBlockJamExit exitComponent,
+            PieceColorType deliverColor)
+        {
+            while (index < plates.Count &&
+                   (plates[index] == null || !plates[index].gameObject.activeSelf))
+                index++;
 
-            sequence.OnComplete(() =>
+            if (index >= plates.Count || exitComponent == null)
             {
                 UpdateCarriedPlateVisuals();
                 _isAnimating = false;
@@ -2157,7 +2133,6 @@ namespace CarryBlockJam
                     return;
                 }
 
-                // Win before tutorial advance — otherwise the next stage snaps CharTable to start.
                 TryTriggerSuccess(plates);
                 if (_successTriggered)
                 {
@@ -2166,7 +2141,81 @@ namespace CarryBlockJam
                 }
 
                 MaybeNotifyTutorialExitDelivery();
+                return;
+            }
+
+            CarryBlockJamBoardPiece plate = plates[index];
+            CarryBlockJamBoardPiece arrivingPlate = plate;
+            RestackPendingExitPlates(plates, index);
+
+            plate.transform.DOKill();
+            plate.transform.SetParent(GetPiecesRoot(), true);
+            plate.transform.localScale = Vector3.one;
+
+            Vector3 targetPosition =
+                exitComponent.transform.position + Vector3.up * (0.05f * index);
+            float flyDuration = Mathf.Max(exitPlateDeliveryDuration, gatePlateFlyDuration);
+            Vector3 spinTarget = plate.transform.eulerAngles + new Vector3(0f, 360f, 0f);
+
+            Sequence flight = DOTween.Sequence();
+            flight.Append(plate.transform.DOJump(
+                targetPosition,
+                Mathf.Max(0.01f, gatePlateFlyHeight),
+                1,
+                flyDuration).SetEase(Ease.InOutQuad));
+            flight.Join(plate.transform.DORotate(
+                spinTarget,
+                flyDuration,
+                RotateMode.FastBeyond360).SetEase(Ease.InOutQuad));
+            flight.Join(plate.transform.DOScale(
+                Vector3.one * 0.35f,
+                flyDuration).SetEase(Ease.InQuad));
+            flight.OnComplete(() =>
+            {
+                Haptic.MediumTaptic();
+                PlayCarrySfx(plateDeliverSound);
+                exitComponent.ConsumeOne(deliverColor);
+                CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
+                CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
+                CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
+                CarryBlockJamFrozenPlate.NotifyPlateCollected(arrivingPlate);
+                if (arrivingPlate != null)
+                {
+                    arrivingPlate.gameObject.SetActive(false);
+                    Destroy(arrivingPlate.gameObject);
+                }
+
+                // Keep the reference in `plates` so TryTriggerSuccess can ignore
+                // this plate until Unity finishes destroying it.
+                AnimateNextPlateToExit(plates, index + 1, exitComponent, deliverColor);
             });
+        }
+
+        /// <summary>
+        /// Keeps not-yet-launched gate-delivery plates on CharTable so they don't
+        /// float as a world-space stack while waiting their turn.
+        /// </summary>
+        private void RestackPendingExitPlates(List<CarryBlockJamBoardPiece> plates, int fromIndex)
+        {
+            Transform attachRoot = GetCarryAttachRoot();
+            if (attachRoot == null || plates == null)
+                return;
+
+            int stackIndex = _carriedPlates.Count;
+            for (int i = fromIndex; i < plates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = plates[i];
+                // Unity fake-null after Destroy, or already launched/disabled.
+                if (plate == null || !plate.gameObject.activeSelf)
+                    continue;
+
+                plate.transform.DOKill();
+                plate.transform.SetParent(attachRoot, false);
+                plate.transform.localPosition = GetCarriedPlateLocalPosition(stackIndex);
+                plate.transform.localRotation = Quaternion.identity;
+                plate.transform.localScale = Vector3.one;
+                stackIndex++;
+            }
         }
 
         private void MaybeNotifyTutorialExitDelivery()
@@ -5906,6 +5955,11 @@ namespace CarryBlockJam
                 if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
                     continue;
 
+                // Delivered plates are deactivated before Destroy; includeInactive
+                // would otherwise still count them and block success.
+                if (!piece.gameObject.activeSelf)
+                    continue;
+
                 if (ignoredPlates != null && ignoredPlates.Contains(piece))
                     continue;
 
@@ -5930,7 +5984,21 @@ namespace CarryBlockJam
                 _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ShowHighlights(false);
             Haptic.MediumTaptic();
-            LevelManager.instance.Success();
+
+            float delay = Mathf.Max(0f, successUiDelay);
+            if (delay <= 0.001f)
+            {
+                LevelManager.instance.Success();
+                return;
+            }
+
+            DOVirtual.DelayedCall(delay, () =>
+            {
+                if (_failTriggered || LevelManager.instance == null)
+                    return;
+
+                LevelManager.instance.Success();
+            }).SetTarget(this);
         }
 
         /// <summary>

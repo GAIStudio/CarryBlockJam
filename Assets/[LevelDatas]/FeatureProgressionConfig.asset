@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef7fc91a73a2c466a8b9f38f8e3da2b3, type: 3}
   m_Name: FeatureProgressionConfig
   m_EditorClassIdentifier: 
-  featureLevels: 060000000e00000017000000
+  featureLevels: 000000000000000000000000
   unlockedMessage: New Feature Unlocked
   progressFormat: '%{0}'
