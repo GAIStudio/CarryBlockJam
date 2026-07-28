@@ -15,7 +15,79 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 8
+    column: 0
+    color: 2
+    flag: 2
+    flagValue: 17
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 0
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 1
+    color: 2
+    flag: 2
+    flagValue: 18
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 7
+    color: 2
+    flag: 8
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 0
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 1
+    color: 2
+    flag: 2
+    flagValue: 19
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 11
+    column: 0
+    color: 1
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 11
+    column: 1
+    color: 2
+    flag: 2
+    flagValue: 20
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 12
+    column: 0
+    color: 2
+    flag: 2
+    flagValue: 21
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 360
@@ -152,14 +224,6 @@ MonoBehaviour:
       count: 0
     - color: 2
       row: 5
-      column: 0
-      count: 0
-    - color: 2
-      row: 8
-      column: 0
-      count: 0
-    - color: 2
-      row: 11
       column: 0
       count: 0
     - color: 1
