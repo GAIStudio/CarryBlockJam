@@ -43,7 +43,7 @@ namespace CarryBlockJam
         [SerializeField] private float dragCellCrossThreshold = 0.65f;
         [SerializeField, Min(0.2f)] private float dragFollowGain = 0.92f;
         [SerializeField, Min(1f)] private float dragFollowSpeed = 16f;
-        [SerializeField] private float charTablePickupDuration = 0.34f;
+        [SerializeField] private float charTablePickupDuration = 0.42f;
         [SerializeField] private float charTablePickupOutsideDistance = 0.5f;
         [SerializeField] private float charTablePickupLift = 0.18f;
         [Tooltip("How small freestanding plates get at the soar apex (scale down then back up).")]
@@ -55,14 +55,18 @@ namespace CarryBlockJam
         [Tooltip("Edge-on flip degrees at the soar apex (flat at start/end, vertical mid-flight).")]
         [SerializeField] private float charTablePickupFlipDegrees = 82f;
         [Tooltip("Duration when picking plates off a normal table onto CharTable.")]
-        [SerializeField] private float charTableTablePickupDuration = 0.16f;
+        [SerializeField] private float charTableTablePickupDuration = 0.22f;
+        [Tooltip("Arc height multiplier when dropping plates from CharTable onto a normal table.")]
+        [SerializeField] private float charTableDropArcHeightMul = 1.85f;
+        [Tooltip("Flight duration when dropping plates from CharTable onto a normal table.")]
+        [SerializeField] private float charTableDropDuration = 0.07f;
         [SerializeField] private float charTablePickupShrinkDuration = 0.06f;
-        [Tooltip("Delay between each ground plate launch so fast pickups still read as a trail.")]
-        [SerializeField] private float charTablePickupStagger = 0.07f;
+        [Tooltip("Launch gap between soaring plates so several stay visible in the air.")]
+        [SerializeField] private float charTablePickupStagger = 0.085f;
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.9f, 0.40f);
-        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 0.9f, -0.08f);
+        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 0.7f, -0.08f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
         [SerializeField] private float failurePlateDropDuration = 0.35f;
@@ -73,13 +77,18 @@ namespace CarryBlockJam
         [SerializeField] private bool enableCharTableTrail = true;
         [Tooltip("Defaults to Epic Toon FX SoapBubbleEmitter when left empty.")]
         [SerializeField] private GameObject charTableTrailVfxPrefab;
-        [SerializeField] private float charTableTrailVfxScale = 1.1f;
-        [SerializeField] private float charTableTrailMinEmission = 22f;
-        [SerializeField] private float charTableTrailMaxEmission = 40f;
-        [SerializeField] private float charTableTrailRateOverDistance = 16f;
-        [SerializeField] private float charTableTrailExhaustSpeed = 3f;
-        [SerializeField] private float charTableTrailExhaustSize = 0.55f;
-        [SerializeField] private float charTableTrailCellsForMaxHeavy = 10f;
+        [SerializeField] private float charTableTrailVfxScale = 1.15f;
+        [SerializeField] private float charTableTrailMinEmission = 10f;
+        [SerializeField] private float charTableTrailMaxEmission = 52f;
+        [SerializeField] private float charTableTrailRateOverDistance = 12f;
+        [SerializeField] private float charTableTrailMaxRateOverDistance = 34f;
+        [SerializeField] private float charTableTrailExhaustSpeed = 2.6f;
+        [SerializeField] private float charTableTrailMaxExhaustSpeed = 4.2f;
+        [SerializeField] private float charTableTrailExhaustSize = 0.72f;
+        [SerializeField] private float charTableTrailMaxExhaustSize = 1.15f;
+        [SerializeField] private float charTableTrailMinLifetime = 0.22f;
+        [SerializeField] private float charTableTrailMaxLifetime = 0.75f;
+        [SerializeField] private float charTableTrailCellsForMaxHeavy = 6f;
         [SerializeField] private float charTableTrailHeight = 0.18f;
         [SerializeField] private float charTableTrailRearOffset = 0.55f;
         [SerializeField] private float charTableTrailAbsorbDuration = 0.12f;
@@ -141,7 +150,7 @@ namespace CarryBlockJam
         private bool _charTableTrailHasLastPos;
         private Vector3 _charTableTrailExhaustDir = Vector3.back;
         private int _charTableTrailConfigVersion;
-        private const int CharTableTrailExhaustConfigVersion = 9;
+        private const int CharTableTrailExhaustConfigVersion = 11;
         private static GameObject _cachedCharTableTrailVfxPrefab;
         private const string CharTableTrailVfxResourcePath = "particles/SoapBubbleEmitter";
         private const string CharTableTrailVfxEditorPath =
@@ -153,6 +162,7 @@ namespace CarryBlockJam
         private Vector3 _charTableVisualRestLocalPosition;
         private bool _charTableVisualRestCaptured;
         private Tween _plateCollectionTween;
+        private float _plateCollectionLaunchCursor;
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
 
@@ -335,6 +345,7 @@ namespace CarryBlockJam
             _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
             _swipeStartedWithCarriedPlates = HasCarriedPlates;
             _hasTablePickupBlockDeliver = false;
+            _trailSessionCells = 0f;
             _trailSegmentProgressReported = 0f;
             _trackingSwipe = true;
             EnsureCharTableTrail();
@@ -345,6 +356,8 @@ namespace CarryBlockJam
                 _charTableTrailLastWorldPos = _cylinder.transform.position;
                 _charTableTrailHasLastPos = true;
             }
+            SetCharTableTrailEmitting(false);
+            RefreshCharTableTrailHeaviness();
             EnsureHighlightRoot();
             ShowHighlights(false);
             RefreshStickmanAnimation(moving: false);
@@ -592,7 +605,9 @@ namespace CarryBlockJam
         {
             return _grid != null &&
                    _grid.IsInside(row, column) &&
-                   !IsBoxOwnedCell(row, column);
+                   !IsBoxOwnedCell(row, column) &&
+                   // Different-color / blocked plates are never valid settle cells.
+                   !IsDragPathBlocker(row, column, GetRequiredCollectColor());
         }
 
         /// <summary>
@@ -1305,6 +1320,13 @@ namespace CarryBlockJam
 
             ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
             _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), row, column);
+
+            // Never overwrite a freestanding plate Occupant. Fast settle used to
+            // claim the cell, hide the plate from Occupant-based path checks, and
+            // let CharTable travel through that plate on the next move.
+            if (FindFreestandingPlateAtCell(row, column) != null)
+                return;
+
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
                 cell.Occupant = _cylinder.gameObject;
         }
@@ -1331,6 +1353,14 @@ namespace CarryBlockJam
                 cell.Occupant != null)
                 return;
 
+            CarryBlockJamBoardPiece plate = FindFreestandingPlateAtCell(row, column);
+            if (plate != null)
+            {
+                CarryBlockJamBoardPiece plateTop = GetTopStackPiece(plate);
+                cell.Occupant = plateTop != null ? plateTop.gameObject : plate.gameObject;
+                return;
+            }
+
             CarryBlockJamBoardPiece box = FindBoxAtCell(row, column);
             if (box == null)
                 return;
@@ -1355,6 +1385,39 @@ namespace CarryBlockJam
             return null;
         }
 
+        /// <summary>
+        /// Freestanding plate still registered on this cell by Row/Column — even if
+        /// Occupant was overwritten by CharTable. Skips plates already in the carry
+        /// stack (including mid-soar pickups).
+        /// </summary>
+        private CarryBlockJamBoardPiece FindFreestandingPlateAtCell(int row, int column)
+        {
+            if (_grid == null || !_grid.IsInside(row, column) || IsBoxOwnedCell(row, column))
+                return null;
+
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            CarryBlockJamBoardPiece found = null;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
+                    continue;
+                if (piece.Row != row || piece.Column != column)
+                    continue;
+                if (_carriedPlates != null && _carriedPlates.Contains(piece))
+                    continue;
+
+                found = piece;
+                break;
+            }
+
+            if (found == null)
+                return null;
+
+            CarryBlockJamBoardPiece basePiece = GetPickupBasePiece(found);
+            return basePiece != null ? basePiece : found;
+        }
+
         private CarryBlockJamBoardPiece GetCellBoardPiece(int row, int column)
         {
             if (_grid == null ||
@@ -1371,6 +1434,11 @@ namespace CarryBlockJam
 
             if (piece != null)
                 return piece;
+
+            // Occupant can be missing/stolen while the plate is still on the cell.
+            CarryBlockJamBoardPiece plate = FindFreestandingPlateAtCell(row, column);
+            if (plate != null)
+                return plate;
 
             return FindBoxAtCell(row, column);
         }
@@ -1523,7 +1591,8 @@ namespace CarryBlockJam
                     row = nextRow;
                     column = nextColumn;
                     path.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
+                    // Enter to collect — never continue the swipe path beyond a plate.
+                    break;
                 }
 
                 // Table ahead with nothing collectible — stay on previous cell.
@@ -1592,7 +1661,8 @@ namespace CarryBlockJam
                     currentRow = nextRow;
                     currentColumn = nextColumn;
                     cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
+                    // Enter to collect — never continue the swipe path beyond a plate.
+                    break;
                 }
 
                 if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
@@ -1931,6 +2001,11 @@ namespace CarryBlockJam
                 }
 
                 safePath.Add(step);
+
+                // May enter a plate cell to collect, but never path beyond it while
+                // the plate is still on the grid.
+                if (IsFreestandingPlateCell(step.x, step.y))
+                    break;
             }
 
             return safePath;
@@ -1938,8 +2013,9 @@ namespace CarryBlockJam
 
         /// <summary>
         /// Movement blockers while dragging: every table, and any plate that is not
-        /// collectible for the active drag color. Same-color freestanding plates stay
-        /// walkable so CharTable can overlap and collect quickly on that cell.
+        /// collectible for the active drag color. Matching freestanding plates are
+        /// enterable for pickup, but pathing must stop on that cell (never travel
+        /// over/through any plate into further cells).
         /// </summary>
         private bool IsDragPathBlocker(int row, int column, PieceColorType requiredColor)
         {
@@ -1956,12 +2032,36 @@ namespace CarryBlockJam
             if (IsBoxCellBlocker(piece))
                 return true;
 
-            // Same-color plates stay walkable for on-cell pickup.
+            // Matching / empty-carry collectible plates are enterable for pickup.
             if (HasCollectiblePlateAt(row, column, requiredColor))
                 return false;
 
-            // Different-color plates / other occupants block the path.
+            // Different-color plates, hidden/frozen/curtained plates, and other
+            // occupants always block the path.
             return true;
+        }
+
+        /// <summary>
+        /// True when the cell's board occupant is a freestanding plate stack (not a table).
+        /// </summary>
+        private bool IsFreestandingPlateCell(int row, int column)
+        {
+            if (IsBoxOwnedCell(row, column))
+                return false;
+
+            CarryBlockJamBoardPiece piece = GetCellBoardPiece(row, column);
+            if (piece == null || piece == _cylinder)
+                return false;
+
+            CarryBlockJamBoardPiece current = piece;
+            while (current != null)
+            {
+                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                    return true;
+                current = current.StackedAbove;
+            }
+
+            return piece.Kind == CarryBlockJamPieceKind.Plate;
         }
 
         private bool IsBoxOwnedCell(int row, int column)
@@ -2093,6 +2193,8 @@ namespace CarryBlockJam
 
             _isAnimating = true;
             List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
+            // CharTable stack index 0 is the bottom — deliver top plate first.
+            plates.Reverse();
             // Lock collect as soon as delivery starts so a fast overlapping drag
             // cannot pick plates back up mid-animation.
             ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
@@ -2132,6 +2234,9 @@ namespace CarryBlockJam
 
             plate.ClearStackLinks();
             plate.transform.SetParent(GetPiecesRoot(), true);
+            // CharTable visual is Y-scaled; worldPositionStays keeps that squash on
+            // the plate and makes table stacks look overlapped. Restore full scale.
+            plate.transform.localScale = Vector3.one;
             Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
                 basePiece.GetStackAttachLocalPosition(plate));
             float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
@@ -2151,7 +2256,7 @@ namespace CarryBlockJam
             Sequence landing = DOTween.Sequence();
             if (usesCharTable)
             {
-                // Same curvy soar as table → CharTable pickup.
+                // Tall curvy soar from CharTable onto the table stack (top plate first).
                 CarryBlockJamBoardPiece stackBase = basePiece;
                 landing.Append(BuildTableTransferSoarTween(
                     plate,
@@ -2162,7 +2267,9 @@ namespace CarryBlockJam
                         : stackWorldTarget,
                     () => stackBase != null
                         ? stackBase.transform.rotation
-                        : Quaternion.identity));
+                        : Quaternion.identity,
+                    charTableDropArcHeightMul,
+                    charTableDropDuration));
             }
             else
             {
@@ -2737,6 +2844,11 @@ namespace CarryBlockJam
             if (IsBoxOwnedCell(row, column))
                 return false;
 
+            // Never claim a different-color plate cell from Round() — that hid the
+            // plate behind CharTable Occupant and allowed pathing through it.
+            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
+                return false;
+
             cell = new Vector2Int(row, column);
             return true;
         }
@@ -2778,6 +2890,9 @@ namespace CarryBlockJam
             column = Mathf.Clamp(column, 0, _grid.Columns - 1);
 
             if (IsBoxOwnedCell(row, column))
+                return;
+
+            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
                 return;
 
             _dragFollowCell = new Vector2Int(row, column);
@@ -3144,7 +3259,7 @@ namespace CarryBlockJam
                 directedProgress,
                 rowStep,
                 columnStep,
-                path,
+                TrimPathBeforeMovementBlocker(path),
                 startRow,
                 startColumn);
 
@@ -3183,13 +3298,35 @@ namespace CarryBlockJam
             }
 
             // Never advance past the last walkable cell — blockers stay solid
-            // even on very fast finger movement. Never visually enter a table.
+            // even on very fast finger movement. Never visually enter a table,
+            // and never travel past a freestanding plate while it remains.
             float maxProgress = path.Count;
+            PieceColorType requiredColor = GetRequiredCollectColor();
             for (int i = 0; i < path.Count; i++)
             {
-                if (IsBoxOwnedCell(path[i].x, path[i].y))
+                Vector2Int step = path[i];
+                if (IsBoxOwnedCell(step.x, step.y) ||
+                    IsDragPathBlocker(step.x, step.y, requiredColor))
                 {
                     maxProgress = i;
+                    break;
+                }
+
+                if (TryResolveCollectiblePlate(
+                        GetCellBoardPiece(step.x, step.y),
+                        step.x,
+                        step.y,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    requiredColor == PieceColorType.None &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
+
+                if (IsFreestandingPlateCell(step.x, step.y))
+                {
+                    maxProgress = i + 1;
                     break;
                 }
             }
@@ -3286,7 +3423,8 @@ namespace CarryBlockJam
                     break;
 
                 // Tables and different-color plates always stop the path.
-                // Same-color freestanding plates stay walkable for on-cell pickup.
+                // Matching freestanding plates are enterable for pickup, but the
+                // path stops on that cell — never continues over the plate.
                 if (IsDragPathBlocker(nextRow, nextColumn, pathCollectColor))
                     break;
 
@@ -3306,6 +3444,9 @@ namespace CarryBlockJam
                 row = nextRow;
                 column = nextColumn;
                 path.Add(new Vector2Int(nextRow, nextColumn));
+
+                if (IsFreestandingPlateCell(nextRow, nextColumn))
+                    break;
             }
 
             return path;
@@ -4163,12 +4304,18 @@ namespace CarryBlockJam
             CarryBlockJamBoardPiece plate,
             int index,
             System.Func<Vector3> getEndWorld,
-            System.Func<Quaternion> getEndRotation)
+            System.Func<Quaternion> getEndRotation,
+            float arcHeightMul = 1f,
+            float durationOverride = -1f)
         {
-            float duration = Mathf.Max(0.08f, charTableTablePickupDuration);
+            float duration = durationOverride > 0f
+                ? Mathf.Max(0.05f, durationOverride)
+                : Mathf.Max(0.08f, charTableTablePickupDuration);
             float heightJitter = 0.08f * ((index % 3) - 1);
             float outwardJitter = 0.06f * ((index % 4) - 1.5f);
-            float arcHeight = Mathf.Max(1.4f, charTablePickupArcHeight * 1.56f + heightJitter);
+            float arcHeight =
+                Mathf.Max(1.4f, charTablePickupArcHeight * 1.56f + heightJitter) *
+                Mathf.Max(0.5f, arcHeightMul);
             float arcOutward = Mathf.Max(0.18f, charTablePickupArcOutward * 0.38f + outwardJitter);
             float midBlend = 0.28f + 0.03f * (index % 3);
             float mid2Blend = 0.68f;
@@ -4274,10 +4421,21 @@ namespace CarryBlockJam
             Vector3 targetLocal,
             bool fromTable)
         {
-            Transform attachRoot = GetCarryAttachRoot();
-            if (fromTable)
+            // Ground uses the same tall soar as CharTable → table delivery, with a
+            // longer flight so the arc reads clearly.
+            float arcMul = fromTable ? 1f : charTableDropArcHeightMul;
+            float duration = -1f;
+            if (!fromTable)
             {
-                return BuildTableTransferSoarTween(
+                CarryBlockJamPrefabSettings settings =
+                    board != null ? board.PrefabSettings : null;
+                duration = settings != null
+                    ? settings.charTablePickupDuration
+                    : charTablePickupDuration;
+                duration = Mathf.Max(0.28f, duration);
+            }
+
+            return BuildTableTransferSoarTween(
                     plate,
                     pickupIndex,
                     () =>
@@ -4291,123 +4449,19 @@ namespace CarryBlockJam
                     {
                         Transform root = GetCarryAttachRoot();
                         return root != null ? root.rotation : Quaternion.identity;
-                    })
-                    .OnComplete(() =>
-                    {
-                        if (plate == null)
-                            return;
-
-                        Transform root = GetCarryAttachRoot();
-                        plate.transform.SetParent(root, false);
-                        plate.transform.localPosition = targetLocal;
-                        plate.transform.localRotation = Quaternion.identity;
-                    });
-            }
-
-            CarryBlockJamPrefabSettings settings =
-                board != null ? board.PrefabSettings : null;
-            float settingsDuration = settings != null
-                ? settings.charTablePickupDuration
-                : charTablePickupDuration;
-
-            // Ground → CharTable: tall soar with mid-flight scale-down/up + edge-on flip.
-            float duration = Mathf.Max(0.18f, settingsDuration);
-            float heightJitter = 0.22f * ((pickupIndex % 3) - 1);
-            float outwardJitter = 0.14f * ((pickupIndex % 4) - 1.5f);
-            float arcHeight = Mathf.Max(0.75f, charTablePickupArcHeight + heightJitter);
-            float arcOutward = Mathf.Max(0.4f, charTablePickupArcOutward + outwardJitter);
-            float midBlend = 0.16f + 0.04f * (pickupIndex % 3);
-            float mid2Blend = 0.58f + 0.03f * (pickupIndex % 3);
-            float sideBow = 0.28f + 0.12f * (pickupIndex % 3);
-            float shrinkMul = Mathf.Clamp(charTablePickupShrinkScale, 0.4f, 0.85f);
-            float flipDegrees = Mathf.Clamp(charTablePickupFlipDegrees, 0f, 110f);
-            float sideSign = pickupIndex % 2 == 0 ? 1f : -1f;
-
-            Vector3 restScale = plate.transform.localScale;
-            if (restScale == Vector3.zero)
-                restScale = Vector3.one;
-            Vector3 shrunkScale = restScale * shrinkMul;
-            Vector3 startWorld = plate.transform.position;
-            Quaternion startRotation = plate.transform.rotation;
-
-            Sequence placement = DOTween.Sequence();
-
-            // World-space flight that tracks CharTable's live stack slot, so settle
-            // snap-back never leaves plates floating in the between cell.
-            float flight = 0f;
-            Tween pathTween = DOTween.To(
-                    () => flight,
-                    value => flight = value,
-                    1f,
+                    },
+                    arcMul,
                     duration)
-                .SetEase(Ease.OutSine)
-                .OnUpdate(() =>
+                .OnComplete(() =>
                 {
-                    if (plate == null || attachRoot == null)
+                    if (plate == null)
                         return;
 
-                    Vector3 endWorld = attachRoot.TransformPoint(targetLocal);
-                    Vector3 mid = Vector3.Lerp(startWorld, endWorld, midBlend);
-                    mid.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight;
-
-                    Vector3 mid2 = Vector3.Lerp(startWorld, endWorld, mid2Blend);
-                    mid2.y = Mathf.Max(startWorld.y, endWorld.y) + arcHeight * 0.52f;
-
-                    Vector3 away = startWorld - endWorld;
-                    away.y = 0f;
-                    Vector3 lateral = Vector3.right;
-                    if (away.sqrMagnitude > 0.0001f)
-                    {
-                        away.Normalize();
-                        mid += away * arcOutward;
-                        mid2 += away * (arcOutward * 0.35f);
-                        Vector3 side = Vector3.Cross(Vector3.up, away);
-                        if (side.sqrMagnitude > 0.0001f)
-                        {
-                            side.Normalize();
-                            lateral = side;
-                            mid += side * (sideBow * sideSign);
-                            mid2 += side * (sideBow * -0.55f * sideSign);
-                        }
-                    }
-                    else
-                    {
-                        mid += Vector3.right * (0.25f * sideSign);
-                        mid2 += Vector3.left * (0.15f * sideSign);
-                    }
-
-                    plate.transform.position = EvaluateCubicBezier(
-                        startWorld, mid, mid2, endWorld, flight);
-
-                    float apex = Mathf.Sin(flight * Mathf.PI);
-                    plate.transform.localScale = Vector3.Lerp(restScale, shrunkScale, apex);
-
-                    Quaternion landRotation = attachRoot.rotation;
-                    Quaternion baseRotation = Quaternion.Slerp(startRotation, landRotation, flight);
-                    if (flipDegrees > 0.01f)
-                    {
-                        Quaternion soarTilt = Quaternion.AngleAxis(flipDegrees * apex, lateral);
-                        plate.transform.rotation = soarTilt * baseRotation;
-                    }
-                    else
-                    {
-                        plate.transform.rotation = baseRotation;
-                    }
+                    Transform root = GetCarryAttachRoot();
+                    plate.transform.SetParent(root, false);
+                    plate.transform.localPosition = targetLocal;
+                    plate.transform.localRotation = Quaternion.identity;
                 });
-
-            placement.Append(pathTween);
-            placement.OnComplete(() =>
-            {
-                if (plate == null)
-                    return;
-
-                Transform root = GetCarryAttachRoot();
-                plate.transform.SetParent(root, false);
-                plate.transform.localPosition = targetLocal;
-                plate.transform.localRotation = Quaternion.identity;
-                plate.transform.localScale = restScale;
-            });
-            return placement;
         }
 
         private static Vector3 EvaluateCubicBezier(
@@ -4433,14 +4487,40 @@ namespace CarryBlockJam
             if (plates == null || plates.Count == 0)
                 return;
 
-            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
-                _plateCollectionTween.Complete();
-
             CarryBlockJamRuntimePieceSpawner spawner =
                 GetComponent<CarryBlockJamRuntimePieceSpawner>();
             bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
 
-            Sequence collection = DOTween.Sequence();
+            Sequence collection;
+            if (_plateCollectionTween is Sequence activeSequence && activeSequence.IsActive())
+            {
+                // Keep already-flying plates in the air; schedule new launches after them.
+                collection = activeSequence;
+            }
+            else
+            {
+                collection = DOTween.Sequence();
+                _plateCollectionLaunchCursor = 0f;
+                collection.OnComplete(() =>
+                {
+                    if (!_failTriggered)
+                        UpdateCarriedPlateVisuals();
+                    _plateCollectionTween = null;
+                    _plateCollectionLaunchCursor = 0f;
+                });
+                _plateCollectionTween = collection;
+            }
+
+            // Launch gap shorter than flight so the next plate is airborne before
+            // the previous one lands — visible trail with spacing.
+            float shrink = Mathf.Max(0.02f, charTablePickupShrinkDuration * 0.55f);
+            float flight = Mathf.Max(0.08f, charTableTablePickupDuration);
+            float launchGap = Mathf.Clamp(
+                charTablePickupStagger,
+                0.05f,
+                (shrink + flight) * 0.5f);
+
+            float batchStart = _plateCollectionLaunchCursor;
             for (int i = 0; i < plates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = plates[i];
@@ -4453,21 +4533,8 @@ namespace CarryBlockJam
                         PlayCarrySfx(plateCollectSound);
                     });
 
-                    if (usesCharTable && fromTable)
-                    {
-                        // Table stacks stay ordered.
-                        if (i > 0)
-                            collection.AppendInterval(Mathf.Max(0.02f, charTablePickupStagger));
-                        collection.Append(bounce);
-                    }
-                    else if (usesCharTable)
-                    {
-                        // Ground plates launch in order with overlapping soars so a
-                        // fast multi-pickup still reads as a curvy motion trail.
-                        float trailGap = Mathf.Max(0.045f, charTablePickupStagger);
-                        bounce.SetDelay(trailGap * i);
-                        collection.Join(bounce);
-                    }
+                    if (usesCharTable)
+                        collection.Insert(batchStart + launchGap * i, bounce);
                     else
                         collection.Join(bounce);
                 }
@@ -4483,13 +4550,8 @@ namespace CarryBlockJam
                 CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
             }
 
-            collection.OnComplete(() =>
-            {
-                if (!_failTriggered)
-                    UpdateCarriedPlateVisuals();
-                _plateCollectionTween = null;
-            });
-            _plateCollectionTween = collection;
+            if (usesCharTable)
+                _plateCollectionLaunchCursor = batchStart + launchGap * plates.Count;
             EnsureCharTableTrail();
             RefreshCharTableTrailHeaviness();
             if (!_trackingSwipe)
@@ -4588,6 +4650,7 @@ namespace CarryBlockJam
             if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
                 _plateCollectionTween.Complete();
             _plateCollectionTween = null;
+            _plateCollectionLaunchCursor = 0f;
         }
 
         private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
@@ -5144,7 +5207,6 @@ namespace CarryBlockJam
             main.scalingMode = ParticleSystemScalingMode.Hierarchy;
             main.startDelay = 0f;
             main.gravityModifier = 0f;
-            main.maxParticles = Mathf.Max(main.maxParticles, 96);
             main.emitterVelocityMode = ParticleSystemEmitterVelocityMode.Transform;
 
             // Mild gray soap tint so bubbles still read as bubbles.
@@ -5177,9 +5239,13 @@ namespace CarryBlockJam
             float speed = Mathf.Max(0.8f, charTableTrailExhaustSpeed);
             main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.55f, speed);
 
-            float size = Mathf.Max(0.12f, charTableTrailExhaustSize * 0.55f);
+            float size = Mathf.Max(0.18f, charTableTrailExhaustSize);
             main.startSize3D = false;
-            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.65f, size);
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.7f, size);
+
+            float life = Mathf.Max(0.12f, charTableTrailMinLifetime);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.85f, life);
+            main.maxParticles = 220;
 
             ParticleSystem.NoiseModule noise = particles.noise;
             // Keep a little authored drift if present, but don't let it spray sideways.
@@ -5272,11 +5338,18 @@ namespace CarryBlockJam
 
             Vector3 worldPos = _cylinder.transform.position;
             bool movedThisFrame = false;
+            float moveDistance = 0f;
             if (_charTableTrailHasLastPos)
             {
                 Vector3 move = worldPos - _charTableTrailLastWorldPos;
                 move.y = 0f;
-                if (move.sqrMagnitude > 0.00005f)
+                moveDistance = move.magnitude;
+                // Ignore tiny settle/jitter while CharTable is parked on a cell.
+                float moveThreshold = 0.0015f;
+                if (_grid != null)
+                    moveThreshold = Mathf.Max(0.0015f, _grid.GridSpacingX * 0.012f);
+
+                if (moveDistance > moveThreshold)
                 {
                     _charTableTrailExhaustDir = -move.normalized;
                     movedThisFrame = true;
@@ -5296,24 +5369,23 @@ namespace CarryBlockJam
             if (progress + 0.0001f < _trailSegmentProgressReported)
                 delta = progress;
             _trailSegmentProgressReported = progress;
-            if (delta > 0f)
-                _trailSessionCells += delta;
 
-            RefreshCharTableTrailHeaviness();
-
-            bool moving =
-                movedThisFrame ||
-                progress > 0.005f ||
-                delta > 0.0001f ||
-                _dragCornerTransitionActive;
-            if (moving)
+            // Trail only while CharTable is actually translating — finger-down but
+            // parked on a cell must not keep emitting.
+            if (movedThisFrame)
             {
+                if (delta > 0f)
+                    _trailSessionCells += delta;
+                else if (_grid != null && _grid.GridSpacingX > 0.01f)
+                    _trailSessionCells += moveDistance / _grid.GridSpacingX;
+
+                RefreshCharTableTrailHeaviness();
                 KillCharTableTrailAbsorbTween();
                 SetCharTableTrailEmitting(true);
             }
             else
             {
-                // Pause emit only while dragging — absorb happens on release.
+                RefreshCharTableTrailHeaviness();
                 SetCharTableTrailEmitting(false);
             }
         }
@@ -5324,20 +5396,48 @@ namespace CarryBlockJam
                 return;
 
             float maxCells = Mathf.Max(1f, charTableTrailCellsForMaxHeavy);
-            float heavy = Mathf.Clamp01(_trailSessionCells / maxCells);
-            float eased = heavy * heavy * (3f - 2f * heavy);
+            // Step up per completed cell so each cell visibly lengthens / densifies.
+            float cellSteps = Mathf.Floor(Mathf.Max(0f, _trailSessionCells));
+            float heavy = Mathf.Clamp01(cellSteps / maxCells);
+            float eased = Mathf.SmoothStep(0f, 1f, heavy);
+
+            ParticleSystem.MainModule main = _charTableTrailParticles.main;
+
+            float lifetime = Mathf.Lerp(
+                Mathf.Max(0.12f, charTableTrailMinLifetime),
+                Mathf.Max(0.2f, charTableTrailMaxLifetime),
+                eased);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(
+                lifetime * 0.85f,
+                lifetime);
+
+            float speed = Mathf.Lerp(
+                Mathf.Max(0.8f, charTableTrailExhaustSpeed),
+                Mathf.Max(1f, charTableTrailMaxExhaustSpeed),
+                eased);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.6f, speed);
+
+            float size = Mathf.Lerp(
+                Mathf.Max(0.18f, charTableTrailExhaustSize),
+                Mathf.Max(0.25f, charTableTrailMaxExhaustSize),
+                eased);
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.72f, size);
+            main.maxParticles = Mathf.RoundToInt(Mathf.Lerp(80f, 220f, eased));
 
             float emission = Mathf.Lerp(
-                Mathf.Max(8f, charTableTrailMinEmission * 0.35f),
-                Mathf.Max(8f, charTableTrailMaxEmission * 0.5f),
+                Mathf.Max(2f, charTableTrailMinEmission * 0.45f),
+                Mathf.Max(8f, charTableTrailMaxEmission),
+                eased);
+            float distanceRate = Mathf.Lerp(
+                Mathf.Max(0f, charTableTrailRateOverDistance * 0.55f),
+                Mathf.Max(0f, charTableTrailMaxRateOverDistance),
                 eased);
             ParticleSystem.EmissionModule emissionModule = _charTableTrailParticles.emission;
             emissionModule.rateOverTime = emission;
-            emissionModule.rateOverDistance =
-                Mathf.Max(0f, charTableTrailRateOverDistance) * Mathf.Lerp(0.9f, 1.3f, eased);
+            emissionModule.rateOverDistance = distanceRate;
 
-            float scale = Mathf.Max(0.55f, charTableTrailVfxScale * 0.75f) *
-                          Mathf.Lerp(0.9f, 1.15f, eased);
+            float scale = Mathf.Max(0.6f, charTableTrailVfxScale * 0.8f) *
+                          Mathf.Lerp(0.95f, 1.25f, eased);
             _charTableTrailParticles.transform.localScale = Vector3.one * scale;
         }
 
@@ -5455,6 +5555,7 @@ namespace CarryBlockJam
             if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
                 _plateCollectionTween.Kill();
             _plateCollectionTween = null;
+            _plateCollectionLaunchCursor = 0f;
 
             if (_failurePreparing)
                 return;

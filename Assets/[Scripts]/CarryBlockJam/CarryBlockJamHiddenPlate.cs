@@ -5,8 +5,10 @@ using UnityEngine;
 namespace CarryBlockJam
 {
     /// <summary>
-    /// Hidden plate: shows HiddenTexture until surrounding (non-self) plates are collected,
-    /// then reveals its true color and becomes pickable.
+    /// Hidden plate: shows HiddenTexture until surrounding <b>normal</b> plates are
+    /// collected, then reveals its true color and becomes pickable.
+    /// Locked neighboring hidden plates do not count toward unlock until they
+    /// themselves are revealed.
     /// Level creator still paints <see cref="LevelCellFlag.Hidden"/>; gameplay
     /// interprets that as a plate instead of a table.
     /// </summary>
@@ -98,7 +100,48 @@ namespace CarryBlockJam
             if (_visualPiece != null)
                 _visualPiece.ApplyHidden(false);
 
+            // Once unlocked this plate counts as a normal neighbor for any
+            // still-locked hidden plates beside it.
+            RegisterSelfWithAdjacentLockedHiddenPlates();
+
             enabled = false;
+        }
+
+        private void RegisterSelfWithAdjacentLockedHiddenPlates()
+        {
+            if (_platePiece == null)
+                return;
+
+            CarryBlockJamHiddenPlate[] hiddenPlates =
+                FindObjectsOfType<CarryBlockJamHiddenPlate>();
+            for (int i = 0; i < hiddenPlates.Length; i++)
+            {
+                CarryBlockJamHiddenPlate other = hiddenPlates[i];
+                if (other == null ||
+                    other == this ||
+                    other._isRevealed ||
+                    other._platePiece == null)
+                    continue;
+
+                if (!IsSurroundingNeighbor(_platePiece, other._platePiece))
+                    continue;
+
+                other._surroundingPlates.Add(_platePiece);
+            }
+        }
+
+        private static bool IsSurroundingNeighbor(
+            CarryBlockJamBoardPiece a,
+            CarryBlockJamBoardPiece b)
+        {
+            if (a == null || b == null)
+                return false;
+
+            int rowDelta = Mathf.Abs(a.Row - b.Row);
+            int columnDelta = Mathf.Abs(a.Column - b.Column);
+            return rowDelta <= 1 &&
+                   columnDelta <= 1 &&
+                   (rowDelta != 0 || columnDelta != 0);
         }
 
         private void RegisterAdjacentPlates(PuzzleGrid grid)
@@ -125,8 +168,10 @@ namespace CarryBlockJam
             CarryBlockJamBoardPiece current = GetPickupBasePiece(piece);
             while (current != null)
             {
+                // Locked hidden plates do not count until they are revealed.
                 if (current.Kind == CarryBlockJamPieceKind.Plate &&
-                    current != _platePiece)
+                    current != _platePiece &&
+                    !current.IsColorHidden)
                     _surroundingPlates.Add(current);
 
                 current = current.StackedAbove;

@@ -14,7 +14,7 @@ namespace CarryBlockJam
     public class CarryBlockJamBoardPiece : MonoBehaviour
     {
         private const float TableToPlateClearance = 0.02f;
-        private const float PlateToPlateClearance = 0.01f;
+        private const float PlateToPlateClearance = 0.022f;
 
         [SerializeField] private CarryBlockJamPieceKind kind;
         [SerializeField] private PieceColorType color = PieceColorType.None;
@@ -129,6 +129,10 @@ namespace CarryBlockJam
             transform.SetParent(basePiece.transform, false);
             transform.localPosition = basePiece.GetStackAttachLocalPosition(this);
             transform.localRotation = Quaternion.Euler(gridRotationEuler);
+            // Dropping off CharTable can leave a Y-squashed world scale; normalize
+            // so table stacks keep full plate thickness / spacing.
+            if (transform.localScale != Vector3.one)
+                transform.localScale = Vector3.one;
             Row = basePiece.Row;
             Column = basePiece.Column;
             StackedBelow = basePiece;
