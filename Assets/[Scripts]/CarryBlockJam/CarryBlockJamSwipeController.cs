@@ -59,7 +59,7 @@ namespace CarryBlockJam
         [Tooltip("Arc height multiplier when dropping plates from CharTable onto a normal table.")]
         [SerializeField] private float charTableDropArcHeightMul = 1.85f;
         [Tooltip("Flight duration when dropping plates from CharTable onto a normal table.")]
-        [SerializeField] private float charTableDropDuration = 0.1f;
+        [SerializeField] private float charTableDropDuration = 0.07f;
         [SerializeField] private float charTablePickupShrinkDuration = 0.06f;
         [Tooltip("Launch gap between soaring plates so several stay visible in the air.")]
         [SerializeField] private float charTablePickupStagger = 0.085f;
@@ -605,7 +605,9 @@ namespace CarryBlockJam
         {
             return _grid != null &&
                    _grid.IsInside(row, column) &&
-                   !IsBoxOwnedCell(row, column);
+                   !IsBoxOwnedCell(row, column) &&
+                   // Different-color / blocked plates are never valid settle cells.
+                   !IsDragPathBlocker(row, column, GetRequiredCollectColor());
         }
 
         /// <summary>
@@ -1318,6 +1320,13 @@ namespace CarryBlockJam
 
             ClearStickmanOccupantFromCell(_cylinder.Row, _cylinder.Column);
             _cylinder.PlaceOnGrid(_grid, GetPiecesRoot(), row, column);
+
+            // Never overwrite a freestanding plate Occupant. Fast settle used to
+            // claim the cell, hide the plate from Occupant-based path checks, and
+            // let CharTable travel through that plate on the next move.
+            if (FindFreestandingPlateAtCell(row, column) != null)
+                return;
+
             if (_grid.TryGetCell(row, column, out PuzzleCell cell) && cell != null)
                 cell.Occupant = _cylinder.gameObject;
         }
@@ -1344,6 +1353,14 @@ namespace CarryBlockJam
                 cell.Occupant != null)
                 return;
 
+            CarryBlockJamBoardPiece plate = FindFreestandingPlateAtCell(row, column);
+            if (plate != null)
+            {
+                CarryBlockJamBoardPiece plateTop = GetTopStackPiece(plate);
+                cell.Occupant = plateTop != null ? plateTop.gameObject : plate.gameObject;
+                return;
+            }
+
             CarryBlockJamBoardPiece box = FindBoxAtCell(row, column);
             if (box == null)
                 return;
@@ -1368,6 +1385,39 @@ namespace CarryBlockJam
             return null;
         }
 
+        /// <summary>
+        /// Freestanding plate still registered on this cell by Row/Column — even if
+        /// Occupant was overwritten by CharTable. Skips plates already in the carry
+        /// stack (including mid-soar pickups).
+        /// </summary>
+        private CarryBlockJamBoardPiece FindFreestandingPlateAtCell(int row, int column)
+        {
+            if (_grid == null || !_grid.IsInside(row, column) || IsBoxOwnedCell(row, column))
+                return null;
+
+            CarryBlockJamBoardPiece[] pieces = GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            CarryBlockJamBoardPiece found = null;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece piece = pieces[i];
+                if (piece == null || piece.Kind != CarryBlockJamPieceKind.Plate)
+                    continue;
+                if (piece.Row != row || piece.Column != column)
+                    continue;
+                if (_carriedPlates != null && _carriedPlates.Contains(piece))
+                    continue;
+
+                found = piece;
+                break;
+            }
+
+            if (found == null)
+                return null;
+
+            CarryBlockJamBoardPiece basePiece = GetPickupBasePiece(found);
+            return basePiece != null ? basePiece : found;
+        }
+
         private CarryBlockJamBoardPiece GetCellBoardPiece(int row, int column)
         {
             if (_grid == null ||
@@ -1384,6 +1434,11 @@ namespace CarryBlockJam
 
             if (piece != null)
                 return piece;
+
+            // Occupant can be missing/stolen while the plate is still on the cell.
+            CarryBlockJamBoardPiece plate = FindFreestandingPlateAtCell(row, column);
+            if (plate != null)
+                return plate;
 
             return FindBoxAtCell(row, column);
         }
@@ -1536,7 +1591,8 @@ namespace CarryBlockJam
                     row = nextRow;
                     column = nextColumn;
                     path.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
+                    // Enter to collect — never continue the swipe path beyond a plate.
+                    break;
                 }
 
                 // Table ahead with nothing collectible — stay on previous cell.
@@ -1605,7 +1661,8 @@ namespace CarryBlockJam
                     currentRow = nextRow;
                     currentColumn = nextColumn;
                     cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
-                    continue;
+                    // Enter to collect — never continue the swipe path beyond a plate.
+                    break;
                 }
 
                 if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
@@ -1944,6 +2001,11 @@ namespace CarryBlockJam
                 }
 
                 safePath.Add(step);
+
+                // May enter a plate cell to collect, but never path beyond it while
+                // the plate is still on the grid.
+                if (IsFreestandingPlateCell(step.x, step.y))
+                    break;
             }
 
             return safePath;
@@ -1951,8 +2013,9 @@ namespace CarryBlockJam
 
         /// <summary>
         /// Movement blockers while dragging: every table, and any plate that is not
-        /// collectible for the active drag color. Same-color freestanding plates stay
-        /// walkable so CharTable can overlap and collect quickly on that cell.
+        /// collectible for the active drag color. Matching freestanding plates are
+        /// enterable for pickup, but pathing must stop on that cell (never travel
+        /// over/through any plate into further cells).
         /// </summary>
         private bool IsDragPathBlocker(int row, int column, PieceColorType requiredColor)
         {
@@ -1969,12 +2032,36 @@ namespace CarryBlockJam
             if (IsBoxCellBlocker(piece))
                 return true;
 
-            // Same-color plates stay walkable for on-cell pickup.
+            // Matching / empty-carry collectible plates are enterable for pickup.
             if (HasCollectiblePlateAt(row, column, requiredColor))
                 return false;
 
-            // Different-color plates / other occupants block the path.
+            // Different-color plates, hidden/frozen/curtained plates, and other
+            // occupants always block the path.
             return true;
+        }
+
+        /// <summary>
+        /// True when the cell's board occupant is a freestanding plate stack (not a table).
+        /// </summary>
+        private bool IsFreestandingPlateCell(int row, int column)
+        {
+            if (IsBoxOwnedCell(row, column))
+                return false;
+
+            CarryBlockJamBoardPiece piece = GetCellBoardPiece(row, column);
+            if (piece == null || piece == _cylinder)
+                return false;
+
+            CarryBlockJamBoardPiece current = piece;
+            while (current != null)
+            {
+                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                    return true;
+                current = current.StackedAbove;
+            }
+
+            return piece.Kind == CarryBlockJamPieceKind.Plate;
         }
 
         private bool IsBoxOwnedCell(int row, int column)
@@ -2757,6 +2844,11 @@ namespace CarryBlockJam
             if (IsBoxOwnedCell(row, column))
                 return false;
 
+            // Never claim a different-color plate cell from Round() — that hid the
+            // plate behind CharTable Occupant and allowed pathing through it.
+            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
+                return false;
+
             cell = new Vector2Int(row, column);
             return true;
         }
@@ -2798,6 +2890,9 @@ namespace CarryBlockJam
             column = Mathf.Clamp(column, 0, _grid.Columns - 1);
 
             if (IsBoxOwnedCell(row, column))
+                return;
+
+            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
                 return;
 
             _dragFollowCell = new Vector2Int(row, column);
@@ -3164,7 +3259,7 @@ namespace CarryBlockJam
                 directedProgress,
                 rowStep,
                 columnStep,
-                path,
+                TrimPathBeforeMovementBlocker(path),
                 startRow,
                 startColumn);
 
@@ -3203,13 +3298,35 @@ namespace CarryBlockJam
             }
 
             // Never advance past the last walkable cell — blockers stay solid
-            // even on very fast finger movement. Never visually enter a table.
+            // even on very fast finger movement. Never visually enter a table,
+            // and never travel past a freestanding plate while it remains.
             float maxProgress = path.Count;
+            PieceColorType requiredColor = GetRequiredCollectColor();
             for (int i = 0; i < path.Count; i++)
             {
-                if (IsBoxOwnedCell(path[i].x, path[i].y))
+                Vector2Int step = path[i];
+                if (IsBoxOwnedCell(step.x, step.y) ||
+                    IsDragPathBlocker(step.x, step.y, requiredColor))
                 {
                     maxProgress = i;
+                    break;
+                }
+
+                if (TryResolveCollectiblePlate(
+                        GetCellBoardPiece(step.x, step.y),
+                        step.x,
+                        step.y,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    requiredColor == PieceColorType.None &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
+
+                if (IsFreestandingPlateCell(step.x, step.y))
+                {
+                    maxProgress = i + 1;
                     break;
                 }
             }
@@ -3306,7 +3423,8 @@ namespace CarryBlockJam
                     break;
 
                 // Tables and different-color plates always stop the path.
-                // Same-color freestanding plates stay walkable for on-cell pickup.
+                // Matching freestanding plates are enterable for pickup, but the
+                // path stops on that cell — never continues over the plate.
                 if (IsDragPathBlocker(nextRow, nextColumn, pathCollectColor))
                     break;
 
@@ -3326,6 +3444,9 @@ namespace CarryBlockJam
                 row = nextRow;
                 column = nextColumn;
                 path.Add(new Vector2Int(nextRow, nextColumn));
+
+                if (IsFreestandingPlateCell(nextRow, nextColumn))
+                    break;
             }
 
             return path;
