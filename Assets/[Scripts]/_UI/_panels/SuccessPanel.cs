@@ -13,12 +13,18 @@ namespace GAITemplate
     /// </summary>
     public class SuccessPanel : EndPanelBase
     {
+        private const string LevelCompleteTitle = "Level Completed Successfully";
+
         [Header("Reward Timing")]
         public float rewardDelay = 0.30f;
 
         [Header("Confetti")]
         [Tooltip("Sahnede hazır ParticleSystem. Play On Awake kapalı olmalı.")]
         public ParticleSystem confetti;
+
+        [Header("Title")]
+        [Tooltip("Top banner TMP title. If empty, SuccessText under this panel is used.")]
+        public TextMeshProUGUI titleText;
 
         [Header("Coin Flight")]
         [Tooltip("Spawn edilecek coin UI prefab'ı (RectTransform içeren küçük Image).")]
@@ -93,6 +99,7 @@ namespace GAITemplate
         {
             AddCameraToStack();
             ResolveSceneReferences();
+            ApplyLevelCompleteTitle();
             UpdateContinueRewardText();
             base.Show(); // _shown guard'ı base'de
             featureProgression?.Refresh();
@@ -273,6 +280,27 @@ namespace GAITemplate
             if (continueRewardText == null && continueButton != null)
                 continueRewardText = continueButton.GetComponentInChildren<TextMeshProUGUI>(true);
 
+            if (titleText == null)
+            {
+                Transform titleTransform = transform.Find("title-container/TopPart/SuccessText");
+                if (titleTransform == null)
+                    titleTransform = transform.Find("SuccessText");
+                if (titleTransform != null)
+                    titleText = titleTransform.GetComponent<TextMeshProUGUI>();
+                if (titleText == null)
+                {
+                    TextMeshProUGUI[] labels = GetComponentsInChildren<TextMeshProUGUI>(true);
+                    for (int i = 0; i < labels.Length; i++)
+                    {
+                        if (labels[i] != null && labels[i].gameObject.name == "SuccessText")
+                        {
+                            titleText = labels[i];
+                            break;
+                        }
+                    }
+                }
+            }
+
             if (mainEmoji == null)
             {
                 Transform emojiTransform = transform.Find("main-emoji");
@@ -281,6 +309,38 @@ namespace GAITemplate
 
                 if (emojiTransform != null)
                     mainEmoji = emojiTransform as RectTransform;
+            }
+        }
+
+        private void ApplyLevelCompleteTitle()
+        {
+            if (titleText != null)
+            {
+            titleText.text = LevelCompleteTitle;
+            titleText.enableAutoSizing = true;
+            titleText.fontSizeMin = 36f;
+            titleText.fontSizeMax = 72f;
+            titleText.ForceMeshUpdate();
+            }
+
+            // Replace any leftover "Success" labels under this panel.
+            TextMeshProUGUI[] labels = GetComponentsInChildren<TextMeshProUGUI>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                TextMeshProUGUI label = labels[i];
+                if (label == null)
+                    continue;
+
+                string current = label.text != null ? label.text.Trim() : string.Empty;
+                if (current.Equals("Success", System.StringComparison.OrdinalIgnoreCase) ||
+                    label.gameObject.name == "SuccessText")
+                {
+                    label.text = LevelCompleteTitle;
+                    label.enableAutoSizing = true;
+                    label.fontSizeMin = 36f;
+                    label.fontSizeMax = 72f;
+                    label.ForceMeshUpdate();
+                }
             }
         }
 
