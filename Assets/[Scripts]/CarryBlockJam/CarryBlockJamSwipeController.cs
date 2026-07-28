@@ -71,7 +71,7 @@ namespace CarryBlockJam
         [SerializeField] private float failureUiDelay = 1.4f;
         [Header("CharTable Wind Trail")]
         [SerializeField] private bool enableCharTableTrail = true;
-        [Tooltip("Defaults to Epic Toon FX WindlinesSpeedy when left empty.")]
+        [Tooltip("Defaults to Epic Toon FX SoapBubbleEmitter when left empty.")]
         [SerializeField] private GameObject charTableTrailVfxPrefab;
         [SerializeField] private float charTableTrailVfxScale = 1.1f;
         [SerializeField] private float charTableTrailMinEmission = 22f;
@@ -141,11 +141,11 @@ namespace CarryBlockJam
         private bool _charTableTrailHasLastPos;
         private Vector3 _charTableTrailExhaustDir = Vector3.back;
         private int _charTableTrailConfigVersion;
-        private const int CharTableTrailExhaustConfigVersion = 6;
+        private const int CharTableTrailExhaustConfigVersion = 9;
         private static GameObject _cachedCharTableTrailVfxPrefab;
-        private const string CharTableTrailVfxResourcePath = "particles/WindlinesSpeedy";
+        private const string CharTableTrailVfxResourcePath = "particles/SoapBubbleEmitter";
         private const string CharTableTrailVfxEditorPath =
-            "Assets/Packages/Particles/Epic Toon FX/Prefabs/Environment/Weather/Wind & Leaves/WindlinesSpeedy.prefab";
+            "Assets/Packages/Particles/Epic Toon FX/Prefabs/Environment/Bubbles/SoapBubbleEmitter.prefab";
         private Tween _charTableIdleShakeTween;
         private ParticleSystem _charTableHintParticles;
         private bool _charTableStartHintPlayed;
@@ -5062,22 +5062,20 @@ namespace CarryBlockJam
             if (prefab == null)
             {
                 Debug.LogWarning(
-                    "[CarryBlockJam] CharTable trail prefab missing (WindlinesSpeedy).");
+                    "[CarryBlockJam] CharTable trail prefab missing (SoapBubbleEmitter).");
                 return;
             }
 
-            // Destroy any old instance under CharTable or pieces root.
-            Transform existingUnderCylinder = _cylinder.transform.Find("CharTableWindTrail");
-            if (existingUnderCylinder != null)
-                Destroy(existingUnderCylinder.gameObject);
-            Transform existingUnderRoot = piecesRoot.Find("CharTableWindTrail");
-            if (existingUnderRoot != null)
-                Destroy(existingUnderRoot.gameObject);
+            // Destroy any old trail instances under CharTable or pieces root.
+            DestroyNamedChild(_cylinder.transform, "CharTableWindTrail");
+            DestroyNamedChild(_cylinder.transform, "CharTableBubbleTrail");
+            DestroyNamedChild(piecesRoot, "CharTableWindTrail");
+            DestroyNamedChild(piecesRoot, "CharTableBubbleTrail");
 
             // Parent to board pieces root (not CharTable) so CharTable's Y-squash
             // scale does not hide / flatten the exhaust particles.
             GameObject trailObject = Instantiate(prefab, piecesRoot, false);
-            trailObject.name = "CharTableWindTrail";
+            trailObject.name = "CharTableBubbleTrail";
             trailObject.SetActive(true);
 
             _charTableTrailParticles = trailObject.GetComponent<ParticleSystem>();
@@ -5094,10 +5092,24 @@ namespace CarryBlockJam
             RefreshCharTableTrailHeaviness();
         }
 
+        private static void DestroyNamedChild(Transform parent, string childName)
+        {
+            if (parent == null)
+                return;
+
+            Transform existing = parent.Find(childName);
+            if (existing != null)
+                Destroy(existing.gameObject);
+        }
+
         private GameObject ResolveCharTableTrailVfxPrefab()
         {
             if (charTableTrailVfxPrefab != null)
                 return charTableTrailVfxPrefab;
+
+            if (_cachedCharTableTrailVfxPrefab != null &&
+                _cachedCharTableTrailVfxPrefab.name != "SoapBubbleEmitter")
+                _cachedCharTableTrailVfxPrefab = null;
 
 #if UNITY_EDITOR
             // Prefer the package prefab in editor — Resources copies can miss materials.
@@ -5123,31 +5135,21 @@ namespace CarryBlockJam
 
             particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
-            // WindlinesSpeedy defaults to centered Stretch billboards — that draws
-            // lines both ahead and behind the spawn point (both table edges).
-            // Rebuild as a one-way rearward exhaust jet.
+            // SoapBubbleEmitter: keep bubble materials/subemitters, retune the root
+            // emitter into a one-sided rearward exhaust jet.
             ParticleSystem.MainModule main = particles.main;
             main.playOnAwake = false;
             main.loop = true;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.scalingMode = ParticleSystemScalingMode.Hierarchy;
             main.startDelay = 0f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.28f, 0.48f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(
-                Mathf.Max(1.3f, charTableTrailExhaustSpeed * 0.85f),
-                Mathf.Max(2f, charTableTrailExhaustSpeed * 1.25f));
-            float size = Mathf.Max(0.18f, charTableTrailExhaustSize);
-            main.startSize3D = true;
-            // Thin elongated streaks that still read as wind lines without
-            // bidirectional Stretch rendering.
-            main.startSizeX = new ParticleSystem.MinMaxCurve(size * 0.14f, size * 0.24f);
-            main.startSizeY = new ParticleSystem.MinMaxCurve(size * 0.8f, size * 1.1f);
-            main.startSizeZ = new ParticleSystem.MinMaxCurve(size * 0.14f, size * 0.24f);
-            main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.45f, 0.46f, 0.48f, 0.85f));
             main.gravityModifier = 0f;
-            main.maxParticles = 110;
+            main.maxParticles = Mathf.Max(main.maxParticles, 96);
             main.emitterVelocityMode = ParticleSystemEmitterVelocityMode.Transform;
+
+            // Mild gray soap tint so bubbles still read as bubbles.
+            Color bubble = new Color(0.62f, 0.66f, 0.7f, 0.9f);
+            main.startColor = new ParticleSystem.MinMaxGradient(bubble);
 
             ParticleSystem.EmissionModule emission = particles.emission;
             emission.enabled = true;
@@ -5157,12 +5159,11 @@ namespace CarryBlockJam
 
             ParticleSystem.ShapeModule shape = particles.shape;
             shape.enabled = true;
-            // Point-cone jet: only fires along emitter +Z (aimed behind CharTable).
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 8f;
-            shape.radius = 0.04f;
+            shape.angle = 10f;
+            shape.radius = 0.05f;
             shape.radiusThickness = 1f;
-            shape.length = 0.01f;
+            shape.length = 0.08f;
             shape.arc = 360f;
             shape.position = Vector3.zero;
             shape.rotation = Vector3.zero;
@@ -5172,73 +5173,22 @@ namespace CarryBlockJam
             shape.sphericalDirectionAmount = 0f;
             shape.randomPositionAmount = 0f;
 
-            ParticleSystem.VelocityOverLifetimeModule velocity = particles.velocityOverLifetime;
-            velocity.enabled = false;
+            // Push bubbles only rearward from the cone (+Z).
+            float speed = Mathf.Max(0.8f, charTableTrailExhaustSpeed);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.55f, speed);
 
-            ParticleSystem.LimitVelocityOverLifetimeModule limitVelocity =
-                particles.limitVelocityOverLifetime;
-            limitVelocity.enabled = false;
-
-            ParticleSystem.InheritVelocityModule inherit = particles.inheritVelocity;
-            inherit.enabled = false;
-
-            ParticleSystem.ForceOverLifetimeModule force = particles.forceOverLifetime;
-            force.enabled = false;
-
-            ParticleSystem.ExternalForcesModule externalForces = particles.externalForces;
-            externalForces.enabled = false;
+            float size = Mathf.Max(0.12f, charTableTrailExhaustSize * 0.55f);
+            main.startSize3D = false;
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.65f, size);
 
             ParticleSystem.NoiseModule noise = particles.noise;
-            noise.enabled = false;
-
-            ParticleSystem.CollisionModule collision = particles.collision;
-            collision.enabled = false;
-
-            ParticleSystem.TriggerModule trigger = particles.trigger;
-            trigger.enabled = false;
-
-            ParticleSystem.SubEmittersModule subEmitters = particles.subEmitters;
-            subEmitters.enabled = false;
-
-            ParticleSystem.TextureSheetAnimationModule sheets = particles.textureSheetAnimation;
-            // Keep authored sheet if present; do not force-disable.
-
-            ParticleSystem.LightsModule lights = particles.lights;
-            lights.enabled = false;
-
-            ParticleSystem.TrailModule trails = particles.trails;
-            trails.enabled = false;
-
-            ParticleSystem.ColorOverLifetimeModule colorOverLifetime = particles.colorOverLifetime;
-            colorOverLifetime.enabled = true;
-            var fade = new Gradient();
-            fade.SetKeys(
-                new[]
-                {
-                    new GradientColorKey(new Color(0.5f, 0.5f, 0.52f), 0f),
-                    new GradientColorKey(new Color(0.32f, 0.33f, 0.35f), 1f),
-                },
-                new[]
-                {
-                    new GradientAlphaKey(0.85f, 0f),
-                    new GradientAlphaKey(0.55f, 0.35f),
-                    new GradientAlphaKey(0.2f, 0.7f),
-                    new GradientAlphaKey(0f, 1f),
-                });
-            colorOverLifetime.color = fade;
-
-            ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = particles.sizeOverLifetime;
-            sizeOverLifetime.enabled = true;
-            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
-                1f,
-                new AnimationCurve(
-                    new Keyframe(0f, 0.9f),
-                    new Keyframe(0.2f, 1f),
-                    new Keyframe(1f, 0.25f)));
-
-            ParticleSystem.RotationOverLifetimeModule rotationOverLifetime =
-                particles.rotationOverLifetime;
-            rotationOverLifetime.enabled = false;
+            // Keep a little authored drift if present, but don't let it spray sideways.
+            if (noise.enabled)
+            {
+                noise.strength = new ParticleSystem.MinMaxCurve(
+                    Mathf.Min(noise.strength.constant, 0.15f));
+                noise.strengthMultiplier = Mathf.Min(noise.strengthMultiplier, 0.35f);
+            }
 
             ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
             if (renderer != null)
@@ -5247,18 +5197,41 @@ namespace CarryBlockJam
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
                 renderer.sortingOrder = 100;
-                // Keep Billboard so streaks stay one-sided (Stretch looked both-way).
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
                 renderer.lengthScale = 1f;
                 renderer.velocityScale = 0f;
                 renderer.cameraVelocityScale = 0f;
                 renderer.maxParticleSize = 5f;
-                renderer.minParticleSize = 0f;
                 renderer.pivot = Vector3.zero;
                 renderer.alignment = ParticleSystemRenderSpace.View;
             }
 
-            float scale = Mathf.Max(0.7f, charTableTrailVfxScale);
+            // Soft-configure child emitters (bubble/droplet subfx) for world space.
+            ParticleSystem[] children =
+                particles.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < children.Length; i++)
+            {
+                ParticleSystem child = children[i];
+                if (child == null || child == particles)
+                    continue;
+
+                ParticleSystem.MainModule childMain = child.main;
+                childMain.playOnAwake = false;
+                childMain.simulationSpace = ParticleSystemSimulationSpace.World;
+                childMain.scalingMode = ParticleSystemScalingMode.Hierarchy;
+
+                ParticleSystemRenderer childRenderer =
+                    child.GetComponent<ParticleSystemRenderer>();
+                if (childRenderer != null)
+                {
+                    childRenderer.shadowCastingMode =
+                        UnityEngine.Rendering.ShadowCastingMode.Off;
+                    childRenderer.receiveShadows = false;
+                    childRenderer.sortingOrder = 101;
+                }
+            }
+
+            float scale = Mathf.Max(0.55f, charTableTrailVfxScale * 0.75f);
             particles.transform.localScale = Vector3.one * scale;
         }
 
@@ -5281,7 +5254,7 @@ namespace CarryBlockJam
                 back * Mathf.Max(0f, charTableTrailRearOffset);
             // Cone emits along +Z — aim that axis opposite travel (exhaust).
             trailTransform.rotation = Quaternion.LookRotation(back, Vector3.up);
-            float scale = Mathf.Max(0.5f, charTableTrailVfxScale);
+            float scale = Mathf.Max(0.55f, charTableTrailVfxScale * 0.75f);
             trailTransform.localScale = Vector3.one * scale;
         }
 
@@ -5363,8 +5336,8 @@ namespace CarryBlockJam
             emissionModule.rateOverDistance =
                 Mathf.Max(0f, charTableTrailRateOverDistance) * Mathf.Lerp(0.9f, 1.3f, eased);
 
-            float scale = Mathf.Max(0.7f, charTableTrailVfxScale) *
-                          Mathf.Lerp(0.95f, 1.15f, eased);
+            float scale = Mathf.Max(0.55f, charTableTrailVfxScale * 0.75f) *
+                          Mathf.Lerp(0.9f, 1.15f, eased);
             _charTableTrailParticles.transform.localScale = Vector3.one * scale;
         }
 
