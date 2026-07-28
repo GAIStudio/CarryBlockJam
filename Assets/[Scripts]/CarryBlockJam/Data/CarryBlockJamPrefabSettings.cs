@@ -50,7 +50,7 @@ namespace CarryBlockJam
         public Vector3 charTableScale = Vector3.one;
 
         [Tooltip("Local position of the first carried plate on the CharTable tabletop. Y = height on face; X/Z = slide on the face.")]
-        public Vector3 charTablePlateOffset = new Vector3(0f, 0.9f, -0.08f);
+        public Vector3 charTablePlateOffset = new Vector3(0f, 0.7f, -0.08f);
 
         [Tooltip("Vertical distance between plates stacked on CharTable.")]
         public float charTablePlateStackStep = 0.18f;

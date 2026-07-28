@@ -17,6 +17,22 @@ MonoBehaviour:
   gridColumns: 9
   colorCells:
   - row: 4
+    column: 2
+    color: 0
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 3
+    color: 0
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
     column: 4
     color: 1
     flag: 1

@@ -62,7 +62,7 @@ namespace CarryBlockJam
         [SerializeField] private float highlightHeight = 0.35f;
         [SerializeField] private Color highlightColor = new Color(0.55f, 0.84f, 1f, 0.9f);
         [SerializeField] private Vector3 carriedPlateBaseOffset = new Vector3(0f, 0.9f, 0.40f);
-        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 0.9f, -0.08f);
+        [SerializeField] private Vector3 charTablePlateBaseOffset = new Vector3(0f, 0.7f, -0.08f);
         [SerializeField] private float carriedPlateStackStep = 0.18f;
         [SerializeField] private Vector3 stickmanCarryOffset = new Vector3(0f, -0.7f, 0f);
         [SerializeField] private float failurePlateDropDuration = 0.35f;
@@ -73,13 +73,18 @@ namespace CarryBlockJam
         [SerializeField] private bool enableCharTableTrail = true;
         [Tooltip("Defaults to Epic Toon FX SoapBubbleEmitter when left empty.")]
         [SerializeField] private GameObject charTableTrailVfxPrefab;
-        [SerializeField] private float charTableTrailVfxScale = 1.1f;
-        [SerializeField] private float charTableTrailMinEmission = 22f;
-        [SerializeField] private float charTableTrailMaxEmission = 40f;
-        [SerializeField] private float charTableTrailRateOverDistance = 16f;
-        [SerializeField] private float charTableTrailExhaustSpeed = 3f;
-        [SerializeField] private float charTableTrailExhaustSize = 0.55f;
-        [SerializeField] private float charTableTrailCellsForMaxHeavy = 10f;
+        [SerializeField] private float charTableTrailVfxScale = 1.15f;
+        [SerializeField] private float charTableTrailMinEmission = 10f;
+        [SerializeField] private float charTableTrailMaxEmission = 52f;
+        [SerializeField] private float charTableTrailRateOverDistance = 12f;
+        [SerializeField] private float charTableTrailMaxRateOverDistance = 34f;
+        [SerializeField] private float charTableTrailExhaustSpeed = 2.6f;
+        [SerializeField] private float charTableTrailMaxExhaustSpeed = 4.2f;
+        [SerializeField] private float charTableTrailExhaustSize = 0.72f;
+        [SerializeField] private float charTableTrailMaxExhaustSize = 1.15f;
+        [SerializeField] private float charTableTrailMinLifetime = 0.22f;
+        [SerializeField] private float charTableTrailMaxLifetime = 0.75f;
+        [SerializeField] private float charTableTrailCellsForMaxHeavy = 6f;
         [SerializeField] private float charTableTrailHeight = 0.18f;
         [SerializeField] private float charTableTrailRearOffset = 0.55f;
         [SerializeField] private float charTableTrailAbsorbDuration = 0.12f;
@@ -141,7 +146,7 @@ namespace CarryBlockJam
         private bool _charTableTrailHasLastPos;
         private Vector3 _charTableTrailExhaustDir = Vector3.back;
         private int _charTableTrailConfigVersion;
-        private const int CharTableTrailExhaustConfigVersion = 9;
+        private const int CharTableTrailExhaustConfigVersion = 11;
         private static GameObject _cachedCharTableTrailVfxPrefab;
         private const string CharTableTrailVfxResourcePath = "particles/SoapBubbleEmitter";
         private const string CharTableTrailVfxEditorPath =
@@ -335,6 +340,7 @@ namespace CarryBlockJam
             _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
             _swipeStartedWithCarriedPlates = HasCarriedPlates;
             _hasTablePickupBlockDeliver = false;
+            _trailSessionCells = 0f;
             _trailSegmentProgressReported = 0f;
             _trackingSwipe = true;
             EnsureCharTableTrail();
@@ -345,6 +351,8 @@ namespace CarryBlockJam
                 _charTableTrailLastWorldPos = _cylinder.transform.position;
                 _charTableTrailHasLastPos = true;
             }
+            SetCharTableTrailEmitting(false);
+            RefreshCharTableTrailHeaviness();
             EnsureHighlightRoot();
             ShowHighlights(false);
             RefreshStickmanAnimation(moving: false);
@@ -2132,6 +2140,9 @@ namespace CarryBlockJam
 
             plate.ClearStackLinks();
             plate.transform.SetParent(GetPiecesRoot(), true);
+            // CharTable visual is Y-scaled; worldPositionStays keeps that squash on
+            // the plate and makes table stacks look overlapped. Restore full scale.
+            plate.transform.localScale = Vector3.one;
             Vector3 stackWorldTarget = basePiece.transform.TransformPoint(
                 basePiece.GetStackAttachLocalPosition(plate));
             float tableAnimationSpeed = Mathf.Max(0.01f, tablePlateAnimationSpeed);
@@ -5144,7 +5155,6 @@ namespace CarryBlockJam
             main.scalingMode = ParticleSystemScalingMode.Hierarchy;
             main.startDelay = 0f;
             main.gravityModifier = 0f;
-            main.maxParticles = Mathf.Max(main.maxParticles, 96);
             main.emitterVelocityMode = ParticleSystemEmitterVelocityMode.Transform;
 
             // Mild gray soap tint so bubbles still read as bubbles.
@@ -5177,9 +5187,13 @@ namespace CarryBlockJam
             float speed = Mathf.Max(0.8f, charTableTrailExhaustSpeed);
             main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.55f, speed);
 
-            float size = Mathf.Max(0.12f, charTableTrailExhaustSize * 0.55f);
+            float size = Mathf.Max(0.18f, charTableTrailExhaustSize);
             main.startSize3D = false;
-            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.65f, size);
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.7f, size);
+
+            float life = Mathf.Max(0.12f, charTableTrailMinLifetime);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.85f, life);
+            main.maxParticles = 220;
 
             ParticleSystem.NoiseModule noise = particles.noise;
             // Keep a little authored drift if present, but don't let it spray sideways.
@@ -5272,11 +5286,18 @@ namespace CarryBlockJam
 
             Vector3 worldPos = _cylinder.transform.position;
             bool movedThisFrame = false;
+            float moveDistance = 0f;
             if (_charTableTrailHasLastPos)
             {
                 Vector3 move = worldPos - _charTableTrailLastWorldPos;
                 move.y = 0f;
-                if (move.sqrMagnitude > 0.00005f)
+                moveDistance = move.magnitude;
+                // Ignore tiny settle/jitter while CharTable is parked on a cell.
+                float moveThreshold = 0.0015f;
+                if (_grid != null)
+                    moveThreshold = Mathf.Max(0.0015f, _grid.GridSpacingX * 0.012f);
+
+                if (moveDistance > moveThreshold)
                 {
                     _charTableTrailExhaustDir = -move.normalized;
                     movedThisFrame = true;
@@ -5296,24 +5317,23 @@ namespace CarryBlockJam
             if (progress + 0.0001f < _trailSegmentProgressReported)
                 delta = progress;
             _trailSegmentProgressReported = progress;
-            if (delta > 0f)
-                _trailSessionCells += delta;
 
-            RefreshCharTableTrailHeaviness();
-
-            bool moving =
-                movedThisFrame ||
-                progress > 0.005f ||
-                delta > 0.0001f ||
-                _dragCornerTransitionActive;
-            if (moving)
+            // Trail only while CharTable is actually translating — finger-down but
+            // parked on a cell must not keep emitting.
+            if (movedThisFrame)
             {
+                if (delta > 0f)
+                    _trailSessionCells += delta;
+                else if (_grid != null && _grid.GridSpacingX > 0.01f)
+                    _trailSessionCells += moveDistance / _grid.GridSpacingX;
+
+                RefreshCharTableTrailHeaviness();
                 KillCharTableTrailAbsorbTween();
                 SetCharTableTrailEmitting(true);
             }
             else
             {
-                // Pause emit only while dragging — absorb happens on release.
+                RefreshCharTableTrailHeaviness();
                 SetCharTableTrailEmitting(false);
             }
         }
@@ -5324,20 +5344,48 @@ namespace CarryBlockJam
                 return;
 
             float maxCells = Mathf.Max(1f, charTableTrailCellsForMaxHeavy);
-            float heavy = Mathf.Clamp01(_trailSessionCells / maxCells);
-            float eased = heavy * heavy * (3f - 2f * heavy);
+            // Step up per completed cell so each cell visibly lengthens / densifies.
+            float cellSteps = Mathf.Floor(Mathf.Max(0f, _trailSessionCells));
+            float heavy = Mathf.Clamp01(cellSteps / maxCells);
+            float eased = Mathf.SmoothStep(0f, 1f, heavy);
+
+            ParticleSystem.MainModule main = _charTableTrailParticles.main;
+
+            float lifetime = Mathf.Lerp(
+                Mathf.Max(0.12f, charTableTrailMinLifetime),
+                Mathf.Max(0.2f, charTableTrailMaxLifetime),
+                eased);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(
+                lifetime * 0.85f,
+                lifetime);
+
+            float speed = Mathf.Lerp(
+                Mathf.Max(0.8f, charTableTrailExhaustSpeed),
+                Mathf.Max(1f, charTableTrailMaxExhaustSpeed),
+                eased);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.6f, speed);
+
+            float size = Mathf.Lerp(
+                Mathf.Max(0.18f, charTableTrailExhaustSize),
+                Mathf.Max(0.25f, charTableTrailMaxExhaustSize),
+                eased);
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.72f, size);
+            main.maxParticles = Mathf.RoundToInt(Mathf.Lerp(80f, 220f, eased));
 
             float emission = Mathf.Lerp(
-                Mathf.Max(8f, charTableTrailMinEmission * 0.35f),
-                Mathf.Max(8f, charTableTrailMaxEmission * 0.5f),
+                Mathf.Max(2f, charTableTrailMinEmission * 0.45f),
+                Mathf.Max(8f, charTableTrailMaxEmission),
+                eased);
+            float distanceRate = Mathf.Lerp(
+                Mathf.Max(0f, charTableTrailRateOverDistance * 0.55f),
+                Mathf.Max(0f, charTableTrailMaxRateOverDistance),
                 eased);
             ParticleSystem.EmissionModule emissionModule = _charTableTrailParticles.emission;
             emissionModule.rateOverTime = emission;
-            emissionModule.rateOverDistance =
-                Mathf.Max(0f, charTableTrailRateOverDistance) * Mathf.Lerp(0.9f, 1.3f, eased);
+            emissionModule.rateOverDistance = distanceRate;
 
-            float scale = Mathf.Max(0.55f, charTableTrailVfxScale * 0.75f) *
-                          Mathf.Lerp(0.9f, 1.15f, eased);
+            float scale = Mathf.Max(0.6f, charTableTrailVfxScale * 0.8f) *
+                          Mathf.Lerp(0.95f, 1.25f, eased);
             _charTableTrailParticles.transform.localScale = Vector3.one * scale;
         }
 

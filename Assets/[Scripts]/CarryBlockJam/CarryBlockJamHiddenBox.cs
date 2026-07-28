@@ -134,7 +134,9 @@ namespace CarryBlockJam
             CarryBlockJamBoardPiece current = basePiece;
             while (current != null)
             {
-                if (current.Kind == CarryBlockJamPieceKind.Plate)
+                // Locked hidden plates do not count until they are revealed.
+                if (current.Kind == CarryBlockJamPieceKind.Plate &&
+                    !current.IsColorHidden)
                     _surroundingPlates.Add(current);
 
                 current = current.StackedAbove;
