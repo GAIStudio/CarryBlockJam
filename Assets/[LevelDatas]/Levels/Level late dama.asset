@@ -70,7 +70,7 @@ MonoBehaviour:
       curtainColor: 0
       unlockMoves: 0
     - color: 2
-      row: 9
+      row: 5
       column: 1
       isHidden: 0
       isFrozen: 0
@@ -168,6 +168,10 @@ MonoBehaviour:
       count: 0
     - color: 1
       row: 11
+      column: 8
+      count: 0
+    - color: 1
+      row: 8
       column: 8
       count: 0
     - color: 1
