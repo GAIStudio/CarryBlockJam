@@ -55,7 +55,7 @@ namespace CarryBlockJam
         [Tooltip("Edge-on flip degrees at the soar apex (flat at start/end, vertical mid-flight).")]
         [SerializeField] private float charTablePickupFlipDegrees = 82f;
         [Tooltip("Duration when picking plates off a normal table onto CharTable.")]
-        [SerializeField] private float charTableTablePickupDuration = 0.16f;
+        [SerializeField] private float charTableTablePickupDuration = 0.22f;
         [Tooltip("Arc height multiplier when dropping plates from CharTable onto a normal table.")]
         [SerializeField] private float charTableDropArcHeightMul = 1.85f;
         [Tooltip("Flight duration when dropping plates from CharTable onto a normal table.")]
