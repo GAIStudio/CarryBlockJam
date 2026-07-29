@@ -1,9 +1,12 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace GAITemplate
 {
     /// <summary>
-    /// Replaces the system mouse cursor with the hand sprite used by tutorials.
+    /// Software hand cursor drawn in-game (Screen Space Overlay) so Unity Recorder
+    /// and other captures include it. Hardware OS cursors are not part of the
+    /// game framebuffer and do not appear in recordings.
     /// </summary>
     public static class HandMouseCursor
     {
@@ -14,10 +17,10 @@ namespace GAITemplate
         private const float SourceTipY = 28f;
         private const float SourceSize = 512f;
 
-        // Display size relative to the imported HandCursor texture.
-        private const float CursorScale = 0.62f;
+        // On-screen size in pixels.
+        private const float CursorPixelSize = 72f;
 
-        private static Texture2D _scaledCursor;
+        private static HandMouseCursorOverlay _overlay;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void ApplyOnLoad()
@@ -35,52 +38,72 @@ namespace GAITemplate
                 return;
             }
 
-            Texture2D cursor = BuildScaledCursor(source, CursorScale);
-            if (cursor == null)
+            // Hide OS cursor — Recorder cannot capture it.
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+
+            if (_overlay != null)
                 return;
 
-            Vector2 hotspot = new Vector2(
-                SourceTipX * cursor.width / SourceSize,
-                SourceTipY * cursor.height / SourceSize);
+            Sprite handSprite = Sprite.Create(
+                source,
+                new Rect(0f, 0f, source.width, source.height),
+                new Vector2(SourceTipX / SourceSize, 1f - SourceTipY / SourceSize),
+                100f);
 
-            Cursor.SetCursor(cursor, hotspot, CursorMode.Auto);
-            Cursor.visible = true;
-            Cursor.lockState = CursorLockMode.None;
+            var root = new GameObject("HandMouseCursorCanvas");
+            Object.DontDestroyOnLoad(root);
+
+            Canvas canvas = root.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = short.MaxValue;
+            root.AddComponent<CanvasScaler>().uiScaleMode =
+                CanvasScaler.ScaleMode.ConstantPixelSize;
+            root.AddComponent<GraphicRaycaster>();
+
+            var cursorObject = new GameObject("HandCursor", typeof(RectTransform));
+            cursorObject.transform.SetParent(root.transform, false);
+
+            RectTransform rect = cursorObject.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.zero;
+            rect.pivot = new Vector2(SourceTipX / SourceSize, 1f - SourceTipY / SourceSize);
+            rect.sizeDelta = new Vector2(CursorPixelSize, CursorPixelSize);
+
+            Image image = cursorObject.AddComponent<Image>();
+            image.sprite = handSprite;
+            image.raycastTarget = false;
+            image.preserveAspect = true;
+
+            _overlay = root.AddComponent<HandMouseCursorOverlay>();
+            _overlay.Initialize(rect);
         }
 
-        private static Texture2D BuildScaledCursor(Texture2D source, float scale)
+        private sealed class HandMouseCursorOverlay : MonoBehaviour
         {
-            scale = Mathf.Clamp(scale, 0.1f, 1f);
-            int width = Mathf.Max(16, Mathf.RoundToInt(source.width * scale));
-            int height = Mathf.Max(16, Mathf.RoundToInt(source.height * scale));
+            private RectTransform _cursor;
 
-            if (_scaledCursor != null &&
-                _scaledCursor.width == width &&
-                _scaledCursor.height == height)
-                return _scaledCursor;
-
-            if (_scaledCursor != null)
-                Object.Destroy(_scaledCursor);
-
-            _scaledCursor = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            _scaledCursor.name = "HandCursorScaled";
-            _scaledCursor.filterMode = FilterMode.Bilinear;
-            _scaledCursor.wrapMode = TextureWrapMode.Clamp;
-
-            Color[] pixels = new Color[width * height];
-            for (int y = 0; y < height; y++)
+            public void Initialize(RectTransform cursor)
             {
-                float v = (y + 0.5f) / height;
-                for (int x = 0; x < width; x++)
-                {
-                    float u = (x + 0.5f) / width;
-                    pixels[y * width + x] = source.GetPixelBilinear(u, v);
-                }
+                _cursor = cursor;
             }
 
-            _scaledCursor.SetPixels(pixels);
-            _scaledCursor.Apply(false, true);
-            return _scaledCursor;
+            private void LateUpdate()
+            {
+                if (_cursor == null)
+                    return;
+
+                Cursor.visible = false;
+                Vector3 mouse = Input.mousePosition;
+                mouse.z = 0f;
+                _cursor.position = mouse;
+                _cursor.gameObject.SetActive(
+                    mouse.x >= 0f &&
+                    mouse.y >= 0f &&
+                    mouse.x <= Screen.width &&
+                    mouse.y <= Screen.height);
+            }
         }
     }
 }

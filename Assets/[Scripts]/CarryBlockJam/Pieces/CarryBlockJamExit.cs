@@ -36,6 +36,9 @@ namespace CarryBlockJam
         [SerializeField] private float labelDecreaseVfxScale = 0.28f;
         [SerializeField] private float gateCompleteVfxScale = 0.85f;
         [SerializeField] private float plateDeliverVfxHeight = 0.85f;
+        [SerializeField, Min(1)] private int plateDeliverVfxStartCount = 2;
+        [SerializeField, Min(1)] private int plateDeliverVfxMaxCount = 12;
+        [SerializeField, Min(1f)] private float plateDeliverVfxSpread = 1.8f;
         [Tooltip("Delay after the label hits x0 before confetti / gate-finish FX.")]
         [SerializeField] private float gateFinishLabelDelay = 0.3f;
 
@@ -55,6 +58,7 @@ namespace CarryBlockJam
         private Transform _gateBounceTransform;
         private Vector3 _gateBounceRestWorldPosition;
         private bool _hasGateBounceRest;
+        private int _plateDeliveryVfxStep;
         private static GameObject _cachedPlateDeliverVfxPrefab;
         private static GameObject _cachedGateCompleteVfxPrefab;
         private static Texture2D _specialParticleTexture;
@@ -87,6 +91,7 @@ namespace CarryBlockJam
             goals = new List<CarryBlockJamExitGoal>(definition.goals ?? new List<CarryBlockJamExitGoal>());
             currentGoalIndex = 0;
             remainingPlateCount = goals.Count > 0 ? Mathf.Max(0, goals[0].requiredPlateCount) : 0;
+            _plateDeliveryVfxStep = 0;
             RefreshVisuals();
         }
 
@@ -254,9 +259,14 @@ namespace CarryBlockJam
                 return;
 
             float scale = Mathf.Clamp(labelDecreaseVfxScale, 0.12f, 0.55f);
+            int burstCount = Mathf.Clamp(
+                Mathf.Max(1, plateDeliverVfxStartCount) + _plateDeliveryVfxStep,
+                1,
+                Mathf.Max(1, plateDeliverVfxMaxCount));
+            _plateDeliveryVfxStep++;
             SpawnGateVfx(
                 prefab,
-                GetGateVfxOrigin(plateDeliverVfxHeight),
+                GetGateLabelVfxOrigin(),
                 scale,
                 ResolveLabelParticleColor(color),
                 particleCountMultiplier: 1f,
@@ -264,7 +274,9 @@ namespace CarryBlockJam
                 preserveAuthoring: true,
                 configureSpecialParticleBurst: false,
                 stripSplashBubbles: true,
-                keepOnlyCoinEmitters: false);
+                keepOnlyCoinEmitters: false,
+                exactBurstParticleCount: burstCount,
+                particleSpreadMultiplier: plateDeliverVfxSpread);
         }
 
         private GameObject ResolvePlateDeliverVfxPrefab()
@@ -475,7 +487,9 @@ namespace CarryBlockJam
             bool stripSplashBubbles = false,
             bool keepOnlyCoinEmitters = false,
             bool applyColorfulConfetti = false,
-            bool preservePrefabTransform = false)
+            bool preservePrefabTransform = false,
+            int exactBurstParticleCount = -1,
+            float particleSpreadMultiplier = 1f)
         {
             if (prefab == null)
                 return;
@@ -517,6 +531,23 @@ namespace CarryBlockJam
             float destroyAfter = 2.5f;
             float countMul = Mathf.Max(1f, particleCountMultiplier);
             float sizeMul = Mathf.Clamp(particleSizeMultiplier, 0.2f, 2f);
+            int eligibleSystemCount = 0;
+            if (exactBurstParticleCount >= 0)
+            {
+                for (int i = 0; i < systems.Length; i++)
+                {
+                    if (systems[i] != null &&
+                        !ShouldSkipGateVfxEmitter(
+                            systems[i].transform,
+                            stripSplashBubbles,
+                            keepOnlyCoinEmitters))
+                    {
+                        eligibleSystemCount++;
+                    }
+                }
+            }
+
+            int configuredSystemIndex = 0;
 
             for (int i = 0; i < systems.Length; i++)
             {
@@ -571,6 +602,18 @@ namespace CarryBlockJam
                     }
                 }
 
+                if (exactBurstParticleCount >= 0 && eligibleSystemCount > 0)
+                {
+                    int particlesForSystem =
+                        exactBurstParticleCount / eligibleSystemCount +
+                        (configuredSystemIndex < exactBurstParticleCount % eligibleSystemCount ? 1 : 0);
+                    ConfigureExactParticleBurst(
+                        particles,
+                        particlesForSystem,
+                        particleSpreadMultiplier);
+                    configuredSystemIndex++;
+                }
+
                 var lifetimeMain = particles.main;
                 float lifetime = lifetimeMain.duration;
                 if (lifetimeMain.startLifetime.mode == ParticleSystemCurveMode.Constant)
@@ -611,6 +654,42 @@ namespace CarryBlockJam
             }
 
             Object.Destroy(instance, destroyAfter);
+        }
+
+        private static void ConfigureExactParticleBurst(
+            ParticleSystem particles,
+            int count,
+            float spreadMultiplier)
+        {
+            if (particles == null)
+                return;
+
+            float spread = Mathf.Max(1f, spreadMultiplier);
+            var main = particles.main;
+            main.maxParticles = Mathf.Max(1, count);
+            main.startSpeed = ScaleMinMaxCurve(main.startSpeed, spread);
+
+            var shape = particles.shape;
+            if (shape.enabled)
+            {
+                shape.scale *= spread;
+                shape.radius *= spread;
+            }
+
+            var emission = particles.emission;
+            emission.enabled = count > 0;
+            emission.rateOverTime = 0f;
+            emission.rateOverDistance = 0f;
+            if (count <= 0)
+            {
+                emission.SetBursts(System.Array.Empty<ParticleSystem.Burst>());
+                return;
+            }
+
+            emission.SetBursts(new[]
+            {
+                new ParticleSystem.Burst(0f, (short)count)
+            });
         }
 
         private static bool ShouldSkipGateVfxEmitter(
@@ -982,6 +1061,24 @@ namespace CarryBlockJam
             }
 
             return transform.position + Vector3.up * Mathf.Max(0.4f, upwardOffset);
+        }
+
+        /// <summary>
+        /// Places per-plate stars around the visible counter so its one-by-one
+        /// decrease and the delivery feedback read as the same event.
+        /// </summary>
+        private Vector3 GetGateLabelVfxOrigin()
+        {
+            if (goalLabel != null)
+            {
+                Renderer labelRenderer = goalLabel.GetComponent<Renderer>();
+                if (labelRenderer != null)
+                    return labelRenderer.bounds.center;
+
+                return goalLabel.transform.position;
+            }
+
+            return GetGateVfxOrigin(plateDeliverVfxHeight);
         }
 
         private static bool IsExcludedFromGateVfxOrigin(Transform target)

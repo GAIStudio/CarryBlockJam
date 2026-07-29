@@ -87,6 +87,12 @@ namespace GAITemplate
         public Vector3 emojiPunchScale = new Vector3(0.16f, 0.16f, 0.16f);
         public Vector3 emojiShineRotation = new Vector3(0f, 0f, 7f);
 
+        /// <summary>
+        /// CPI / playable: Next button only gives click feedback — no reward flight
+        /// and no scene navigation.
+        /// </summary>
+        [SerializeField] private bool continueButtonClickOnly = true;
+
         // ── State ─────────────────────────────────────────────────────────────────────
 
         private bool _isFinishing;
@@ -112,9 +118,22 @@ namespace GAITemplate
             base.OnDisable();
         }
 
-        /// <summary>Continue button tıklanınca çağrılır → coin spawn + uçma → restart.</summary>
+        /// <summary>Continue button click. CPI mode: haptic only, no navigation.</summary>
         public override void OnPressRestart()
         {
+            if (continueButtonClickOnly)
+            {
+                Haptic.MediumTaptic();
+                if (continueButton != null)
+                {
+                    continueButton.DOKill(false);
+                    continueButton.localScale = Vector3.one;
+                    continueButton.DOPunchScale(Vector3.one * 0.08f, 0.18f, vibrato: 6, elasticity: 0.6f);
+                }
+
+                return;
+            }
+
             if (_isFinishing) return;
             _isFinishing = true;
 
@@ -177,11 +196,57 @@ namespace GAITemplate
         private void UpdateContinueRewardText()
         {
             ResolveSceneReferences();
+
+            if (continueButtonClickOnly)
+            {
+                HideContinueRewardVisuals();
+                return;
+            }
+
             if (continueRewardText == null) return;
 
             int amount = ResolveRewardAmount();
 
             continueRewardText.text = string.Format(continueRewardFormat, amount);
+        }
+
+        private void HideContinueRewardVisuals()
+        {
+            if (continueRewardText != null)
+            {
+                continueRewardText.text = string.Empty;
+                continueRewardText.gameObject.SetActive(false);
+            }
+
+            if (continueButton == null)
+                return;
+
+            Transform coin = continueButton.Find("Coin");
+            if (coin != null)
+                coin.gameObject.SetActive(false);
+
+            // Center the "Next" label now that coin/reward are gone.
+            Transform nextLabel = continueButton.Find("Text (TMP)");
+            if (nextLabel != null)
+            {
+                RectTransform nextRt = nextLabel as RectTransform;
+                if (nextRt != null)
+                {
+                    nextRt.anchorMin = Vector2.zero;
+                    nextRt.anchorMax = Vector2.one;
+                    nextRt.pivot = new Vector2(0.5f, 0.5f);
+                    nextRt.anchoredPosition = Vector2.zero;
+                    nextRt.sizeDelta = Vector2.zero;
+                }
+
+                TextMeshProUGUI nextTmp = nextLabel.GetComponent<TextMeshProUGUI>();
+                if (nextTmp != null)
+                {
+                    nextTmp.alignment = TextAlignmentOptions.Center;
+                    nextTmp.horizontalAlignment = HorizontalAlignmentOptions.Center;
+                    nextTmp.verticalAlignment = VerticalAlignmentOptions.Middle;
+                }
+            }
         }
 
         // ── Coin uçurma ──────────────────────────────────────────────────────────────
