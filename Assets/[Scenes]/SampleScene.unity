@@ -1666,7 +1666,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &146505940
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9942,7 +9942,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 910000002}
-  - component: {fileID: 910000003}
   m_Layer: 0
   m_Name: Art-Environment
   m_TagString: Untagged
@@ -9967,27 +9966,6 @@ Transform:
   - {fileID: 1219906615}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &910000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 910000001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e880f8bbe773e48669c1d98044c54138, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  targetCamera: {fileID: 0}
-  scaleTarget: {fileID: 910000050}
-  oversize: 1.15
-  meshUnitSize: 1
-  preserveYScale: 1
-  useRendererBounds: 1
-  fitTiltedFrustum: 1
-  groundY: -1000
-  applyContinuously: 1
 --- !u!1001 &910000010
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12180,7 +12158,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 30.5
+  field of view: 33
   orthographic: 0
   orthographic size: 11.5
   m_Depth: 0
