@@ -161,8 +161,7 @@ namespace CarryBlockJam
         private float _lastPlayerInputTime = -1f;
         private Vector3 _charTableVisualRestLocalPosition;
         private bool _charTableVisualRestCaptured;
-        private Tween _plateCollectionTween;
-        private float _plateCollectionLaunchCursor;
+        private readonly List<Tween> _plateCollectionTweens = new List<Tween>();
         private Transform _highlightRoot;
         private readonly List<Transform> _highlightPool = new List<Transform>();
 
@@ -1093,18 +1092,11 @@ namespace CarryBlockJam
 
                 CarryBlockJamBoardPiece occupant =
                     cell.Occupant.GetComponent<CarryBlockJamBoardPiece>();
-                if (!CanPickUpPiece(occupant, step.x, step.y))
-                    continue;
-
-                List<CarryBlockJamBoardPiece> extracted = ExtractPickupPlates(occupant, step.x, step.y);
-                if (extracted == null)
-                    continue;
-
-                for (int p = 0; p < extracted.Count; p++)
-                {
-                    if (extracted[p] != null)
-                        pickupPieces.Add(extracted[p]);
-                }
+                TryCollectPlatesFromOccupant(
+                    occupant,
+                    step.x,
+                    step.y,
+                    pickupPieces);
             }
 
             // While carrying, stop beside a matching table at the target (normal drop).
@@ -3976,9 +3968,6 @@ namespace CarryBlockJam
                 return CarriedColor;
             }
 
-            if (_carriedPlates.Count == 0)
-                _dragCollectColor = PieceColorType.None;
-
             return _dragCollectColor;
         }
 
@@ -4491,25 +4480,12 @@ namespace CarryBlockJam
                 GetComponent<CarryBlockJamRuntimePieceSpawner>();
             bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
 
-            Sequence collection;
-            if (_plateCollectionTween is Sequence activeSequence && activeSequence.IsActive())
-            {
-                // Keep already-flying plates in the air; schedule new launches after them.
-                collection = activeSequence;
-            }
-            else
-            {
-                collection = DOTween.Sequence();
-                _plateCollectionLaunchCursor = 0f;
-                collection.OnComplete(() =>
-                {
-                    if (!_failTriggered)
-                        UpdateCarriedPlateVisuals();
-                    _plateCollectionTween = null;
-                    _plateCollectionLaunchCursor = 0f;
-                });
-                _plateCollectionTween = collection;
-            }
+            // DOTween sequences are immutable after they start. A fresh sequence
+            // per pickup batch prevents rapid pickups from being inserted into a
+            // locked sequence and leaving their plates floating in world space.
+            Sequence collection = DOTween.Sequence();
+            _plateCollectionTweens.Add(collection);
+            collection.OnComplete(() => _plateCollectionTweens.Remove(collection));
 
             // Launch gap shorter than flight so the next plate is airborne before
             // the previous one lands — visible trail with spacing.
@@ -4520,13 +4496,14 @@ namespace CarryBlockJam
                 0.05f,
                 (shrink + flight) * 0.5f);
 
-            float batchStart = _plateCollectionLaunchCursor;
+            bool hasCollectionTween = false;
             for (int i = 0; i < plates.Count; i++)
             {
                 CarryBlockJamBoardPiece plate = plates[i];
                 Tween bounce = AddPlateToCarryStack(plate, i, fromTable);
                 if (bounce != null)
                 {
+                    hasCollectionTween = true;
                     bounce.OnStart(() =>
                     {
                         Haptic.LightTaptic();
@@ -4534,7 +4511,7 @@ namespace CarryBlockJam
                     });
 
                     if (usesCharTable)
-                        collection.Insert(batchStart + launchGap * i, bounce);
+                        collection.Insert(launchGap * i, bounce);
                     else
                         collection.Join(bounce);
                 }
@@ -4550,8 +4527,11 @@ namespace CarryBlockJam
                 CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
             }
 
-            if (usesCharTable)
-                _plateCollectionLaunchCursor = batchStart + launchGap * plates.Count;
+            if (!hasCollectionTween)
+            {
+                collection.Kill();
+                _plateCollectionTweens.Remove(collection);
+            }
             EnsureCharTableTrail();
             RefreshCharTableTrailHeaviness();
             if (!_trackingSwipe)
@@ -4647,10 +4627,16 @@ namespace CarryBlockJam
 
         private void CompletePlateCollectionAnimation()
         {
-            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
-                _plateCollectionTween.Complete();
-            _plateCollectionTween = null;
-            _plateCollectionLaunchCursor = 0f;
+            Tween[] activeTweens = _plateCollectionTweens.ToArray();
+            for (int i = 0; i < activeTweens.Length; i++)
+            {
+                Tween tween = activeTweens[i];
+                if (tween != null && tween.IsActive())
+                    tween.Complete();
+            }
+
+            _plateCollectionTweens.Clear();
+            UpdateCarriedPlateVisuals();
         }
 
         private static CarryBlockJamBoardPiece GetTopStackPiece(CarryBlockJamBoardPiece basePiece)
@@ -5552,10 +5538,7 @@ namespace CarryBlockJam
             if (_charTableHintParticles != null)
                 _charTableHintParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ShowHighlights(false);
-            if (_plateCollectionTween != null && _plateCollectionTween.IsActive())
-                _plateCollectionTween.Kill();
-            _plateCollectionTween = null;
-            _plateCollectionLaunchCursor = 0f;
+            CompletePlateCollectionAnimation();
 
             if (_failurePreparing)
                 return;
