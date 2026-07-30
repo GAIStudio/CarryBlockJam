@@ -1583,8 +1583,7 @@ namespace CarryBlockJam
                     row = nextRow;
                     column = nextColumn;
                     path.Add(new Vector2Int(nextRow, nextColumn));
-                    // Enter to collect — never continue the swipe path beyond a plate.
-                    break;
+                    continue;
                 }
 
                 // Table ahead with nothing collectible — stay on previous cell.
@@ -1653,8 +1652,7 @@ namespace CarryBlockJam
                     currentRow = nextRow;
                     currentColumn = nextColumn;
                     cylinderPath.Add(new Vector2Int(nextRow, nextColumn));
-                    // Enter to collect — never continue the swipe path beyond a plate.
-                    break;
+                    continue;
                 }
 
                 if (IsBoxOwnedCell(nextRow, nextColumn) || IsBoxCellBlocker(nextPiece))
@@ -1993,11 +1991,6 @@ namespace CarryBlockJam
                 }
 
                 safePath.Add(step);
-
-                // May enter a plate cell to collect, but never path beyond it while
-                // the plate is still on the grid.
-                if (IsFreestandingPlateCell(step.x, step.y))
-                    break;
             }
 
             return safePath;
@@ -2006,8 +1999,7 @@ namespace CarryBlockJam
         /// <summary>
         /// Movement blockers while dragging: every table, and any plate that is not
         /// collectible for the active drag color. Matching freestanding plates are
-        /// enterable for pickup, but pathing must stop on that cell (never travel
-        /// over/through any plate into further cells).
+        /// walkable and are collected by the swept drag pickup.
         /// </summary>
         private bool IsDragPathBlocker(int row, int column, PieceColorType requiredColor)
         {
@@ -2878,11 +2870,17 @@ namespace CarryBlockJam
                     IsDragPathBlocker(nextRow, nextColumn, requiredColor))
                     return false;
 
-                bool isDestination = nextRow == toRow && nextColumn == toColumn;
-                // Matching plates are enterable, but nothing may be claimed beyond
-                // one until the on-cell pickup has actually happened.
-                if (!isDestination && IsFreestandingPlateCell(nextRow, nextColumn))
-                    return false;
+                if (requiredColor == PieceColorType.None &&
+                    TryResolveCollectiblePlate(
+                        GetCellBoardPiece(nextRow, nextColumn),
+                        nextRow,
+                        nextColumn,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
 
                 row = nextRow;
                 column = nextColumn;
@@ -2951,10 +2949,17 @@ namespace CarryBlockJam
                 row = nextRow;
                 column = nextColumn;
 
-                // Claim the matching plate cell so it can be collected, then stop
-                // advancing until that plate is no longer on the floor.
-                if (IsFreestandingPlateCell(row, column))
-                    break;
+                if (requiredColor == PieceColorType.None &&
+                    TryResolveCollectiblePlate(
+                        GetCellBoardPiece(row, column),
+                        row,
+                        column,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
             }
 
             row = Mathf.Clamp(row, 0, _grid.Rows - 1);
@@ -3362,9 +3367,8 @@ namespace CarryBlockJam
                 return;
             }
 
-            // Never advance past the last walkable cell — blockers stay solid
-            // even on very fast finger movement. Never visually enter a table,
-            // and never travel past a freestanding plate while it remains.
+            // Never advance past the last walkable cell — tables and
+            // non-matching plates stay solid even on very fast finger movement.
             float maxProgress = path.Count;
             PieceColorType requiredColor = GetRequiredCollectColor();
             for (int i = 0; i < path.Count; i++)
@@ -3389,14 +3393,21 @@ namespace CarryBlockJam
                     requiredColor = collectPlate.Color;
                 }
 
-                if (IsFreestandingPlateCell(step.x, step.y))
-                {
-                    maxProgress = i + 1;
-                    break;
-                }
             }
 
-            float clampedProgress = Mathf.Min(directedProgress, maxProgress);
+            // Final swept safety check independent of PuzzleCell.Occupant and the
+            // preview path. A very large pointer delta can span many cells in one
+            // frame, so inspect every crossed Row/Column registration directly.
+            float plateLimitedProgress = ComputePlateLimitedDragProgress(
+                startRow,
+                startColumn,
+                rowStep,
+                columnStep,
+                directedProgress,
+                GetRequiredCollectColor());
+            float clampedProgress = Mathf.Min(
+                directedProgress,
+                Mathf.Min(maxProgress, plateLimitedProgress));
             Vector3 targetPosition = EvaluateDragPathPosition(
                 startRow,
                 startColumn,
@@ -3426,10 +3437,119 @@ namespace CarryBlockJam
             }
 
             _cylinder.transform.localPosition = nextPos;
+            CollectFreestandingPlatesThroughDragProgress(
+                startRow,
+                startColumn,
+                rowStep,
+                columnStep,
+                GetDirectedProgressToPosition(
+                    startRow,
+                    startColumn,
+                    rowStep,
+                    columnStep,
+                    nextPos));
             FaceStickmanToward(targetPosition);
             RefreshStickmanAnimation(moving: clampedProgress > 0.01f);
             UpdateCharTableTrailDuringDrag(clampedProgress);
             UpdateDragFollowCellFromVisual();
+        }
+
+        private float ComputePlateLimitedDragProgress(
+            int startRow,
+            int startColumn,
+            int rowStep,
+            int columnStep,
+            float directedProgress,
+            PieceColorType requiredColor)
+        {
+            if (_grid == null ||
+                directedProgress <= 0f ||
+                (rowStep == 0 && columnStep == 0))
+                return Mathf.Max(0f, directedProgress);
+
+            int cellsToScan = Mathf.CeilToInt(directedProgress);
+            int row = startRow;
+            int column = startColumn;
+
+            for (int distance = 1; distance <= cellsToScan; distance++)
+            {
+                row += rowStep;
+                column += columnStep;
+                if (!_grid.IsInside(row, column))
+                    return distance - 1;
+
+                CarryBlockJamBoardPiece plate =
+                    FindFreestandingPlateAtCell(row, column);
+                if (plate == null)
+                    continue;
+
+                // Matching plates are collected during the visual sweep and do not
+                // limit movement. Only a different/non-collectible plate blocks.
+                bool canCollect = HasCollectiblePlateAt(row, column, requiredColor);
+                if (!canCollect)
+                    return distance - 1;
+
+                if (requiredColor == PieceColorType.None)
+                    requiredColor = plate.Color;
+            }
+
+            return directedProgress;
+        }
+
+        private float GetDirectedProgressToPosition(
+            int startRow,
+            int startColumn,
+            int rowStep,
+            int columnStep,
+            Vector3 localPosition)
+        {
+            Vector3 startPosition =
+                GetPieceLocalPosition(_cylinder, startRow, startColumn);
+            if (rowStep != 0)
+            {
+                float rowCells = -(localPosition.z - startPosition.z) /
+                    Mathf.Max(0.0001f, _grid.GridSpacingZ);
+                return Mathf.Max(0f, rowCells * rowStep);
+            }
+
+            float columnCells = (localPosition.x - startPosition.x) /
+                Mathf.Max(0.0001f, _grid.GridSpacingX);
+            return Mathf.Max(0f, columnCells * columnStep);
+        }
+
+        private void CollectFreestandingPlatesThroughDragProgress(
+            int startRow,
+            int startColumn,
+            int rowStep,
+            int columnStep,
+            float reachedProgress)
+        {
+            if (_grid == null ||
+                reachedProgress < 1f ||
+                (rowStep == 0 && columnStep == 0))
+                return;
+
+            PieceColorType requiredColor = GetRequiredCollectColor();
+            int reachedCells = Mathf.FloorToInt(reachedProgress + 0.0001f);
+            int row = startRow;
+            int column = startColumn;
+            for (int distance = 1; distance <= reachedCells; distance++)
+            {
+                row += rowStep;
+                column += columnStep;
+                if (!_grid.IsInside(row, column))
+                    break;
+
+                CarryBlockJamBoardPiece plate =
+                    FindFreestandingPlateAtCell(row, column);
+                if (plate == null)
+                    continue;
+                if (!HasCollectiblePlateAt(row, column, requiredColor))
+                    break;
+
+                TryCollectAtCellDuringDrag(row, column);
+                requiredColor = GetRequiredCollectColor();
+            }
         }
 
         private Vector3 EvaluateDragPathPosition(
@@ -3487,9 +3607,9 @@ namespace CarryBlockJam
                     cell == null)
                     break;
 
-                // Tables and different-color plates always stop the path.
-                // Matching freestanding plates are enterable for pickup, but the
-                // path stops on that cell — never continues over the plate.
+                // Tables and different-color plates stop the path. Matching
+                // freestanding plates stay walkable and are collected in the
+                // swept visual traversal.
                 if (IsDragPathBlocker(nextRow, nextColumn, pathCollectColor))
                     break;
 
@@ -3509,9 +3629,6 @@ namespace CarryBlockJam
                 row = nextRow;
                 column = nextColumn;
                 path.Add(new Vector2Int(nextRow, nextColumn));
-
-                if (IsFreestandingPlateCell(nextRow, nextColumn))
-                    break;
             }
 
             return path;
