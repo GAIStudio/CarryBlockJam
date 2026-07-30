@@ -3084,6 +3084,15 @@ namespace CarryBlockJam
                 int cornerColumn = segmentStart.y;
                 if (cornerSteps > 0)
                 {
+                    // A fast turn can request a corner several cells away in one
+                    // frame. Validate every intermediate cell; checking only the
+                    // final corner allowed Level 13's yellow plates to be jumped.
+                    cornerSteps = ClampCornerStepsBeforeMovementBlocker(
+                        segmentStart,
+                        _dragActiveAxis,
+                        direction,
+                        cornerSteps);
+
                     if (_dragActiveAxis == 1)
                         cornerRow = segmentStart.x + direction * cornerSteps;
                     else
@@ -3142,6 +3151,50 @@ namespace CarryBlockJam
                 GetPieceLocalPosition(_cylinder, corner.x, corner.y);
             RefreshStickmanAnimation(moving: true);
             return true;
+        }
+
+        private int ClampCornerStepsBeforeMovementBlocker(
+            Vector2Int segmentStart,
+            int axis,
+            int direction,
+            int requestedSteps)
+        {
+            if (_grid == null || requestedSteps <= 0 || direction == 0)
+                return 0;
+
+            PieceColorType requiredColor = GetRequiredCollectColor();
+            int safeSteps = 0;
+            int row = segmentStart.x;
+            int column = segmentStart.y;
+
+            for (int distance = 1; distance <= requestedSteps; distance++)
+            {
+                if (axis == 1)
+                    row += direction;
+                else
+                    column += direction;
+
+                if (!_grid.IsInside(row, column) ||
+                    !_grid.TryGetCell(row, column, out PuzzleCell cell) ||
+                    cell == null ||
+                    IsDragPathBlocker(row, column, requiredColor))
+                    break;
+
+                safeSteps = distance;
+                if (requiredColor == PieceColorType.None &&
+                    TryResolveCollectiblePlate(
+                        GetCellBoardPiece(row, column),
+                        row,
+                        column,
+                        requiredColor,
+                        out CarryBlockJamBoardPiece collectPlate) &&
+                    collectPlate != null)
+                {
+                    requiredColor = collectPlate.Color;
+                }
+            }
+
+            return safeSteps;
         }
 
         private bool TryGetActiveSegmentIntent(
