@@ -30,21 +30,26 @@ MonoBehaviour:
     serializationDepthLimit: 64
     assemblyNames:
     - Assembly-CSharp-firstpass
-    - ToonyColorsPro2.Demo
-    - Assembly-CSharp
-    - ToonyColorsPro.Editor
-    - UniTask.Linq
     - StompyRobot.SRDebugger
     - UniTask
-    - StompyRobot.SRF
+    - Assembly-CSharp
+    - ToonyColorsPro.Editor
     - PPv2URPConverters
+    - StompyRobot.SRF
+    - ToonyColorsPro2.Demo
+    - Firebase.App.Internal
     - StompyRobot.SRDebugger.Editor
     - ToonyColorsPro.Runtime
+    - UniTask.Linq
+    - MaxSdk.Scripts
+    - MaxSdk.Scripts.IntegrationManager.Editor
+    - AdjustSdk.Scripts
+    - StompyRobot.SRF.Editor
+    - UniTask.TextMeshPro
+    - AdjustSdk.Editor
     - UniTask.Addressables
     - UniTask.Editor
-    - StompyRobot.SRF.Editor
     - KinoBloom.Runtime
-    - UniTask.TextMeshPro
     - UniTask.DOTween
     - ToonyColorsPro.Demo.Editor
     showAdvancedSettings: 0

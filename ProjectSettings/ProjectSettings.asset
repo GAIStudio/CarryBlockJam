@@ -189,7 +189,7 @@ PlayerSettings:
   VertexChannelCompressionMask: 4054
   iPhoneSdkVersion: 988
   iOSSimulatorArchitecture: 0
-  iOSTargetOSVersionString: 14.0
+  iOSTargetOSVersionString: 15.0
   tvOSSdkVersion: 0
   tvOSSimulatorArchitecture: 0
   tvOSRequireExtendedGameController: 0
@@ -849,7 +849,7 @@ PlayerSettings:
   webGLMemoryGeometricGrowthCap: 96
   webGLPowerPreference: 2
   scriptingDefineSymbols:
-    Android: UNITY_VISUAL_SCRIPTING
+    Android: UNITY_VISUAL_SCRIPTING;gameanalytics_max_enabled
     EmbeddedLinux: UNITY_VISUAL_SCRIPTING
     LinuxHeadlessSimulation: UNITY_VISUAL_SCRIPTING
     Nintendo Switch: UNITY_VISUAL_SCRIPTING
@@ -862,7 +862,7 @@ PlayerSettings:
     WebGL: UNITY_VISUAL_SCRIPTING
     Windows Store Apps: UNITY_VISUAL_SCRIPTING
     XboxOne: UNITY_VISUAL_SCRIPTING
-    iPhone: UNITY_VISUAL_SCRIPTING
+    iPhone: UNITY_VISUAL_SCRIPTING;gameanalytics_max_enabled
     tvOS: UNITY_VISUAL_SCRIPTING
   additionalCompilerArguments: {}
   platformArchitecture: {}

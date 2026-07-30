@@ -1,4 +1,5 @@
 using CarryBlockJam;
+using DEVELOPER_SYSTEM.Main.SdkSystem.Scripts;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -53,6 +54,7 @@ namespace GAITemplate
                 PlayerPrefs.SetInt("Elephant", elephant);
             }
 
+            AnalyticsEvents.OnLevelStart?.Invoke(GameManager.instance.level);
             startEvent.Invoke();
         }
 
@@ -89,6 +91,7 @@ namespace GAITemplate
 
             _endGameReserved = true;
             PlayerPrefs.DeleteKey("Elephant");
+            AnalyticsEvents.OnLevelComplete?.Invoke(GameManager.instance.level);
             GameManager.instance.LevelUp();
             endGameEvent.Invoke(true);
         }
@@ -101,6 +104,7 @@ namespace GAITemplate
             _endGameReserved = true;
             PlayerPrefs.DeleteKey("Elephant");
             Haptic.MediumTaptic();
+            AnalyticsEvents.OnLevelFail?.Invoke(GameManager.instance.level);
 
             CarryBlockJamSwipeController swipeController =
                 FindObjectOfType<CarryBlockJamSwipeController>();
