@@ -51,6 +51,8 @@ MonoBehaviour:
       goals:
       - color: 2
         requiredPlateCount: 3
+      - color: 1
+        requiredPlateCount: 2
     disableAutoTables: 1
     tablePlacements:
     - color: 1
@@ -85,6 +87,14 @@ MonoBehaviour:
     - color: 2
       row: 4
       column: 3
+      count: 1
+    - color: 1
+      row: 8
+      column: 5
+      count: 1
+    - color: 1
+      row: 8
+      column: 1
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
