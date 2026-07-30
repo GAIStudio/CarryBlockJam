@@ -1,0 +1,31 @@
+{
+  "project_info": {
+    "project_number": "347113598822",
+    "project_id": "dish-rush",
+    "storage_bucket": "dish-rush.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347113598822:ios:11c3563de8566f1672e2a7",
+        "android_client_info": {
+          "package_name": "com.incigames.dishrush"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyBE6IbBnBaVfV_btGNFRKYVWXaEsXumx-k"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 0
+        },
+        "appinvite_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
