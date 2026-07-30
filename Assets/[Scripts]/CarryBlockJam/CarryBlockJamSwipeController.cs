@@ -2108,7 +2108,6 @@ namespace CarryBlockJam
                     CarryBlockJamHiddenBox.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamHiddenPlate.NotifyPlateCollected(arrivingPlate);
                     CarryBlockJamFrozenBox.NotifyPlateCollected(arrivingPlate);
-                    CarryBlockJamFrozenPlate.NotifyPlateCollected(arrivingPlate);
                     if (arrivingPlate != null)
                     {
                         arrivingPlate.gameObject.SetActive(false);
@@ -4776,7 +4775,8 @@ namespace CarryBlockJam
                 CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
                 CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
                 CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
-                CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
+                if (!fromTable)
+                    CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
             }
 
             if (!hasCollectionTween)

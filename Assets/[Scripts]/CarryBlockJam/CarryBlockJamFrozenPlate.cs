@@ -9,8 +9,9 @@ using UnityEditor;
 namespace CarryBlockJam
 {
     /// <summary>
-    /// Frozen plate: iced until unlock-move countdown reaches zero after plate collects,
-    /// then becomes pickable. Level creator still paints <see cref="LevelCellFlag.Ice"/>.
+    /// Frozen plate: iced until its unlock countdown reaches zero after freestanding
+    /// grid-plate pickups, then becomes pickable. Deliveries and table pickups do
+    /// not advance this countdown. Level creator still paints <see cref="LevelCellFlag.Ice"/>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CarryBlockJamFrozenPlate : MonoBehaviour
