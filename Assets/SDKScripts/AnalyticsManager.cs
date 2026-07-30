@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using AdjustSdk;
 using Facebook.Unity;
@@ -26,6 +27,7 @@ namespace DEVELOPER_SYSTEM.Main.SdkSystem.Scripts
         [SerializeField] private string tokenLevelFail;
 
         private bool _firebaseReady;
+        private bool _firebaseUnavailable;
         private float _levelStartTime;
         private int _levelMoveCount;
         private bool _gameAnalyticsReady;
@@ -145,6 +147,23 @@ namespace DEVELOPER_SYSTEM.Main.SdkSystem.Scripts
 
         private async Task InitializeFirebase()
         {
+#if UNITY_EDITOR
+            string desktopConfig = Path.Combine(
+                Application.streamingAssetsPath,
+                "google-services-desktop.json");
+            string fallbackConfig = Path.Combine(
+                Application.streamingAssetsPath,
+                "google-services.json");
+            if (!File.Exists(desktopConfig) && !File.Exists(fallbackConfig))
+            {
+                _firebaseUnavailable = true;
+                _pendingFirebaseEvents.Clear();
+                Debug.LogWarning(
+                    "[Analytics] Firebase disabled in Editor: no Firebase app configuration was found.");
+                return;
+            }
+#endif
+
             var dependencyStatus = await FirebaseApp.CheckAndFixDependenciesAsync();
 
             if (dependencyStatus == DependencyStatus.Available)
@@ -254,6 +273,9 @@ namespace DEVELOPER_SYSTEM.Main.SdkSystem.Scripts
         private void SendFirebaseEvent(Action eventAction)
         {
             if (eventAction == null)
+                return;
+
+            if (_firebaseUnavailable)
                 return;
 
             if (_firebaseReady)
