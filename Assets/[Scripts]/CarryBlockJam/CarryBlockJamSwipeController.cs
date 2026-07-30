@@ -2038,22 +2038,9 @@ namespace CarryBlockJam
         /// </summary>
         private bool IsFreestandingPlateCell(int row, int column)
         {
-            if (IsBoxOwnedCell(row, column))
-                return false;
-
-            CarryBlockJamBoardPiece piece = GetCellBoardPiece(row, column);
-            if (piece == null || piece == _cylinder)
-                return false;
-
-            CarryBlockJamBoardPiece current = piece;
-            while (current != null)
-            {
-                if (current.Kind == CarryBlockJamPieceKind.Plate)
-                    return true;
-                current = current.StackedAbove;
-            }
-
-            return piece.Kind == CarryBlockJamPieceKind.Plate;
+            // Row/Column lookup remains reliable even if CharTable temporarily
+            // owns the PuzzleCell occupant during a very fast drag.
+            return FindFreestandingPlateAtCell(row, column) != null;
         }
 
         private bool IsBoxOwnedCell(int row, int column)
@@ -2137,6 +2124,12 @@ namespace CarryBlockJam
                     }
                 });
             }
+
+            // A plate that is parented to CharTable but belongs to neither the
+            // logical carried stack nor this delivery is a stale pickup visual.
+            // Remove it before the gate animation so an old pile cannot remain
+            // attached after its logical plates have already been delivered.
+            RemoveStaleCarryPlateVisuals(plates);
 
             sequence.OnComplete(() =>
             {
@@ -2838,10 +2831,63 @@ namespace CarryBlockJam
 
             // Never claim a different-color plate cell from Round() — that hid the
             // plate behind CharTable Occupant and allowed pathing through it.
-            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
+            PieceColorType requiredColor = GetRequiredCollectColor();
+            if (IsDragPathBlocker(row, column, requiredColor))
+                return false;
+
+            // A rounded visual cell may be several cells ahead after a long frame.
+            // Validate every intermediate cell so Round() cannot leapfrog a plate.
+            if (!IsAxisReachableWithoutPlateCross(
+                    _dragFollowCell.x,
+                    _dragFollowCell.y,
+                    row,
+                    column,
+                    requiredColor))
                 return false;
 
             cell = new Vector2Int(row, column);
+            return true;
+        }
+
+        private bool IsAxisReachableWithoutPlateCross(
+            int fromRow,
+            int fromColumn,
+            int toRow,
+            int toColumn,
+            PieceColorType requiredColor)
+        {
+            if (fromRow == toRow && fromColumn == toColumn)
+                return true;
+
+            int rowDelta = toRow - fromRow;
+            int columnDelta = toColumn - fromColumn;
+            if (rowDelta != 0 && columnDelta != 0)
+                return false;
+
+            int rowStep = rowDelta == 0 ? 0 : (rowDelta > 0 ? 1 : -1);
+            int columnStep = columnDelta == 0 ? 0 : (columnDelta > 0 ? 1 : -1);
+            int steps = Mathf.Max(Mathf.Abs(rowDelta), Mathf.Abs(columnDelta));
+            int row = fromRow;
+            int column = fromColumn;
+
+            for (int i = 0; i < steps; i++)
+            {
+                int nextRow = row + rowStep;
+                int nextColumn = column + columnStep;
+                if (!_grid.IsInside(nextRow, nextColumn) ||
+                    IsDragPathBlocker(nextRow, nextColumn, requiredColor))
+                    return false;
+
+                bool isDestination = nextRow == toRow && nextColumn == toColumn;
+                // Matching plates are enterable, but nothing may be claimed beyond
+                // one until the on-cell pickup has actually happened.
+                if (!isDestination && IsFreestandingPlateCell(nextRow, nextColumn))
+                    return false;
+
+                row = nextRow;
+                column = nextColumn;
+            }
+
             return true;
         }
 
@@ -2866,8 +2912,9 @@ namespace CarryBlockJam
         }
 
         /// <summary>
-        /// Advance the claimed drag cell only after CharTable is well inside
-        /// the next cell — avoids border Round() jitter and release side-jumps.
+        /// Advance through visual cells one at a time and validate each one. This
+        /// preserves the existing hysteresis threshold while preventing long-frame
+        /// jumps from skipping a floor plate.
         /// </summary>
         private void UpdateDragFollowCellFromVisual()
         {
@@ -2876,16 +2923,42 @@ namespace CarryBlockJam
                     out float columnContinuous))
                 return;
 
-            int row = StableCellIndex(rowContinuous, _dragFollowCell.x);
-            int column = StableCellIndex(columnContinuous, _dragFollowCell.y);
+            int row = Mathf.Clamp(_dragFollowCell.x, 0, _grid.Rows - 1);
+            int column = Mathf.Clamp(_dragFollowCell.y, 0, _grid.Columns - 1);
+            float cross = Mathf.Clamp(dragCellCrossThreshold, 0.5f, 0.9f);
+            PieceColorType requiredColor = GetRequiredCollectColor();
+
+            while (true)
+            {
+                int nextRow = row;
+                int nextColumn = column;
+                if (rowContinuous >= row + cross)
+                    nextRow++;
+                else if (rowContinuous <= row - cross)
+                    nextRow--;
+                else if (columnContinuous >= column + cross)
+                    nextColumn++;
+                else if (columnContinuous <= column - cross)
+                    nextColumn--;
+                else
+                    break;
+
+                if (!_grid.IsInside(nextRow, nextColumn) ||
+                    IsBoxOwnedCell(nextRow, nextColumn) ||
+                    IsDragPathBlocker(nextRow, nextColumn, requiredColor))
+                    break;
+
+                row = nextRow;
+                column = nextColumn;
+
+                // Claim the matching plate cell so it can be collected, then stop
+                // advancing until that plate is no longer on the floor.
+                if (IsFreestandingPlateCell(row, column))
+                    break;
+            }
+
             row = Mathf.Clamp(row, 0, _grid.Rows - 1);
             column = Mathf.Clamp(column, 0, _grid.Columns - 1);
-
-            if (IsBoxOwnedCell(row, column))
-                return;
-
-            if (IsDragPathBlocker(row, column, GetRequiredCollectColor()))
-                return;
 
             _dragFollowCell = new Vector2Int(row, column);
         }
@@ -4221,10 +4294,15 @@ namespace CarryBlockJam
             if (plate == null)
                 return null;
 
+            // Fast overlap checks can report the same floor plate more than once
+            // before its first soar finishes. Never start competing tweens for a
+            // plate that already belongs to the logical carry stack.
+            if (_carriedPlates.Contains(plate))
+                return null;
+
             plate.ClearStackLinks();
             Transform attachRoot = GetCarryAttachRoot();
-            if (!_carriedPlates.Contains(plate))
-                _carriedPlates.Add(plate);
+            _carriedPlates.Add(plate);
 
             int stackIndex = _carriedPlates.IndexOf(plate);
             Vector3 targetLocal = GetCarriedPlateLocalPosition(stackIndex);
@@ -4476,6 +4554,10 @@ namespace CarryBlockJam
             if (plates == null || plates.Count == 0)
                 return;
 
+            // Heal any visual left behind by an older interrupted pickup before
+            // adding the next logical batch.
+            RemoveStaleCarryPlateVisuals();
+
             CarryBlockJamRuntimePieceSpawner spawner =
                 GetComponent<CarryBlockJamRuntimePieceSpawner>();
             bool usesCharTable = spawner != null && spawner.UsesCharTableCylinderVisual;
@@ -4568,6 +4650,30 @@ namespace CarryBlockJam
                 plate.transform.SetParent(attachRoot, false);
                 plate.transform.localPosition = GetCarriedPlateLocalPosition(i);
                 plate.transform.localRotation = Quaternion.identity;
+            }
+        }
+
+        private void RemoveStaleCarryPlateVisuals(
+            ICollection<CarryBlockJamBoardPiece> platesInTransfer = null)
+        {
+            Transform attachRoot = GetCarryAttachRoot();
+            if (attachRoot == null)
+                return;
+
+            CarryBlockJamBoardPiece[] attachedPieces =
+                attachRoot.GetComponentsInChildren<CarryBlockJamBoardPiece>(true);
+            for (int i = 0; i < attachedPieces.Length; i++)
+            {
+                CarryBlockJamBoardPiece plate = attachedPieces[i];
+                if (plate == null ||
+                    plate.Kind != CarryBlockJamPieceKind.Plate ||
+                    _carriedPlates.Contains(plate) ||
+                    (platesInTransfer != null && platesInTransfer.Contains(plate)))
+                    continue;
+
+                plate.transform.DOKill(false);
+                plate.gameObject.SetActive(false);
+                Destroy(plate.gameObject);
             }
         }
 
