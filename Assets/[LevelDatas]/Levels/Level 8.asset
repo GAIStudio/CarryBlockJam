@@ -92,6 +92,8 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 1
         requiredPlateCount: 3
+      - color: 3
+        requiredPlateCount: 3
     - row: 0
       column: 6
       side: 0
