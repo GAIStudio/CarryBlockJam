@@ -15,6 +15,8 @@ MonoBehaviour:
   autoSpawnLevel: 0
   loopFromLevel: 1
   levels:
+  - {fileID: 11400000, guid: 692c4e9a8b488344ca62f2a687af3fbd, type: 2}
+  - {fileID: 11400000, guid: 6444a2c6cbcce0a47bc2bc00414e8ad3, type: 2}
+  - {fileID: 11400000, guid: cae39efa5978b08499fa81df52883daa, type: 2}
   - {fileID: 11400000, guid: bea940f70991e4a68ad5a83e4404c8ad, type: 2}
   - {fileID: 11400000, guid: 3975301b1c9dc4a1fbbaf5161bdaeb72, type: 2}
-  - {fileID: 11400000, guid: 9d0d6c5333b704c00ab95ef1cd35acf6, type: 2}

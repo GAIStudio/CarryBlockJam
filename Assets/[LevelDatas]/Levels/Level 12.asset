@@ -128,41 +128,9 @@ MonoBehaviour:
       curtainColor: 0
       unlockMoves: 0
     platePlacements:
-    - color: 2
-      row: 9
-      column: 0
-      count: 1
-    - color: 3
-      row: 10
-      column: 1
-      count: 1
-    - color: 3
-      row: 10
-      column: 2
-      count: 1
-    - color: 4
-      row: 8
-      column: 2
-      count: 1
-    - color: 4
-      row: 8
-      column: 1
-      count: 1
-    - color: 4
-      row: 8
-      column: 3
-      count: 1
-    - color: 2
-      row: 9
-      column: 4
-      count: 1
-    - color: 3
-      row: 10
-      column: 3
-      count: 1
     - color: 3
       row: 2
-      column: 7
+      column: 5
       count: 1
     - color: 3
       row: 2
@@ -170,7 +138,7 @@ MonoBehaviour:
       count: 1
     - color: 3
       row: 2
-      column: 5
+      column: 7
       count: 1
     - color: 2
       row: 3
@@ -182,7 +150,7 @@ MonoBehaviour:
       count: 1
     - color: 4
       row: 4
-      column: 7
+      column: 5
       count: 1
     - color: 4
       row: 4
@@ -190,7 +158,39 @@ MonoBehaviour:
       count: 1
     - color: 4
       row: 4
-      column: 5
+      column: 7
+      count: 1
+    - color: 4
+      row: 8
+      column: 1
+      count: 1
+    - color: 4
+      row: 8
+      column: 2
+      count: 1
+    - color: 4
+      row: 8
+      column: 3
+      count: 1
+    - color: 2
+      row: 9
+      column: 0
+      count: 1
+    - color: 2
+      row: 9
+      column: 4
+      count: 1
+    - color: 3
+      row: 10
+      column: 1
+      count: 1
+    - color: 3
+      row: 10
+      column: 2
+      count: 1
+    - color: 3
+      row: 10
+      column: 3
       count: 1
     stickmanSpawnMode: 0
     fixedStickmanCell:
