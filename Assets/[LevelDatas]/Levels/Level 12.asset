@@ -268,7 +268,7 @@ MonoBehaviour:
     column: 7
     color: 2
     flag: 1
-    flagValue: 0
+    flagValue: 1
     direction: 0
     tunnelPieces: 
     secondaryColor: 0
