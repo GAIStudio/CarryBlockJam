@@ -210,7 +210,7 @@ namespace GAITemplate.Editor
                     "Hidden cell + color spawns a hidden CarryBlockJam plate at that cell. " +
                     "It reveals when every plate on surrounding cells (including diagonals) is collected.",
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Ice cell + color spawns a frozen CarryBlockJam plate. Set unlock moves below the cell. " +
+                    "Ice cell + color spawns a frozen CarryBlockJam plate. Set unlock moves in the small field next to the color. " +
                     "Each collected plate counts down until the ice melts and the plate can be picked up.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Color Table cell: set Accept Color. Spawns a table that only accepts plates of that color. " +
@@ -258,10 +258,14 @@ namespace GAITemplate.Editor
 
         private void DrawCell(int row, int column)
         {
-            GUILayout.BeginVertical(GUILayout.Width(70f));
+            // Keep each cell column narrow and short so Ice/Color-Table extras
+            // do not open large gaps between grid rows.
+            GUILayout.BeginVertical(GUILayout.Width(64f));
 
             LevelCellFlag flags = _cellFlags[row, column];
             bool isTunnel = (flags & LevelCellFlag.Tunnel) == LevelCellFlag.Tunnel;
+            bool isIce = (flags & LevelCellFlag.Ice) == LevelCellFlag.Ice;
+            bool isColorTable = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
 
             Rect rect = GUILayoutUtility.GetRect(40f, 40f, GUILayout.Width(40f), GUILayout.Height(40f));
 
@@ -304,44 +308,66 @@ namespace GAITemplate.Editor
                 EditorGUI.LabelField(rect, GetFlagsShortLabel(flags), labelStyle);
             }
 
-            // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
-            if (!isTunnel)
+            // Ice unlock count on the cell (bottom-right) so it does not need a
+            // separate tall "Unlock Moves" label under the grid.
+            if (isIce && IsCarryBlockJamGrid())
             {
-                bool isColorTable = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
-                if (isColorTable && IsCarryBlockJamGrid())
+                var unlockStyle = new GUIStyle(EditorStyles.miniBoldLabel)
                 {
-                    EditorGUILayout.LabelField("Accept", EditorStyles.miniLabel);
-                    _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
-                        _cellColors[row, column],
-                        includeNone: true,
-                        GUILayout.Width(70f));
-                }
-                else
-                {
-                    _cellColors[row, column] = DrawGridCellColorPopup(_cellColors[row, column], flags);
-                }
+                    alignment = TextAnchor.LowerRight,
+                    normal = { textColor = Color.white },
+                    fontSize = 10,
+                };
+                EditorGUI.LabelField(
+                    new Rect(rect.x, rect.yMax - 14f, rect.width - 2f, 14f),
+                    _cellFlagValues[row, column].ToString(),
+                    unlockStyle);
+            }
+
+            GUILayout.Space(1f);
+
+            // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
+            if (isTunnel)
+            {
+                _cellDirections[row, column] = (CellDirection)EditorGUILayout.EnumPopup(
+                    _cellDirections[row, column],
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
+            }
+            else if (isIce && IsCarryBlockJamGrid())
+            {
+                // One compact row: color + unlock moves (no extra label line).
+                EditorGUILayout.BeginHorizontal(GUILayout.Width(64f), GUILayout.Height(16f));
+                _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
+                    _cellColors[row, column],
+                    includeNone: true,
+                    GUILayout.Width(40f),
+                    GUILayout.Height(16f));
+
+                int prevValue = _cellFlagValues[row, column];
+                int newValue = EditorGUILayout.IntField(
+                    new GUIContent(string.Empty, "Unlock moves"),
+                    prevValue,
+                    GUILayout.Width(22f),
+                    GUILayout.Height(16f));
+                if (newValue < 1)
+                    newValue = 1;
+                if (newValue != prevValue)
+                    _cellFlagValues[row, column] = newValue;
+                EditorGUILayout.EndHorizontal();
+            }
+            else if (isColorTable && IsCarryBlockJamGrid())
+            {
+                _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
+                    _cellColors[row, column],
+                    includeNone: true,
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
             }
             else
             {
-                // Tunnel yönü dropdown'u.
-                _cellDirections[row, column] = (CellDirection)EditorGUILayout.EnumPopup(
-                    _cellDirections[row, column],
-                    GUILayout.Width(70f));
-            }
-
-            // Ice cell: unlock moves for frozen CarryBlockJam plates.
-            if ((flags & LevelCellFlag.Ice) == LevelCellFlag.Ice)
-            {
-                bool isCarryBlockJamGrid = _levelData != null &&
-                    _levelData.mechanicType == PuzzleMechanicType.Grid;
-                if (isCarryBlockJamGrid)
-                    EditorGUILayout.LabelField("Unlock Moves", EditorStyles.miniLabel);
-
-                int prevValue = _cellFlagValues[row, column];
-                int newValue = EditorGUILayout.IntField(prevValue, GUILayout.Width(70f));
-                if (newValue < 1) newValue = 1;
-                if (newValue != prevValue)
-                    _cellFlagValues[row, column] = newValue;
+                    _cellColors[row, column] = DrawGridCellColorPopup(
+                    _cellColors[row, column]);
             }
 
             GUILayout.EndVertical();
@@ -352,29 +378,21 @@ namespace GAITemplate.Editor
             return _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid;
         }
 
-        private PieceColorType DrawGridCellColorPopup(PieceColorType current, LevelCellFlag flags)
+        private PieceColorType DrawGridCellColorPopup(PieceColorType current)
         {
             if (!IsCarryBlockJamGrid())
-                return (PieceColorType)EditorGUILayout.EnumPopup(current, GUILayout.Width(70f));
-
-            // Hidden / Ice cell colors paint plate materials (plate runtime).
-            // Color Table uses a dedicated Accept Color picker in DrawCell.
-            bool isSpecialPlateCell =
-                (flags & LevelCellFlag.Hidden) != 0 ||
-                (flags & LevelCellFlag.Ice) != 0;
-
-            if (isSpecialPlateCell)
             {
-                return PlateColorEditorUtility.DrawPopupNoLabel(
+                return (PieceColorType)EditorGUILayout.EnumPopup(
                     current,
-                    includeNone: true,
-                    GUILayout.Width(70f));
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
             }
 
             return PlateColorEditorUtility.DrawPopupNoLabel(
                 current,
                 includeNone: true,
-                GUILayout.Width(70f));
+                GUILayout.Width(64f),
+                GUILayout.Height(16f));
         }
 
         private void DrawTunnelPiecesSection()
