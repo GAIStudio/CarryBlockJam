@@ -16,23 +16,47 @@ MonoBehaviour:
   gridRows: 13
   gridColumns: 9
   colorCells:
-  - row: 4
-    column: 2
-    color: 0
-    flag: 1
+  - row: 2
+    column: 4
+    color: 1
+    flag: 0
     flagValue: 0
     direction: 0
     tunnelPieces: 
     secondaryColor: 0
   - row: 4
+    column: 1
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 5
+    color: 2
+    flag: 2
+    flagValue: 3
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 6
+    color: 4
+    flag: 2
+    flagValue: 3
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
     column: 3
-    color: 0
+    color: 2
     flag: 1
     flagValue: 0
     direction: 0
     tunnelPieces: 
     secondaryColor: 0
-  - row: 4
+  - row: 5
     column: 4
     color: 1
     flag: 1
@@ -40,10 +64,10 @@ MonoBehaviour:
     direction: 0
     tunnelPieces: 
     secondaryColor: 0
-  - row: 6
+  - row: 5
     column: 8
     color: 1
-    flag: 1
+    flag: 0
     flagValue: 0
     direction: 0
     tunnelPieces: 
@@ -71,9 +95,9 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 1
-        requiredPlateCount: 9
+        requiredPlateCount: 2
       - color: 3
-        requiredPlateCount: 9
+        requiredPlateCount: 2
     - row: 0
       column: 4
       side: 0
@@ -84,7 +108,7 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 3
-        requiredPlateCount: 9
+        requiredPlateCount: 2
     - row: 12
       column: 1
       side: 1
@@ -95,7 +119,7 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 6
-        requiredPlateCount: 9
+        requiredPlateCount: 2
     - row: 7
       column: 8
       side: 3
@@ -106,9 +130,9 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 4
-        requiredPlateCount: 9
+        requiredPlateCount: 2
       - color: 1
-        requiredPlateCount: 9
+        requiredPlateCount: 2
     disableAutoTables: 1
     tablePlacements:
     - color: 0

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -93,6 +94,8 @@ namespace GAITemplate.Editor
             GUILayout.Space(10f);
             DrawGridSettings();
             GUILayout.Space(8f);
+            DrawPlateGateBalanceSummary();
+            GUILayout.Space(8f);
             DrawTunnelPiecesSection();
             GUILayout.Space(8f);
             DrawCarryBlockJamSection();
@@ -178,7 +181,14 @@ namespace GAITemplate.Editor
             GUILayout.Space(6f);
             DrawToolbar();
             GUILayout.Space(6f);
+            EditorGUI.BeginChangeCheck();
             DrawColorGrid(isSlide);
+            if (EditorGUI.EndChangeCheck() && IsCarryBlockJamGrid())
+            {
+                SyncPlatePlacementsFromGrid();
+                EditorUtility.SetDirty(_levelData);
+                RequestScenePreviewRefresh();
+            }
         }
 
         // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -204,12 +214,16 @@ namespace GAITemplate.Editor
 
             string hint = _activeTool switch
             {
+                CellTool.None when IsCarryBlockJamGrid() =>
+                    "Normal plates: pick a color under a cell (no Hidden/Ice/Color Table flag). " +
+                    "Click the cell with None tool to clear special flags and keep it as a normal plate. " +
+                    "Set color to None to remove the plate.",
                 CellTool.None => "Cell'e tıklayınca üzerindeki tüm flag'ler temizlenir. Renk dropdown'la seçilir.",
                 CellTool.Hidden when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Hidden cell + color spawns a hidden CarryBlockJam plate at that cell. " +
                     "It reveals when every plate on surrounding cells (including diagonals) is collected.",
                 CellTool.Ice when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
-                    "Ice cell + color spawns a frozen CarryBlockJam plate. Set unlock moves below the cell. " +
+                    "Ice cell + color spawns a frozen CarryBlockJam plate. Set unlock moves in the small field next to the color. " +
                     "Each collected plate counts down until the ice melts and the plate can be picked up.",
                 CellTool.Curtain when _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid =>
                     "Color Table cell: set Accept Color. Spawns a table that only accepts plates of that color. " +
@@ -257,10 +271,14 @@ namespace GAITemplate.Editor
 
         private void DrawCell(int row, int column)
         {
-            GUILayout.BeginVertical(GUILayout.Width(70f));
+            // Keep each cell column narrow and short so Ice/Color-Table extras
+            // do not open large gaps between grid rows.
+            GUILayout.BeginVertical(GUILayout.Width(64f));
 
             LevelCellFlag flags = _cellFlags[row, column];
             bool isTunnel = (flags & LevelCellFlag.Tunnel) == LevelCellFlag.Tunnel;
+            bool isIce = (flags & LevelCellFlag.Ice) == LevelCellFlag.Ice;
+            bool isColorTable = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
 
             Rect rect = GUILayoutUtility.GetRect(40f, 40f, GUILayout.Width(40f), GUILayout.Height(40f));
 
@@ -292,55 +310,85 @@ namespace GAITemplate.Editor
                 $"[{row},{column}]",
                 coordStyle);
 
-            // Flag overlay etiketleri (bitmask birleşik gösterimi: "H", "HI", "IT", "HIT" vb).
-            if (flags != LevelCellFlag.None)
+            // Overlay: special flags (H/I/C/T) or "P" for a normal painted plate.
+            string overlayLabel = GetFlagsShortLabel(flags);
+            if (string.IsNullOrEmpty(overlayLabel) &&
+                IsCarryBlockJamGrid() &&
+                PieceColorPalette.IsPaintable(_cellColors[row, column]))
+            {
+                overlayLabel = "P";
+            }
+
+            if (!string.IsNullOrEmpty(overlayLabel))
             {
                 var labelStyle = new GUIStyle(EditorStyles.boldLabel)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = Color.white },
                 };
-                EditorGUI.LabelField(rect, GetFlagsShortLabel(flags), labelStyle);
+                EditorGUI.LabelField(rect, overlayLabel, labelStyle);
             }
 
-            // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
-            if (!isTunnel)
+            // Ice unlock count on the cell (bottom-right) so it does not need a
+            // separate tall "Unlock Moves" label under the grid.
+            if (isIce && IsCarryBlockJamGrid())
             {
-                bool isColorTable = (flags & LevelCellFlag.Curtain) == LevelCellFlag.Curtain;
-                if (isColorTable && IsCarryBlockJamGrid())
+                var unlockStyle = new GUIStyle(EditorStyles.miniBoldLabel)
                 {
-                    EditorGUILayout.LabelField("Accept", EditorStyles.miniLabel);
-                    _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
-                        _cellColors[row, column],
-                        includeNone: true,
-                        GUILayout.Width(70f));
-                }
-                else
-                {
-                    _cellColors[row, column] = DrawGridCellColorPopup(_cellColors[row, column], flags);
-                }
+                    alignment = TextAnchor.LowerRight,
+                    normal = { textColor = Color.white },
+                    fontSize = 10,
+                };
+                EditorGUI.LabelField(
+                    new Rect(rect.x, rect.yMax - 14f, rect.width - 2f, 14f),
+                    _cellFlagValues[row, column].ToString(),
+                    unlockStyle);
+            }
+
+            GUILayout.Space(1f);
+
+            // Tunnel cell renk gerektirmez (orada tunnel objesi spawn olur, piece değil).
+            if (isTunnel)
+            {
+                _cellDirections[row, column] = (CellDirection)EditorGUILayout.EnumPopup(
+                    _cellDirections[row, column],
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
+            }
+            else if (isIce && IsCarryBlockJamGrid())
+            {
+                // One compact row: color + unlock moves (no extra label line).
+                EditorGUILayout.BeginHorizontal(GUILayout.Width(64f), GUILayout.Height(16f));
+                _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
+                    _cellColors[row, column],
+                    includeNone: true,
+                    GUILayout.Width(40f),
+                    GUILayout.Height(16f));
+
+                int prevValue = _cellFlagValues[row, column];
+                int newValue = EditorGUILayout.IntField(
+                    new GUIContent(string.Empty, "Unlock moves"),
+                    prevValue,
+                    GUILayout.Width(22f),
+                    GUILayout.Height(16f));
+                if (newValue < 1)
+                    newValue = 1;
+                if (newValue != prevValue)
+                    _cellFlagValues[row, column] = newValue;
+                EditorGUILayout.EndHorizontal();
+            }
+            else if (isColorTable && IsCarryBlockJamGrid())
+            {
+                _cellColors[row, column] = PlateColorEditorUtility.DrawPopupNoLabel(
+                    _cellColors[row, column],
+                    includeNone: true,
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
             }
             else
             {
-                // Tunnel yönü dropdown'u.
-                _cellDirections[row, column] = (CellDirection)EditorGUILayout.EnumPopup(
-                    _cellDirections[row, column],
-                    GUILayout.Width(70f));
-            }
-
-            // Ice cell: unlock moves for frozen CarryBlockJam plates.
-            if ((flags & LevelCellFlag.Ice) == LevelCellFlag.Ice)
-            {
-                bool isCarryBlockJamGrid = _levelData != null &&
-                    _levelData.mechanicType == PuzzleMechanicType.Grid;
-                if (isCarryBlockJamGrid)
-                    EditorGUILayout.LabelField("Unlock Moves", EditorStyles.miniLabel);
-
-                int prevValue = _cellFlagValues[row, column];
-                int newValue = EditorGUILayout.IntField(prevValue, GUILayout.Width(70f));
-                if (newValue < 1) newValue = 1;
-                if (newValue != prevValue)
-                    _cellFlagValues[row, column] = newValue;
+                    _cellColors[row, column] = DrawGridCellColorPopup(
+                    _cellColors[row, column]);
             }
 
             GUILayout.EndVertical();
@@ -351,29 +399,21 @@ namespace GAITemplate.Editor
             return _levelData != null && _levelData.mechanicType == PuzzleMechanicType.Grid;
         }
 
-        private PieceColorType DrawGridCellColorPopup(PieceColorType current, LevelCellFlag flags)
+        private PieceColorType DrawGridCellColorPopup(PieceColorType current)
         {
             if (!IsCarryBlockJamGrid())
-                return (PieceColorType)EditorGUILayout.EnumPopup(current, GUILayout.Width(70f));
-
-            // Hidden / Ice cell colors paint plate materials (plate runtime).
-            // Color Table uses a dedicated Accept Color picker in DrawCell.
-            bool isSpecialPlateCell =
-                (flags & LevelCellFlag.Hidden) != 0 ||
-                (flags & LevelCellFlag.Ice) != 0;
-
-            if (isSpecialPlateCell)
             {
-                return PlateColorEditorUtility.DrawPopupNoLabel(
+                return (PieceColorType)EditorGUILayout.EnumPopup(
                     current,
-                    includeNone: true,
-                    GUILayout.Width(70f));
+                    GUILayout.Width(64f),
+                    GUILayout.Height(16f));
             }
 
             return PlateColorEditorUtility.DrawPopupNoLabel(
                 current,
                 includeNone: true,
-                GUILayout.Width(70f));
+                GUILayout.Width(64f),
+                GUILayout.Height(16f));
         }
 
         private void DrawTunnelPiecesSection()
@@ -453,6 +493,12 @@ namespace GAITemplate.Editor
             {
                 _cellFlags[row, column]      = LevelCellFlag.None;
                 _cellFlagValues[row, column] = 0;
+                if (IsCarryBlockJamGrid())
+                {
+                    SyncPlatePlacementsFromGrid();
+                    EditorUtility.SetDirty(_levelData);
+                    RequestScenePreviewRefresh();
+                }
                 return;
             }
 
@@ -497,6 +543,13 @@ namespace GAITemplate.Editor
                 // Plate flags clear Color Table on the same cell.
                 if (bit == LevelCellFlag.Hidden || bit == LevelCellFlag.Ice)
                     _cellFlags[row, column] &= ~LevelCellFlag.Curtain;
+            }
+
+            if (IsCarryBlockJamGrid())
+            {
+                SyncPlatePlacementsFromGrid();
+                EditorUtility.SetDirty(_levelData);
+                RequestScenePreviewRefresh();
             }
         }
 
@@ -627,8 +680,9 @@ namespace GAITemplate.Editor
             EditorGUILayout.Space(6f);
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
             EditorGUILayout.HelpBox(
+                "Normal plates: paint None + color on the grid, or use Plate Placements (row/column) below. " +
                 "Frozen ice and Color Table badge look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
-                "In Level Creator paint Ice cells (unlock moves) or Color Table cells (Accept Color).",
+                "Paint Ice cells (unlock moves) or Color Table cells (Accept Color).",
                 MessageType.None);
             EditorGUILayout.Space(6f);
 
@@ -644,9 +698,22 @@ namespace GAITemplate.Editor
                 carryBlockJamProperty.FindPropertyRelative("stickmanSpawnMode");
             SerializedProperty fixedStickmanCellProperty =
                 carryBlockJamProperty.FindPropertyRelative("fixedStickmanCell");
+            SerializedProperty platePlacementsProperty =
+                carryBlockJamProperty.FindPropertyRelative("platePlacements");
 
             DrawStickmanSpawnSettings(stickmanSpawnModeProperty, fixedStickmanCellProperty);
             EditorGUILayout.Space(6f);
+
+            if (platePlacementsProperty != null)
+            {
+                EditorGUILayout.LabelField("Plate Placements", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "Existing levels use this list (row / column / color / count). " +
+                    "Edits here paint onto the grid; grid None+color cells sync back into this list on Save.",
+                    MessageType.None);
+                EditorGUILayout.PropertyField(platePlacementsProperty, true);
+                EditorGUILayout.Space(6f);
+            }
 
             DrawCarryBlockJamSettingsWithoutFrozenVisual(
                 carryBlockJamProperty,
@@ -655,19 +722,19 @@ namespace GAITemplate.Editor
                 timeLimitProperty,
                 disableAutoTablesProperty,
                 stickmanSpawnModeProperty,
-                fixedStickmanCellProperty);
+                fixedStickmanCellProperty,
+                platePlacementsProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
             if (changed)
             {
                 _levelDataSo.ApplyModifiedProperties();
+                // List edits (row/column) drive the grid — do not rebuild the list from the grid here.
+                if (IsCarryBlockJamGrid())
+                    ApplyPlatePlacementsToGrid();
                 EditorUtility.SetDirty(_levelData);
                 RequestScenePreviewRefresh();
-            }
-            else
-            {
-                _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
             }
         }
 
@@ -720,9 +787,9 @@ namespace GAITemplate.Editor
             EditorGUILayout.HelpBox(
                 noAuto
                     ? "Auto table generation is off. Use tablePlacements or Color Table cells for tables. " +
-                      "Hidden / Ice cells spawn plates."
+                      "Paint normal plates on the grid with None + color. Hidden / Ice cells spawn special plates."
                     : "By default, missing tables are auto-generated to match exits. " +
-                      "Use tablePlacements for manual tables. " +
+                      "Paint normal plates on the grid with None + color. " +
                       "Hidden plates reveal when surrounding plates are collected. " +
                       "Frozen plates unlock after N collected plates. " +
                       "Color Table cells spawn a table that only accepts plates of the Accept Color.",
@@ -780,7 +847,8 @@ namespace GAITemplate.Editor
             SerializedProperty timeLimitProperty = null,
             SerializedProperty disableAutoTablesProperty = null,
             SerializedProperty stickmanSpawnModeProperty = null,
-            SerializedProperty fixedStickmanCellProperty = null)
+            SerializedProperty fixedStickmanCellProperty = null,
+            SerializedProperty platePlacementsProperty = null)
         {
             if (carryBlockJamProperty == null)
                 return;
@@ -806,9 +874,372 @@ namespace GAITemplate.Editor
                 if (fixedStickmanCellProperty != null &&
                     iterator.propertyPath == fixedStickmanCellProperty.propertyPath)
                     continue;
+                // Normal plates are also drawn above via Plate Placements (row/column).
+                // Skip the auto iterator copy so we do not show the list twice.
+                if (platePlacementsProperty != null &&
+                    iterator.propertyPath == platePlacementsProperty.propertyPath)
+                    continue;
 
                 EditorGUILayout.PropertyField(iterator, true);
             }
+        }
+
+        private void DrawPlateGateBalanceSummary()
+        {
+            if (!IsCarryBlockJamGrid() || _levelData?.carryBlockJam == null)
+                return;
+
+            // Flush pending CarryBlockJam inspector edits so gate totals stay current.
+            if (_levelDataSo != null && _levelDataSo.targetObject == _levelData)
+                _levelDataSo.ApplyModifiedProperties();
+
+            EnsureGridSizes();
+
+            var manualByColor = new Dictionary<PieceColorType, int>();
+            var hiddenByColor = new Dictionary<PieceColorType, int>();
+            var frozenByColor = new Dictionary<PieceColorType, int>();
+            var curtainByColor = new Dictionary<PieceColorType, int>();
+            var gridPlateByColor = new Dictionary<PieceColorType, int>();
+            var authoredPlateByColor = new Dictionary<PieceColorType, int>();
+            var autoByColor = new Dictionary<PieceColorType, int>();
+            var gateByColor = new Dictionary<PieceColorType, int>();
+            var manualCells = new Dictionary<Vector2Int, PieceColorType>();
+
+            // Live grid None+color cells are normal plates (platePlacements is synced from these).
+            CountNormalGridPlates(manualByColor, manualCells);
+
+            int invalidHidden = 0;
+            int invalidFrozen = 0;
+            int invalidCurtain = 0;
+            CountLiveGridMechanics(
+                manualByColor,
+                manualCells,
+                hiddenByColor,
+                frozenByColor,
+                curtainByColor,
+                gridPlateByColor,
+                authoredPlateByColor,
+                ref invalidHidden,
+                ref invalidFrozen,
+                ref invalidCurtain);
+            CountGateRequirements(_levelData.carryBlockJam.exits, gateByColor);
+
+            // Runtime only auto-fills when no normal/grid plates are authored yet.
+            bool usesAutoGeneration = SumCounts(authoredPlateByColor) == 0;
+            if (usesAutoGeneration)
+            {
+                foreach (KeyValuePair<PieceColorType, int> entry in gateByColor)
+                {
+                    authoredPlateByColor.TryGetValue(entry.Key, out int authored);
+                    int autoCount = Mathf.Max(0, entry.Value - authored);
+                    if (autoCount > 0)
+                        autoByColor[entry.Key] = autoCount;
+                }
+            }
+
+            var expectedPlateByColor = new Dictionary<PieceColorType, int>(authoredPlateByColor);
+            foreach (KeyValuePair<PieceColorType, int> entry in autoByColor)
+                AddColorCount(expectedPlateByColor, entry.Key, entry.Value);
+
+            int manualTotal = SumCounts(manualByColor);
+            int hiddenTotal = SumCounts(hiddenByColor);
+            int frozenTotal = SumCounts(frozenByColor);
+            int curtainTotal = SumCounts(curtainByColor);
+            int gridPlateTotal = SumCounts(gridPlateByColor);
+            int autoTotal = SumCounts(autoByColor);
+            int authoredPlateTotal = SumCounts(authoredPlateByColor);
+            int expectedPlateTotal = SumCounts(expectedPlateByColor);
+            int gateTotal = SumCounts(gateByColor);
+
+            List<PieceColorType> colors = CollectSortedColors(
+                manualByColor,
+                hiddenByColor,
+                frozenByColor,
+                curtainByColor,
+                autoByColor,
+                gateByColor);
+
+            EditorGUILayout.LabelField("Plate / Gate Balance", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.LabelField("Sources", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField(
+                $"Normal plates: {manualTotal}   |   Grid plates (Hidden/Frozen): {gridPlateTotal}");
+            EditorGUILayout.LabelField(
+                $"Hidden cells: {hiddenTotal}   |   Frozen cells: {frozenTotal}   |   Curtain tables: {curtainTotal}");
+            EditorGUILayout.LabelField(
+                usesAutoGeneration
+                    ? $"Auto-generated plates (fill remaining gate labels): {autoTotal}"
+                    : "Auto-generated plates: 0 (disabled while grid plates are authored)");
+
+            MessageType totalMessageType = expectedPlateTotal == gateTotal
+                ? MessageType.Info
+                : MessageType.Error;
+            EditorGUILayout.HelpBox(
+                $"Expected plates: {expectedPlateTotal} " +
+                $"(authored {authoredPlateTotal} + auto {autoTotal})   |   " +
+                $"Gate labels: {gateTotal}   |   {FormatMatchStatus(expectedPlateTotal, gateTotal)}",
+                totalMessageType);
+
+            if (colors.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No authored plates, grid mechanics, or gate goals were found.",
+                    MessageType.Warning);
+            }
+            else
+            {
+                EditorGUILayout.Space(4f);
+                EditorGUILayout.LabelField("Per Color", EditorStyles.miniBoldLabel);
+                for (int i = 0; i < colors.Count; i++)
+                {
+                    PieceColorType color = colors[i];
+                    manualByColor.TryGetValue(color, out int manual);
+                    hiddenByColor.TryGetValue(color, out int hidden);
+                    frozenByColor.TryGetValue(color, out int frozen);
+                    curtainByColor.TryGetValue(color, out int curtain);
+                    gridPlateByColor.TryGetValue(color, out int gridPlates);
+                    autoByColor.TryGetValue(color, out int auto);
+                    expectedPlateByColor.TryGetValue(color, out int expected);
+                    gateByColor.TryGetValue(color, out int gates);
+
+                    int difference = expected - gates;
+                    MessageType messageType = difference == 0
+                        ? MessageType.Info
+                        : difference < 0
+                            ? MessageType.Error
+                            : MessageType.Warning;
+
+                    EditorGUILayout.HelpBox(
+                        $"{color}: plates {expected} = manual {manual} + grid {gridPlates} " +
+                        $"(H{hidden}/F{frozen}) + auto {auto}   |   " +
+                        $"gate labels {gates}   |   curtain tables {curtain}   |   " +
+                        $"{FormatMatchStatus(expected, gates)}",
+                        messageType);
+                }
+            }
+
+            if (invalidHidden > 0 || invalidFrozen > 0 || invalidCurtain > 0)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Cells missing a color (will not spawn): " +
+                    $"Hidden {invalidHidden}, Frozen {invalidFrozen}, Curtain {invalidCurtain}.",
+                    MessageType.Warning);
+            }
+
+            if (usesAutoGeneration)
+            {
+                EditorGUILayout.HelpBox(
+                    "No normal/Hidden/Frozen plates are painted yet, so runtime may fill remaining gate labels with auto plates.",
+                    MessageType.None);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "Paint normal plates with None + color on the grid. Hidden/Ice still add their own plates.",
+                    MessageType.None);
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void CountNormalGridPlates(
+            Dictionary<PieceColorType, int> counts,
+            Dictionary<Vector2Int, PieceColorType> occupiedCells)
+        {
+            if (_cellColors == null || _cellFlags == null)
+                return;
+
+            int rows = Mathf.Min(_rows, _cellColors.GetLength(0));
+            int columns = Mathf.Min(_columns, _cellColors.GetLength(1));
+            for (int row = 0; row < rows; row++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    LevelCellFlag flags = _cellFlags[row, column];
+                    if ((flags & (LevelCellFlag.Hidden |
+                                  LevelCellFlag.Ice |
+                                  LevelCellFlag.Curtain |
+                                  LevelCellFlag.Tunnel)) != 0)
+                        continue;
+
+                    PieceColorType color = _cellColors[row, column];
+                    if (!PieceColorPalette.IsPaintable(color))
+                        continue;
+
+                    AddColorCount(counts, color, 1);
+                    if (occupiedCells != null)
+                        occupiedCells[new Vector2Int(row, column)] = color;
+                }
+            }
+        }
+
+        private void CountLiveGridMechanics(
+            Dictionary<PieceColorType, int> manualByColor,
+            Dictionary<Vector2Int, PieceColorType> manualCells,
+            Dictionary<PieceColorType, int> hiddenByColor,
+            Dictionary<PieceColorType, int> frozenByColor,
+            Dictionary<PieceColorType, int> curtainByColor,
+            Dictionary<PieceColorType, int> gridPlateByColor,
+            Dictionary<PieceColorType, int> authoredPlateByColor,
+            ref int invalidHidden,
+            ref int invalidFrozen,
+            ref int invalidCurtain)
+        {
+            if (manualByColor != null)
+            {
+                foreach (KeyValuePair<PieceColorType, int> entry in manualByColor)
+                    AddColorCount(authoredPlateByColor, entry.Key, entry.Value);
+            }
+
+            if (_cellColors == null || _cellFlags == null)
+                return;
+
+            int rows = Mathf.Min(_rows, _cellColors.GetLength(0));
+            int columns = Mathf.Min(_columns, _cellColors.GetLength(1));
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    LevelCellFlag flags = _cellFlags[row, column];
+                    PieceColorType color = _cellColors[row, column];
+                    var cell = new Vector2Int(row, column);
+                    PieceColorType manualColor = PieceColorType.None;
+                    bool hasManualPlate = manualCells != null &&
+                                          manualCells.TryGetValue(cell, out manualColor);
+                    bool isPaintable = PieceColorPalette.IsPaintable(color);
+
+                    if ((flags & LevelCellFlag.Hidden) != 0)
+                    {
+                        if (isPaintable)
+                            AddColorCount(hiddenByColor, color, 1);
+                        else if (hasManualPlate && PieceColorPalette.IsPaintable(manualColor))
+                            AddColorCount(hiddenByColor, manualColor, 1);
+                        else
+                            invalidHidden++;
+                    }
+
+                    if ((flags & LevelCellFlag.Ice) != 0)
+                    {
+                        if (isPaintable)
+                            AddColorCount(frozenByColor, color, 1);
+                        else if (hasManualPlate && PieceColorPalette.IsPaintable(manualColor))
+                            AddColorCount(frozenByColor, manualColor, 1);
+                        else
+                            invalidFrozen++;
+                    }
+
+                    if ((flags & LevelCellFlag.Curtain) != 0)
+                    {
+                        PieceColorType acceptColor = isPaintable
+                            ? color
+                            : (_cellSecondaryColors != null
+                                ? _cellSecondaryColors[row, column]
+                                : PieceColorType.None);
+                        if (PieceColorPalette.IsPaintable(acceptColor))
+                            AddColorCount(curtainByColor, acceptColor, 1);
+                        else
+                            invalidCurtain++;
+                    }
+
+                    // Hidden/Ice spawn an extra plate only when the cell has no manual placement.
+                    bool spawnsFlagPlate =
+                        !hasManualPlate &&
+                        isPaintable &&
+                        ((flags & (LevelCellFlag.Hidden | LevelCellFlag.Ice)) != 0);
+                    if (spawnsFlagPlate)
+                    {
+                        AddColorCount(gridPlateByColor, color, 1);
+                        AddColorCount(authoredPlateByColor, color, 1);
+                    }
+                }
+            }
+        }
+
+        private static void CountGateRequirements(
+            List<CarryBlockJamExitDefinition> exits,
+            Dictionary<PieceColorType, int> counts)
+        {
+            if (exits == null)
+                return;
+
+            for (int exitIndex = 0; exitIndex < exits.Count; exitIndex++)
+            {
+                CarryBlockJamExitDefinition exit = exits[exitIndex];
+                if (exit?.goals == null)
+                    continue;
+
+                for (int goalIndex = 0; goalIndex < exit.goals.Count; goalIndex++)
+                {
+                    CarryBlockJamExitGoal goal = exit.goals[goalIndex];
+                    if (goal == null)
+                        continue;
+
+                    AddColorCount(
+                        counts,
+                        goal.color,
+                        Mathf.Max(1, goal.requiredPlateCount));
+                }
+            }
+        }
+
+        private static List<PieceColorType> CollectSortedColors(
+            params Dictionary<PieceColorType, int>[] sources)
+        {
+            var colors = new List<PieceColorType>();
+            if (sources == null)
+                return colors;
+
+            for (int sourceIndex = 0; sourceIndex < sources.Length; sourceIndex++)
+            {
+                Dictionary<PieceColorType, int> source = sources[sourceIndex];
+                if (source == null)
+                    continue;
+
+                foreach (PieceColorType color in source.Keys)
+                {
+                    if (!colors.Contains(color))
+                        colors.Add(color);
+                }
+            }
+
+            colors.Sort((left, right) => ((int)left).CompareTo((int)right));
+            return colors;
+        }
+
+        private static string FormatMatchStatus(int plates, int gateLabels)
+        {
+            if (plates == gateLabels)
+                return "MATCH";
+            return plates < gateLabels
+                ? $"SHORT BY {gateLabels - plates}"
+                : $"EXTRA {plates - gateLabels}";
+        }
+
+        private static void AddColorCount(
+            Dictionary<PieceColorType, int> counts,
+            PieceColorType color,
+            int amount)
+        {
+            if (counts == null ||
+                amount <= 0 ||
+                !PieceColorPalette.IsPaintable(color))
+                return;
+
+            counts.TryGetValue(color, out int current);
+            counts[color] = current + amount;
+        }
+
+        private static int SumCounts(Dictionary<PieceColorType, int> counts)
+        {
+            int total = 0;
+            if (counts == null)
+                return total;
+
+            foreach (int count in counts.Values)
+                total += count;
+            return total;
         }
 
         // Return true → caller bu stage'i listeden silmeli.
@@ -1079,6 +1510,107 @@ namespace GAITemplate.Editor
                     _columns);
                 EditorUtility.SetDirty(_levelData);
             }
+
+            // Legacy / list-authored plates appear as normal grid colors (None tool).
+            ApplyPlatePlacementsToGrid();
+        }
+
+        /// <summary>
+        /// Paints platePlacements onto the color grid so designers edit them visually.
+        /// Does not overwrite Hidden / Ice / Color Table / Tunnel cell colors.
+        /// </summary>
+        private void ApplyPlatePlacementsToGrid()
+        {
+            if (!IsCarryBlockJamGrid() ||
+                _levelData?.carryBlockJam?.platePlacements == null ||
+                _cellColors == null ||
+                _cellFlags == null)
+                return;
+
+            List<CarryBlockJamPlatePlacement> placements = _levelData.carryBlockJam.platePlacements;
+            for (int i = 0; i < placements.Count; i++)
+            {
+                CarryBlockJamPlatePlacement placement = placements[i];
+                if (placement == null ||
+                    !PieceColorPalette.IsPaintable(placement.color) ||
+                    placement.row < 0 ||
+                    placement.row >= _rows ||
+                    placement.column < 0 ||
+                    placement.column >= _columns)
+                    continue;
+
+                LevelCellFlag flags = _cellFlags[placement.row, placement.column];
+                if ((flags & (LevelCellFlag.Hidden |
+                              LevelCellFlag.Ice |
+                              LevelCellFlag.Curtain |
+                              LevelCellFlag.Tunnel)) != 0)
+                    continue;
+
+                _cellColors[placement.row, placement.column] = placement.color;
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds platePlacements from None-flag grid cells that have a plate color.
+        /// Hidden / Ice / Color Table / Tunnel cells are not written here.
+        /// </summary>
+        private void SyncPlatePlacementsFromGrid()
+        {
+            if (!IsCarryBlockJamGrid() || _levelData?.carryBlockJam == null)
+                return;
+
+            EnsureGridSizes();
+
+            var previousCounts = new Dictionary<Vector2Int, int>();
+            List<CarryBlockJamPlatePlacement> existing = _levelData.carryBlockJam.platePlacements;
+            if (existing != null)
+            {
+                for (int i = 0; i < existing.Count; i++)
+                {
+                    CarryBlockJamPlatePlacement placement = existing[i];
+                    if (placement == null)
+                        continue;
+
+                    previousCounts[new Vector2Int(placement.row, placement.column)] =
+                        Mathf.Max(1, placement.count);
+                }
+            }
+
+            var synced = new List<CarryBlockJamPlatePlacement>();
+            for (int row = 0; row < _rows; row++)
+            {
+                for (int column = 0; column < _columns; column++)
+                {
+                    LevelCellFlag flags = _cellFlags[row, column];
+                    if ((flags & (LevelCellFlag.Hidden |
+                                  LevelCellFlag.Ice |
+                                  LevelCellFlag.Curtain |
+                                  LevelCellFlag.Tunnel)) != 0)
+                        continue;
+
+                    PieceColorType color = _cellColors[row, column];
+                    if (!PieceColorPalette.IsPaintable(color))
+                        continue;
+
+                    var cell = new Vector2Int(row, column);
+                    int count = previousCounts.TryGetValue(cell, out int previousCount)
+                        ? previousCount
+                        : 1;
+
+                    synced.Add(new CarryBlockJamPlatePlacement
+                    {
+                        color = color,
+                        row = row,
+                        column = column,
+                        count = count,
+                    });
+                }
+            }
+
+            _levelData.carryBlockJam.platePlacements = synced;
+            EditorUtility.SetDirty(_levelData);
+            if (_levelDataSo != null && _levelDataSo.targetObject == _levelData)
+                _levelDataSo.Update();
         }
 
         private void EnsureGridSizes()
@@ -1166,6 +1698,8 @@ namespace GAITemplate.Editor
                     _cellTunnelPieces[row, column]?.Clear();
                 }
             }
+            if (IsCarryBlockJamGrid())
+                SyncPlatePlacementsFromGrid();
             Repaint();
         }
 
@@ -1175,18 +1709,27 @@ namespace GAITemplate.Editor
                 return;
 
             EnsureGridSizes();
+
+            // Flush pending SerializedObject edits BEFORE writing grid/plates.
+            // Calling Update() first would discard those edits and could restore a
+            // stale platePlacements list over the grid sync.
+            if (_levelDataSo == null || _levelDataSo.targetObject != _levelData)
+                _levelDataSo = new SerializedObject(_levelData);
+            _levelDataSo.ApplyModifiedProperties();
+
+            if (IsCarryBlockJamGrid())
+                SyncPlatePlacementsFromGrid();
+
             LevelCreatorUtility.WriteGridToLevel(_levelData, _rows, _columns,
                 _cellColors, _cellFlags, _cellFlagValues, _cellDirections, _cellTunnelPieces,
                 _cellSecondaryColors);
 
-            if (_levelDataSo != null)
-            {
-                _levelDataSo.Update();
-                _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
-            }
-
             EditorUtility.SetDirty(_levelData);
             AssetDatabase.SaveAssets();
+
+            // Refresh the SerializedObject from the saved asset; do not Apply afterward.
+            _levelDataSo.Update();
+
             RefreshCarryBlockJamScenePreview();
             SaveDirtyGameplayScenes();
             Debug.Log(
@@ -1196,6 +1739,8 @@ namespace GAITemplate.Editor
 
         private void ApplyToScene()
         {
+            if (IsCarryBlockJamGrid())
+                SyncPlatePlacementsFromGrid();
             SyncPreviewGridDimensions();
             EditorUtility.SetDirty(_levelData);
             if (CarryBlockJamSceneLevelApplicator.TryApply(_levelData, true, out string message))
@@ -1233,6 +1778,8 @@ namespace GAITemplate.Editor
             if (_levelData == null)
                 return;
 
+            if (IsCarryBlockJamGrid())
+                SyncPlatePlacementsFromGrid();
             SyncPreviewGridDimensions();
             if (CarryBlockJamSceneLevelApplicator.TryApply(_levelData, out _))
                 Repaint();

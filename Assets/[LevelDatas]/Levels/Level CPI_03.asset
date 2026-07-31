@@ -54,9 +54,9 @@ MonoBehaviour:
       - color: 23
         requiredPlateCount: 5
       - color: 21
-        requiredPlateCount: 5
+        requiredPlateCount: 9
       - color: 23
-        requiredPlateCount: 8
+        requiredPlateCount: 10
       - color: 21
         requiredPlateCount: 8
       - color: 23
@@ -81,9 +81,9 @@ MonoBehaviour:
       - color: 23
         requiredPlateCount: 5
       - color: 21
-        requiredPlateCount: 5
-      - color: 23
         requiredPlateCount: 8
+      - color: 23
+        requiredPlateCount: 10
       - color: 21
         requiredPlateCount: 7
       - color: 23
@@ -125,7 +125,7 @@ MonoBehaviour:
       row: 3
       column: 4
       count: 0
-    - color: 21
+    - color: 23
       row: 3
       column: 3
       count: 0
@@ -205,7 +205,7 @@ MonoBehaviour:
       row: 1
       column: 3
       count: 0
-    - color: 21
+    - color: 23
       row: 2
       column: 2
       count: 0
@@ -465,7 +465,7 @@ MonoBehaviour:
       row: 9
       column: 7
       count: 0
-    - color: 21
+    - color: 23
       row: 8
       column: 0
       count: 0
@@ -477,11 +477,11 @@ MonoBehaviour:
       row: 10
       column: 2
       count: 0
-    - color: 23
+    - color: 21
       row: 8
       column: 8
       count: 0
-    - color: 23
+    - color: 21
       row: 10
       column: 6
       count: 0
@@ -489,7 +489,7 @@ MonoBehaviour:
       row: 0
       column: 6
       count: 0
-    - color: 23
+    - color: 21
       row: 0
       column: 0
       count: 0
@@ -555,6 +555,10 @@ MonoBehaviour:
       count: 0
     - color: 21
       row: 12
+      column: 8
+      count: 0
+    - color: 21
+      row: 6
       column: 8
       count: 0
     stickmanSpawnMode: 2
