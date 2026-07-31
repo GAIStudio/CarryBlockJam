@@ -135,139 +135,139 @@ MonoBehaviour:
     - color: 1
       row: 1
       column: 0
-      count: 0
+      count: 1
     - color: 1
       row: 1
       column: 1
-      count: 0
-    - color: 1
-      row: 2
-      column: 1
-      count: 0
-    - color: 1
-      row: 3
-      column: 1
-      count: 0
-    - color: 1
-      row: 3
-      column: 0
-      count: 0
-    - color: 6
-      row: 3
-      column: 3
-      count: 0
-    - color: 6
-      row: 2
-      column: 3
-      count: 0
-    - color: 6
-      row: 2
+      count: 1
+    - color: 2
+      row: 1
       column: 2
-      count: 0
-    - color: 6
-      row: 4
-      column: 2
-      count: 0
-    - color: 6
-      row: 4
-      column: 1
-      count: 0
-    - color: 6
-      row: 5
-      column: 3
-      count: 0
-    - color: 6
-      row: 6
-      column: 3
-      count: 0
+      count: 1
     - color: 2
       row: 1
       column: 3
-      count: 0
+      count: 1
     - color: 2
       row: 1
       column: 4
-      count: 0
+      count: 1
     - color: 2
       row: 1
       column: 5
-      count: 0
+      count: 1
+    - color: 1
+      row: 2
+      column: 1
+      count: 1
+    - color: 6
+      row: 2
+      column: 2
+      count: 1
+    - color: 6
+      row: 2
+      column: 3
+      count: 1
+    - color: 1
+      row: 3
+      column: 0
+      count: 1
+    - color: 1
+      row: 3
+      column: 1
+      count: 1
+    - color: 6
+      row: 3
+      column: 3
+      count: 1
+    - color: 2
+      row: 3
+      column: 4
+      count: 1
     - color: 2
       row: 3
       column: 5
-      count: 0
-    - color: 2
-      row: 3
-      column: 4
-      count: 0
-    - color: 2
-      row: 1
+      count: 1
+    - color: 1
+      row: 4
+      column: 0
+      count: 1
+    - color: 6
+      row: 4
+      column: 1
+      count: 1
+    - color: 6
+      row: 4
       column: 2
-      count: 0
-    - color: 4
-      row: 6
-      column: 4
-      count: 0
-    - color: 4
-      row: 7
-      column: 4
-      count: 0
-    - color: 4
-      row: 7
-      column: 3
-      count: 0
-    - color: 4
-      row: 5
-      column: 4
-      count: 0
+      count: 1
     - color: 4
       row: 4
       column: 4
-      count: 0
-    - color: 4
-      row: 7
-      column: 2
-      count: 0
-    - color: 3
-      row: 7
-      column: 1
-      count: 0
-    - color: 3
-      row: 6
-      column: 1
-      count: 0
-    - color: 3
-      row: 5
-      column: 1
-      count: 0
+      count: 1
     - color: 3
       row: 5
       column: 0
-      count: 0
+      count: 1
+    - color: 3
+      row: 5
+      column: 1
+      count: 1
+    - color: 6
+      row: 5
+      column: 3
+      count: 1
+    - color: 4
+      row: 5
+      column: 4
+      count: 1
+    - color: 3
+      row: 6
+      column: 1
+      count: 1
     - color: 3
       row: 6
       column: 2
-      count: 0
+      count: 1
+    - color: 6
+      row: 6
+      column: 3
+      count: 1
+    - color: 4
+      row: 6
+      column: 4
+      count: 1
+    - color: 3
+      row: 7
+      column: 1
+      count: 1
+    - color: 4
+      row: 7
+      column: 2
+      count: 1
+    - color: 4
+      row: 7
+      column: 3
+      count: 1
+    - color: 4
+      row: 7
+      column: 4
+      count: 1
     - color: 3
       row: 8
       column: 0
-      count: 0
-    - color: 4
-      row: 9
-      column: 3
-      count: 0
+      count: 1
     - color: 4
       row: 8
       column: 4
-      count: 0
+      count: 1
+    - color: 4
+      row: 9
+      column: 3
+      count: 1
     - color: 4
       row: 9
       column: 5
-      count: 0
-    - color: 1
-      row: 4
-      column: 0
-      count: 0
+      count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
       row: 0

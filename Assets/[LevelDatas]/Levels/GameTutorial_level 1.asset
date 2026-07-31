@@ -48,11 +48,7 @@ MonoBehaviour:
       column: 2
       count: 1
     - color: 1
-      row: 9
-      column: 5
-      count: 1
-    - color: 1
-      row: 9
+      row: 7
       column: 2
       count: 1
     - color: 1
@@ -60,8 +56,12 @@ MonoBehaviour:
       column: 5
       count: 1
     - color: 1
-      row: 7
+      row: 9
       column: 2
+      count: 1
+    - color: 1
+      row: 9
+      column: 5
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
