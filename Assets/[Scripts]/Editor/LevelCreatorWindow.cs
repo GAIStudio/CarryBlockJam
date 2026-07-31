@@ -719,12 +719,10 @@ namespace GAITemplate.Editor
             if (changed)
             {
                 _levelDataSo.ApplyModifiedProperties();
+                if (IsCarryBlockJamGrid())
+                    SyncPlatePlacementsFromGrid();
                 EditorUtility.SetDirty(_levelData);
                 RequestScenePreviewRefresh();
-            }
-            else
-            {
-                _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
             }
         }
 
@@ -877,6 +875,10 @@ namespace GAITemplate.Editor
         {
             if (!IsCarryBlockJamGrid() || _levelData?.carryBlockJam == null)
                 return;
+
+            // Flush pending CarryBlockJam inspector edits so gate totals stay current.
+            if (_levelDataSo != null && _levelDataSo.targetObject == _levelData)
+                _levelDataSo.ApplyModifiedProperties();
 
             EnsureGridSizes();
 
@@ -1593,6 +1595,7 @@ namespace GAITemplate.Editor
             }
 
             _levelData.carryBlockJam.platePlacements = synced;
+            EditorUtility.SetDirty(_levelData);
             if (_levelDataSo != null && _levelDataSo.targetObject == _levelData)
                 _levelDataSo.Update();
         }
@@ -1693,20 +1696,27 @@ namespace GAITemplate.Editor
                 return;
 
             EnsureGridSizes();
+
+            // Flush pending SerializedObject edits BEFORE writing grid/plates.
+            // Calling Update() first would discard those edits and could restore a
+            // stale platePlacements list over the grid sync.
+            if (_levelDataSo == null || _levelDataSo.targetObject != _levelData)
+                _levelDataSo = new SerializedObject(_levelData);
+            _levelDataSo.ApplyModifiedProperties();
+
             if (IsCarryBlockJamGrid())
                 SyncPlatePlacementsFromGrid();
+
             LevelCreatorUtility.WriteGridToLevel(_levelData, _rows, _columns,
                 _cellColors, _cellFlags, _cellFlagValues, _cellDirections, _cellTunnelPieces,
                 _cellSecondaryColors);
 
-            if (_levelDataSo != null)
-            {
-                _levelDataSo.Update();
-                _levelDataSo.ApplyModifiedPropertiesWithoutUndo();
-            }
-
             EditorUtility.SetDirty(_levelData);
             AssetDatabase.SaveAssets();
+
+            // Refresh the SerializedObject from the saved asset; do not Apply afterward.
+            _levelDataSo.Update();
+
             RefreshCarryBlockJamScenePreview();
             SaveDirtyGameplayScenes();
             Debug.Log(
