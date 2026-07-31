@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -656,6 +657,8 @@ namespace GAITemplate.Editor
                 disableAutoTablesProperty,
                 stickmanSpawnModeProperty,
                 fixedStickmanCellProperty);
+            EditorGUILayout.Space(8f);
+            DrawPlateGateBalanceSummary(carryBlockJamProperty, exitsProperty);
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUILayout.EndVertical();
 
@@ -809,6 +812,384 @@ namespace GAITemplate.Editor
 
                 EditorGUILayout.PropertyField(iterator, true);
             }
+        }
+
+        private void DrawPlateGateBalanceSummary(
+            SerializedProperty carryBlockJamProperty,
+            SerializedProperty exitsProperty)
+        {
+            if (carryBlockJamProperty == null)
+                return;
+
+            EnsureGridSizes();
+
+            var manualByColor = new Dictionary<PieceColorType, int>();
+            var hiddenByColor = new Dictionary<PieceColorType, int>();
+            var frozenByColor = new Dictionary<PieceColorType, int>();
+            var curtainByColor = new Dictionary<PieceColorType, int>();
+            var gridPlateByColor = new Dictionary<PieceColorType, int>();
+            var authoredPlateByColor = new Dictionary<PieceColorType, int>();
+            var autoByColor = new Dictionary<PieceColorType, int>();
+            var gateByColor = new Dictionary<PieceColorType, int>();
+            var manualCells = new Dictionary<Vector2Int, PieceColorType>();
+
+            SerializedProperty platePlacementsProperty =
+                carryBlockJamProperty.FindPropertyRelative("platePlacements");
+            CountExplicitPlatePlacements(
+                platePlacementsProperty,
+                manualByColor,
+                manualCells);
+
+            int invalidHidden = 0;
+            int invalidFrozen = 0;
+            int invalidCurtain = 0;
+            CountLiveGridMechanics(
+                manualByColor,
+                manualCells,
+                hiddenByColor,
+                frozenByColor,
+                curtainByColor,
+                gridPlateByColor,
+                authoredPlateByColor,
+                ref invalidHidden,
+                ref invalidFrozen,
+                ref invalidCurtain);
+            CountGateRequirements(exitsProperty, gateByColor);
+
+            // Runtime only auto-fills when platePlacements is empty.
+            bool usesAutoGeneration =
+                platePlacementsProperty == null || platePlacementsProperty.arraySize == 0;
+            if (usesAutoGeneration)
+            {
+                foreach (KeyValuePair<PieceColorType, int> entry in gateByColor)
+                {
+                    authoredPlateByColor.TryGetValue(entry.Key, out int authored);
+                    int autoCount = Mathf.Max(0, entry.Value - authored);
+                    if (autoCount > 0)
+                        autoByColor[entry.Key] = autoCount;
+                }
+            }
+
+            var expectedPlateByColor = new Dictionary<PieceColorType, int>(authoredPlateByColor);
+            foreach (KeyValuePair<PieceColorType, int> entry in autoByColor)
+                AddColorCount(expectedPlateByColor, entry.Key, entry.Value);
+
+            int manualTotal = SumCounts(manualByColor);
+            int hiddenTotal = SumCounts(hiddenByColor);
+            int frozenTotal = SumCounts(frozenByColor);
+            int curtainTotal = SumCounts(curtainByColor);
+            int gridPlateTotal = SumCounts(gridPlateByColor);
+            int autoTotal = SumCounts(autoByColor);
+            int authoredPlateTotal = SumCounts(authoredPlateByColor);
+            int expectedPlateTotal = SumCounts(expectedPlateByColor);
+            int gateTotal = SumCounts(gateByColor);
+
+            List<PieceColorType> colors = CollectSortedColors(
+                manualByColor,
+                hiddenByColor,
+                frozenByColor,
+                curtainByColor,
+                autoByColor,
+                gateByColor);
+
+            EditorGUILayout.LabelField("Plate / Gate Balance", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.LabelField("Sources", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField(
+                $"Manual plates: {manualTotal}   |   Grid plates (Hidden/Frozen): {gridPlateTotal}");
+            EditorGUILayout.LabelField(
+                $"Hidden cells: {hiddenTotal}   |   Frozen cells: {frozenTotal}   |   Curtain tables: {curtainTotal}");
+            EditorGUILayout.LabelField(
+                usesAutoGeneration
+                    ? $"Auto-generated plates (fill remaining gate labels): {autoTotal}"
+                    : "Auto-generated plates: 0 (disabled while platePlacements exist)");
+
+            MessageType totalMessageType = expectedPlateTotal == gateTotal
+                ? MessageType.Info
+                : MessageType.Error;
+            EditorGUILayout.HelpBox(
+                $"Expected plates: {expectedPlateTotal} " +
+                $"(authored {authoredPlateTotal} + auto {autoTotal})   |   " +
+                $"Gate labels: {gateTotal}   |   {FormatMatchStatus(expectedPlateTotal, gateTotal)}",
+                totalMessageType);
+
+            if (colors.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No authored plates, grid mechanics, or gate goals were found.",
+                    MessageType.Warning);
+            }
+            else
+            {
+                EditorGUILayout.Space(4f);
+                EditorGUILayout.LabelField("Per Color", EditorStyles.miniBoldLabel);
+                for (int i = 0; i < colors.Count; i++)
+                {
+                    PieceColorType color = colors[i];
+                    manualByColor.TryGetValue(color, out int manual);
+                    hiddenByColor.TryGetValue(color, out int hidden);
+                    frozenByColor.TryGetValue(color, out int frozen);
+                    curtainByColor.TryGetValue(color, out int curtain);
+                    gridPlateByColor.TryGetValue(color, out int gridPlates);
+                    autoByColor.TryGetValue(color, out int auto);
+                    expectedPlateByColor.TryGetValue(color, out int expected);
+                    gateByColor.TryGetValue(color, out int gates);
+
+                    int difference = expected - gates;
+                    MessageType messageType = difference == 0
+                        ? MessageType.Info
+                        : difference < 0
+                            ? MessageType.Error
+                            : MessageType.Warning;
+
+                    EditorGUILayout.HelpBox(
+                        $"{color}: plates {expected} = manual {manual} + grid {gridPlates} " +
+                        $"(H{hidden}/F{frozen}) + auto {auto}   |   " +
+                        $"gate labels {gates}   |   curtain tables {curtain}   |   " +
+                        $"{FormatMatchStatus(expected, gates)}",
+                        messageType);
+                }
+            }
+
+            if (invalidHidden > 0 || invalidFrozen > 0 || invalidCurtain > 0)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Cells missing a color (will not spawn): " +
+                    $"Hidden {invalidHidden}, Frozen {invalidFrozen}, Curtain {invalidCurtain}.",
+                    MessageType.Warning);
+            }
+
+            if (usesAutoGeneration)
+            {
+                EditorGUILayout.HelpBox(
+                    "platePlacements is empty, so runtime fills remaining gate labels with auto plates. " +
+                    "Hidden/Frozen grid cells with a color count toward that fill first.",
+                    MessageType.None);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "Because platePlacements is authored, runtime will not auto-fill missing plates. " +
+                    "Hidden/Frozen cells still add plates when their cell is empty.",
+                    MessageType.None);
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void CountLiveGridMechanics(
+            Dictionary<PieceColorType, int> manualByColor,
+            Dictionary<Vector2Int, PieceColorType> manualCells,
+            Dictionary<PieceColorType, int> hiddenByColor,
+            Dictionary<PieceColorType, int> frozenByColor,
+            Dictionary<PieceColorType, int> curtainByColor,
+            Dictionary<PieceColorType, int> gridPlateByColor,
+            Dictionary<PieceColorType, int> authoredPlateByColor,
+            ref int invalidHidden,
+            ref int invalidFrozen,
+            ref int invalidCurtain)
+        {
+            if (manualByColor != null)
+            {
+                foreach (KeyValuePair<PieceColorType, int> entry in manualByColor)
+                    AddColorCount(authoredPlateByColor, entry.Key, entry.Value);
+            }
+
+            if (_cellColors == null || _cellFlags == null)
+                return;
+
+            int rows = Mathf.Min(_rows, _cellColors.GetLength(0));
+            int columns = Mathf.Min(_columns, _cellColors.GetLength(1));
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    LevelCellFlag flags = _cellFlags[row, column];
+                    PieceColorType color = _cellColors[row, column];
+                    var cell = new Vector2Int(row, column);
+                    PieceColorType manualColor = PieceColorType.None;
+                    bool hasManualPlate = manualCells != null &&
+                                          manualCells.TryGetValue(cell, out manualColor);
+                    bool isPaintable = PieceColorPalette.IsPaintable(color);
+
+                    if ((flags & LevelCellFlag.Hidden) != 0)
+                    {
+                        if (isPaintable)
+                            AddColorCount(hiddenByColor, color, 1);
+                        else if (hasManualPlate && PieceColorPalette.IsPaintable(manualColor))
+                            AddColorCount(hiddenByColor, manualColor, 1);
+                        else
+                            invalidHidden++;
+                    }
+
+                    if ((flags & LevelCellFlag.Ice) != 0)
+                    {
+                        if (isPaintable)
+                            AddColorCount(frozenByColor, color, 1);
+                        else if (hasManualPlate && PieceColorPalette.IsPaintable(manualColor))
+                            AddColorCount(frozenByColor, manualColor, 1);
+                        else
+                            invalidFrozen++;
+                    }
+
+                    if ((flags & LevelCellFlag.Curtain) != 0)
+                    {
+                        PieceColorType acceptColor = isPaintable
+                            ? color
+                            : (_cellSecondaryColors != null
+                                ? _cellSecondaryColors[row, column]
+                                : PieceColorType.None);
+                        if (PieceColorPalette.IsPaintable(acceptColor))
+                            AddColorCount(curtainByColor, acceptColor, 1);
+                        else
+                            invalidCurtain++;
+                    }
+
+                    // Hidden/Ice spawn an extra plate only when the cell has no manual placement.
+                    bool spawnsFlagPlate =
+                        !hasManualPlate &&
+                        isPaintable &&
+                        ((flags & (LevelCellFlag.Hidden | LevelCellFlag.Ice)) != 0);
+                    if (spawnsFlagPlate)
+                    {
+                        AddColorCount(gridPlateByColor, color, 1);
+                        AddColorCount(authoredPlateByColor, color, 1);
+                    }
+                }
+            }
+        }
+
+        private static void CountExplicitPlatePlacements(
+            SerializedProperty platePlacementsProperty,
+            Dictionary<PieceColorType, int> counts,
+            Dictionary<Vector2Int, PieceColorType> occupiedCells)
+        {
+            if (platePlacementsProperty == null || !platePlacementsProperty.isArray)
+                return;
+
+            for (int i = 0; i < platePlacementsProperty.arraySize; i++)
+            {
+                SerializedProperty placement =
+                    platePlacementsProperty.GetArrayElementAtIndex(i);
+                SerializedProperty colorProperty =
+                    placement.FindPropertyRelative("color");
+                SerializedProperty rowProperty =
+                    placement.FindPropertyRelative("row");
+                SerializedProperty columnProperty =
+                    placement.FindPropertyRelative("column");
+                SerializedProperty countProperty =
+                    placement.FindPropertyRelative("count");
+                if (colorProperty == null)
+                    continue;
+
+                PieceColorType color = (PieceColorType)colorProperty.intValue;
+                int amount = countProperty != null
+                    ? Mathf.Max(1, countProperty.intValue)
+                    : 1;
+                AddColorCount(counts, color, amount);
+
+                if (rowProperty != null &&
+                    columnProperty != null &&
+                    occupiedCells != null &&
+                    PieceColorPalette.IsPaintable(color))
+                {
+                    occupiedCells[new Vector2Int(rowProperty.intValue, columnProperty.intValue)] =
+                        color;
+                }
+            }
+        }
+
+        private static void CountGateRequirements(
+            SerializedProperty exitsProperty,
+            Dictionary<PieceColorType, int> counts)
+        {
+            if (exitsProperty == null || !exitsProperty.isArray)
+                return;
+
+            for (int exitIndex = 0; exitIndex < exitsProperty.arraySize; exitIndex++)
+            {
+                SerializedProperty exit = exitsProperty.GetArrayElementAtIndex(exitIndex);
+                SerializedProperty goalsProperty = exit.FindPropertyRelative("goals");
+                if (goalsProperty == null || !goalsProperty.isArray)
+                    continue;
+
+                for (int goalIndex = 0; goalIndex < goalsProperty.arraySize; goalIndex++)
+                {
+                    SerializedProperty goal =
+                        goalsProperty.GetArrayElementAtIndex(goalIndex);
+                    SerializedProperty colorProperty =
+                        goal.FindPropertyRelative("color");
+                    SerializedProperty countProperty =
+                        goal.FindPropertyRelative("requiredPlateCount");
+                    if (colorProperty == null || countProperty == null)
+                        continue;
+
+                    AddColorCount(
+                        counts,
+                        (PieceColorType)colorProperty.intValue,
+                        Mathf.Max(1, countProperty.intValue));
+                }
+            }
+        }
+
+        private static List<PieceColorType> CollectSortedColors(
+            params Dictionary<PieceColorType, int>[] sources)
+        {
+            var colors = new List<PieceColorType>();
+            if (sources == null)
+                return colors;
+
+            for (int sourceIndex = 0; sourceIndex < sources.Length; sourceIndex++)
+            {
+                Dictionary<PieceColorType, int> source = sources[sourceIndex];
+                if (source == null)
+                    continue;
+
+                foreach (PieceColorType color in source.Keys)
+                {
+                    if (!colors.Contains(color))
+                        colors.Add(color);
+                }
+            }
+
+            colors.Sort((left, right) => ((int)left).CompareTo((int)right));
+            return colors;
+        }
+
+        private static string FormatMatchStatus(int plates, int gateLabels)
+        {
+            if (plates == gateLabels)
+                return "MATCH";
+            return plates < gateLabels
+                ? $"SHORT BY {gateLabels - plates}"
+                : $"EXTRA {plates - gateLabels}";
+        }
+
+        private static void AddColorCount(
+            Dictionary<PieceColorType, int> counts,
+            PieceColorType color,
+            int amount)
+        {
+            if (counts == null ||
+                amount <= 0 ||
+                !PieceColorPalette.IsPaintable(color))
+                return;
+
+            counts.TryGetValue(color, out int current);
+            counts[color] = current + amount;
+        }
+
+        private static int SumCounts(Dictionary<PieceColorType, int> counts)
+        {
+            int total = 0;
+            if (counts == null)
+                return total;
+
+            foreach (int count in counts.Values)
+                total += count;
+            return total;
         }
 
         // Return true → caller bu stage'i listeden silmeli.
