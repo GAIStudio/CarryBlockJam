@@ -680,7 +680,7 @@ namespace GAITemplate.Editor
             EditorGUILayout.Space(6f);
             DrawCarryBlockJamTablePlacementHelp(carryBlockJamProperty);
             EditorGUILayout.HelpBox(
-                "Paint normal plates on the grid with None tool + color. " +
+                "Normal plates: paint None + color on the grid, or use Plate Placements (row/column) below. " +
                 "Frozen ice and Color Table badge look are shared on CarryBlockJamRuntimePieceSpawner (all levels). " +
                 "Paint Ice cells (unlock moves) or Color Table cells (Accept Color).",
                 MessageType.None);
@@ -704,6 +704,17 @@ namespace GAITemplate.Editor
             DrawStickmanSpawnSettings(stickmanSpawnModeProperty, fixedStickmanCellProperty);
             EditorGUILayout.Space(6f);
 
+            if (platePlacementsProperty != null)
+            {
+                EditorGUILayout.LabelField("Plate Placements", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "Existing levels use this list (row / column / color / count). " +
+                    "Edits here paint onto the grid; grid None+color cells sync back into this list on Save.",
+                    MessageType.None);
+                EditorGUILayout.PropertyField(platePlacementsProperty, true);
+                EditorGUILayout.Space(6f);
+            }
+
             DrawCarryBlockJamSettingsWithoutFrozenVisual(
                 carryBlockJamProperty,
                 exitsProperty,
@@ -719,8 +730,9 @@ namespace GAITemplate.Editor
             if (changed)
             {
                 _levelDataSo.ApplyModifiedProperties();
+                // List edits (row/column) drive the grid — do not rebuild the list from the grid here.
                 if (IsCarryBlockJamGrid())
-                    SyncPlatePlacementsFromGrid();
+                    ApplyPlatePlacementsToGrid();
                 EditorUtility.SetDirty(_levelData);
                 RequestScenePreviewRefresh();
             }
@@ -862,7 +874,8 @@ namespace GAITemplate.Editor
                 if (fixedStickmanCellProperty != null &&
                     iterator.propertyPath == fixedStickmanCellProperty.propertyPath)
                     continue;
-                // Normal plates are authored on the color grid (None + color).
+                // Normal plates are also drawn above via Plate Placements (row/column).
+                // Skip the auto iterator copy so we do not show the list twice.
                 if (platePlacementsProperty != null &&
                     iterator.propertyPath == platePlacementsProperty.propertyPath)
                     continue;
