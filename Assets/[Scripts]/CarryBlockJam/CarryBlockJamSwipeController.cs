@@ -344,7 +344,8 @@ namespace CarryBlockJam
             _dragFollowCell = new Vector2Int(_swipeStartRow, _swipeStartColumn);
             _dragCornerTransitionActive = false;
             _dragCornerTransitionElapsed = 0f;
-            _dragCollectColor = HasCarriedPlates ? CarriedColor : PieceColorType.None;
+            // Mixed-color stacks are allowed — never lock collect to one color.
+            _dragCollectColor = PieceColorType.None;
             _swipeStartedWithCarriedPlates = HasCarriedPlates;
             _hasTablePickupBlockDeliver = false;
             _trailSessionCells = 0f;
@@ -2090,9 +2091,12 @@ namespace CarryBlockJam
                 return;
             }
 
+            // Deliver top-first: only the contiguous run of matching color at the
+            // top of the stack. Lower plates stay until they surface.
             PieceColorType deliverColor = CarriedColor;
+            int leadingCount = CountLeadingCarriedPlatesOfColor(deliverColor);
             int consumableCount = Mathf.Min(
-                _carriedPlates.Count,
+                leadingCount,
                 exitComponent.GetAcceptablePlateCount(deliverColor));
             if (consumableCount <= 0)
             {
@@ -2109,7 +2113,114 @@ namespace CarryBlockJam
             // Keep the queue on CharTable until each plate launches — do not
             // reparent the whole stack up front (that left plates floating mid-air).
             RestackPendingExitPlates(plates, 0);
-            AnimateNextPlateToExit(plates, 0, exitComponent, deliverColor);
+            if (UsesCharTableVisual())
+                AnimateGateDeliveryBatch(plates, exitComponent, deliverColor);
+            else
+                AnimateNextPlateToExit(plates, 0, exitComponent, deliverColor);
+        }
+
+        /// <summary>
+        /// Staggered curvy soar from CharTable to the gate so each plate reads clearly.
+        /// </summary>
+        private void AnimateGateDeliveryBatch(
+            List<CarryBlockJamBoardPiece> plates,
+            CarryBlockJamExit exitComponent,
+            PieceColorType deliverColor)
+        {
+            if (plates == null || plates.Count == 0 || exitComponent == null)
+            {
+                _isAnimating = false;
+                return;
+            }
+
+            int remaining = plates.Count;
+            float launchGap = Mathf.Clamp(
+                charTablePickupStagger * 0.9f,
+                0.06f,
+                0.2f);
+            float flyDuration = Mathf.Max(
+                gatePlateFlyDuration,
+                charTableTablePickupDuration,
+                0.28f);
+
+            for (int i = 0; i < plates.Count; i++)
+            {
+                int index = i;
+                CarryBlockJamBoardPiece plate = plates[index];
+                if (plate == null)
+                {
+                    remaining--;
+                    continue;
+                }
+
+                float launchDelay = launchGap * index;
+                DOVirtual.DelayedCall(launchDelay, () =>
+                {
+                    if (plate == null || !plate.gameObject.activeSelf || exitComponent == null)
+                    {
+                        if (--remaining <= 0)
+                            FinishGatePlateDelivery(plates, exitComponent, deliverColor);
+                        return;
+                    }
+
+                    plate.transform.DOKill();
+                    plate.transform.SetParent(GetPiecesRoot(), true);
+                    plate.transform.localScale = Vector3.one;
+
+                    BuildTableTransferSoarTween(
+                            plate,
+                            index,
+                            () => exitComponent.GetPlateDeliveryWorldPosition(index),
+                            () => Quaternion.identity,
+                            charTableDropArcHeightMul * 1.2f,
+                            flyDuration)
+                        .OnComplete(() =>
+                        {
+                            Haptic.MediumTaptic();
+                            PlayCarrySfx(plateDeliverSound);
+                            exitComponent.ConsumeOne(deliverColor);
+                            CarryBlockJamHiddenBox.NotifyPlateCollected(plate);
+                            CarryBlockJamHiddenPlate.NotifyPlateCollected(plate);
+                            CarryBlockJamFrozenBox.NotifyPlateCollected(plate);
+                            CarryBlockJamFrozenPlate.NotifyPlateCollected(plate);
+                            if (plate != null)
+                            {
+                                plate.gameObject.SetActive(false);
+                                Destroy(plate.gameObject);
+                            }
+
+                            if (--remaining <= 0)
+                                FinishGatePlateDelivery(plates, exitComponent, deliverColor);
+                        });
+                }).SetTarget(this);
+            }
+
+            if (remaining <= 0)
+                FinishGatePlateDelivery(plates, exitComponent, deliverColor);
+        }
+
+        private void FinishGatePlateDelivery(
+            List<CarryBlockJamBoardPiece> plates,
+            CarryBlockJamExit exitComponent,
+            PieceColorType deliverColor)
+        {
+            UpdateCarriedPlateVisuals();
+            _isAnimating = false;
+            if (HasCarriedPlates)
+            {
+                MaybeNotifyTutorialExitDelivery();
+                EvaluateCarriedPlateDeadlock();
+                return;
+            }
+
+            TryTriggerSuccess(plates);
+            if (_successTriggered)
+            {
+                TutorialManager.Instance?.CompleteAndHide();
+                return;
+            }
+
+            MaybeNotifyTutorialExitDelivery();
         }
 
         private void AnimateNextPlateToExit(
@@ -2240,15 +2351,25 @@ namespace CarryBlockJam
                 return;
             }
 
+            // Same ordered rule as gates: only the leading matching color run.
+            PieceColorType deliverColor = CarriedColor;
+            int leadingCount = CountLeadingCarriedPlatesOfColor(deliverColor);
+            if (leadingCount <= 0)
+            {
+                _isAnimating = false;
+                onComplete?.Invoke();
+                return;
+            }
+
             _isAnimating = true;
-            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates();
-            // CharTable stack index 0 is the bottom — deliver top plate first.
-            plates.Reverse();
+            List<CarryBlockJamBoardPiece> plates = DetachCarriedPlates(leadingCount);
+            // CharTable stack top is delivered first — DetachCarriedPlates returns top-first.
             // Lock collect as soon as delivery starts so a fast overlapping drag
             // cannot pick plates back up mid-animation.
             ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
             RefreshStickmanAnimation(moving: false);
-            ClearCharTableTrail(resetHeaviness: true);
+            if (!HasCarriedPlates)
+                ClearCharTableTrail(resetHeaviness: true);
             AnimateNextPlateToBox(plates, 0, targetBox, onComplete);
         }
 
@@ -2263,9 +2384,12 @@ namespace CarryBlockJam
 
             if (index >= plates.Count)
             {
+                UpdateCarriedPlateVisuals();
                 _isAnimating = false;
                 if (targetBox != null)
                     ArmTableCollectCooldown(targetBox.Row, targetBox.Column);
+                if (HasCarriedPlates)
+                    EvaluateCarriedPlateDeadlock();
                 if (onComplete != null)
                     onComplete.Invoke();
                 else
@@ -4019,16 +4143,9 @@ namespace CarryBlockJam
 
         private PieceColorType GetRequiredCollectColor()
         {
-            if (HasCarriedPlates)
-            {
-                _dragCollectColor = CarriedColor;
-                return CarriedColor;
-            }
-
-            if (_carriedPlates.Count == 0)
-                _dragCollectColor = PieceColorType.None;
-
-            return _dragCollectColor;
+            // Mixed-color CharTable stacks: any unlocked plate can be picked up.
+            _dragCollectColor = PieceColorType.None;
+            return PieceColorType.None;
         }
 
         private bool IsCollectiblePlate(
@@ -4072,9 +4189,6 @@ namespace CarryBlockJam
                     GetRequiredCollectColor(),
                     out CarryBlockJamBoardPiece plate))
                 return false;
-
-            if (_dragCollectColor == PieceColorType.None)
-                _dragCollectColor = plate.Color;
 
             List<CarryBlockJamBoardPiece> extracted = ExtractPickupPlates(plate, row, column);
             if (extracted == null || extracted.Count == 0)
@@ -4270,8 +4384,31 @@ namespace CarryBlockJam
 
         private bool HasCarriedPlates => _carriedPlates.Count > 0;
 
+        /// <summary>
+        /// Top / next-to-deliver color. Mixed stacks deliver from the top down.
+        /// </summary>
         private PieceColorType CarriedColor =>
-            HasCarriedPlates ? _carriedPlates[0].Color : PieceColorType.None;
+            HasCarriedPlates ? _carriedPlates[_carriedPlates.Count - 1].Color : PieceColorType.None;
+
+        /// <summary>
+        /// Contiguous plates from the top of the carry stack that share <paramref name="color"/>.
+        /// </summary>
+        private int CountLeadingCarriedPlatesOfColor(PieceColorType color)
+        {
+            if (color == PieceColorType.None || _carriedPlates.Count == 0)
+                return 0;
+
+            int count = 0;
+            for (int i = _carriedPlates.Count - 1; i >= 0; i--)
+            {
+                CarryBlockJamBoardPiece plate = _carriedPlates[i];
+                if (plate == null || plate.Color != color)
+                    break;
+                count++;
+            }
+
+            return count;
+        }
 
         private Tween AddPlateToCarryStack(
             CarryBlockJamBoardPiece plate,
@@ -4685,11 +4822,12 @@ namespace CarryBlockJam
             CompletePlateCollectionAnimation();
             int resolvedCount = Mathf.Clamp(count, 0, _carriedPlates.Count);
             var detached = new List<CarryBlockJamBoardPiece>(resolvedCount);
-            for (int i = 0; i < resolvedCount; i++)
+            int startIndex = _carriedPlates.Count - resolvedCount;
+            for (int i = startIndex; i < _carriedPlates.Count; i++)
                 detached.Add(_carriedPlates[i]);
 
             if (resolvedCount > 0)
-                _carriedPlates.RemoveRange(0, resolvedCount);
+                _carriedPlates.RemoveRange(startIndex, resolvedCount);
 
             return detached;
         }
@@ -4794,9 +4932,42 @@ namespace CarryBlockJam
             _failTriggered = false;
             _successTriggered = false;
             _failurePreparing = false;
+            // Stale refs after RespawnFromLevel destroyed previous pieces.
+            _carriedPlates.Clear();
+            _dragCollectColor = PieceColorType.None;
 
             ResolveGameplayReferences();
             TryPlayCharTableStartHint(force: true);
+        }
+
+        /// <summary>
+        /// Instantly mounts an ordered plate stack on CharTable (no pickup animation).
+        /// Index 0 is the bottom; the top plate is delivered first.
+        /// </summary>
+        public void SeedInitialCarryStack(List<CarryBlockJamBoardPiece> plates)
+        {
+            ResolveGameplayReferences();
+            CompletePlateCollectionAnimation();
+            _carriedPlates.Clear();
+            _dragCollectColor = PieceColorType.None;
+
+            if (plates == null || plates.Count == 0)
+                return;
+
+            for (int i = 0; i < plates.Count; i++)
+            {
+                CarryBlockJamBoardPiece plate = plates[i];
+                if (plate == null)
+                    continue;
+
+                plate.ClearStackLinks();
+                _carriedPlates.Add(plate);
+            }
+
+            UpdateCarriedPlateVisuals();
+            EnsureCharTableTrail();
+            RefreshCharTableTrailHeaviness();
+            RefreshStickmanAnimation(moving: false);
         }
 
         private void UpdateCharTableIdleHints()
@@ -6091,7 +6262,9 @@ namespace CarryBlockJam
             if (IsBoxCellBlocker(piece))
                 return false;
 
-            return piece.Kind == CarryBlockJamPieceKind.Plate && piece.Color == carriedColor;
+            // Any collectible plate is walkable — CharTable may pick mixed colors.
+            return piece.Kind == CarryBlockJamPieceKind.Plate &&
+                   IsCollectiblePlate(piece, row, column, PieceColorType.None);
         }
 
         private bool IsCarriedPlateSinkCell(int row, int column, PieceColorType carriedColor)

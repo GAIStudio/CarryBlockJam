@@ -252,7 +252,7 @@ namespace CarryBlockJam
             InitializeHiddenBoxes(grid);
             InitializeHiddenPlates(grid);
 
-            if (spawnedCount == 0)
+            if (spawnedCount == 0 && !ShouldSeedGateOrderedCarryStack())
             {
                 Debug.LogWarning("[CarryBlockJam] Runtime piece spawner did not create any pieces.");
                 return;
@@ -269,6 +269,8 @@ namespace CarryBlockJam
                 CarryBlockJamSwipeController swipe = GetComponent<CarryBlockJamSwipeController>();
                 if (swipe != null)
                     swipe.NotifyLevelPiecesSpawned();
+
+                spawnedCount += SeedGateOrderedCarryStackIfNeeded();
             }
         }
 
@@ -867,6 +869,11 @@ namespace CarryBlockJam
             BoardPlatePlacement[] basePlacements;
             if (levelPlacements.Length > 0)
                 basePlacements = levelPlacements;
+            else if (ShouldSeedGateOrderedCarryStack())
+            {
+                // Gate plates go onto CharTable — do not also scatter them on the board.
+                basePlacements = Array.Empty<BoardPlatePlacement>();
+            }
             else if (!randomizeTables && plates != null && plates.Length > 0)
                 basePlacements = plates;
             else
@@ -874,6 +881,106 @@ namespace CarryBlockJam
 
             // Level creator Hidden / Ice cells spawn as plates.
             return MergeFlaggedPlatePlacementsFromGrid(basePlacements);
+        }
+
+        private bool ShouldSeedGateOrderedCarryStack()
+        {
+            LevelData levelData = ResolveLevelData();
+            return levelData?.carryBlockJam != null &&
+                   levelData.carryBlockJam.startWithGateOrderedCarryStack;
+        }
+
+        /// <summary>
+        /// Builds CharTable's starting stack by goal round: every exit's 1st goal,
+        /// then every exit's 2nd goal, and so on. The list is reversed so the first
+        /// goal sits on top and is delivered first.
+        /// </summary>
+        private int SeedGateOrderedCarryStackIfNeeded()
+        {
+            if (!Application.isPlaying || !ShouldSeedGateOrderedCarryStack())
+                return 0;
+
+            LevelData levelData = ResolveLevelData();
+            List<CarryBlockJamExitDefinition> exits = levelData?.carryBlockJam?.exits;
+            if (exits == null || exits.Count == 0)
+                return 0;
+
+            int maxGoalCount = 0;
+            for (int exitIndex = 0; exitIndex < exits.Count; exitIndex++)
+            {
+                CarryBlockJamExitDefinition exit = exits[exitIndex];
+                if (exit?.goals == null)
+                    continue;
+                maxGoalCount = Mathf.Max(maxGoalCount, exit.goals.Count);
+            }
+
+            var plates = new List<CarryBlockJamBoardPiece>();
+            for (int goalIndex = 0; goalIndex < maxGoalCount; goalIndex++)
+            {
+                for (int exitIndex = 0; exitIndex < exits.Count; exitIndex++)
+                {
+                    CarryBlockJamExitDefinition exit = exits[exitIndex];
+                    if (exit?.goals == null || goalIndex >= exit.goals.Count)
+                        continue;
+
+                    CarryBlockJamExitGoal goal = exit.goals[goalIndex];
+                    if (goal == null || !PieceColorPalette.IsPaintable(goal.color))
+                        continue;
+
+                    int count = Mathf.Max(0, goal.requiredPlateCount);
+                    for (int i = 0; i < count; i++)
+                    {
+                        CarryBlockJamBoardPiece plate = CreateCarryStackPlate(
+                            goal.color,
+                            exitIndex,
+                            goalIndex,
+                            i);
+                        if (plate != null)
+                            plates.Add(plate);
+                    }
+                }
+            }
+
+            if (plates.Count == 0)
+                return 0;
+
+            // Top-of-stack delivery: reverse so the first goal round ends up on top.
+            plates.Reverse();
+
+            CarryBlockJamSwipeController swipe = GetComponent<CarryBlockJamSwipeController>();
+            if (swipe == null)
+            {
+                Debug.LogWarning(
+                    "[CarryBlockJam] Gate-ordered carry stack needs CarryBlockJamSwipeController.");
+                return 0;
+            }
+
+            swipe.SeedInitialCarryStack(plates);
+            return plates.Count;
+        }
+
+        private CarryBlockJamBoardPiece CreateCarryStackPlate(
+            PieceColorType color,
+            int exitIndex,
+            int goalIndex,
+            int plateIndex)
+        {
+            EnsurePiecesRoot();
+
+            var plateObject = new GameObject(
+                $"CarryPlate_{color}_e{exitIndex}_g{goalIndex}_{plateIndex}");
+            plateObject.transform.SetParent(_piecesRoot, false);
+            plateObject.transform.localRotation = Quaternion.identity;
+            plateObject.transform.localScale = Vector3.one;
+
+            CreatePlateVisual(plateVisual, "Visual", plateObject.transform, color);
+            CarryBlockJamBoardPiece piece = plateObject.AddComponent<CarryBlockJamBoardPiece>();
+            piece.Initialize(
+                CarryBlockJamPieceKind.Plate,
+                color,
+                plateVisual != null ? plateVisual.offset : new Vector3(0f, 0.75f, 0f),
+                new Vector3(0f, 1.15f, 0f));
+            return piece;
         }
 
         private readonly struct ExitDrivenSpawnPlan

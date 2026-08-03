@@ -15,63 +15,7 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells:
-  - row: 0
-    column: 7
-    color: 6
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 0
-    column: 8
-    color: 6
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 1
-    column: 8
-    color: 6
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 8
-    column: 0
-    color: 1
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 8
-    column: 8
-    color: 1
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 9
-    column: 0
-    color: 1
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
-  - row: 9
-    column: 8
-    color: 1
-    flag: 1
-    flagValue: 0
-    direction: 0
-    tunnelPieces: 
-    secondaryColor: 0
+  colorCells: []
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 360
@@ -104,6 +48,8 @@ MonoBehaviour:
         requiredPlateCount: 5
       - color: 6
         requiredPlateCount: 5
+      - color: 3
+        requiredPlateCount: 4
     - row: 0
       column: 4
       side: 0
@@ -113,8 +59,6 @@ MonoBehaviour:
       rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
-      - color: 3
-        requiredPlateCount: 4
       - color: 6
         requiredPlateCount: 5
       - color: 2
@@ -123,6 +67,8 @@ MonoBehaviour:
         requiredPlateCount: 4
       - color: 3
         requiredPlateCount: 4
+      - color: 1
+        requiredPlateCount: 3
     - row: 6
       column: 0
       side: 2
@@ -135,8 +81,6 @@ MonoBehaviour:
       - color: 6
         requiredPlateCount: 5
       - color: 4
-        requiredPlateCount: 4
-      - color: 3
         requiredPlateCount: 4
       - color: 1
         requiredPlateCount: 5
@@ -153,14 +97,23 @@ MonoBehaviour:
       goals:
       - color: 1
         requiredPlateCount: 5
-      - color: 3
-        requiredPlateCount: 4
       - color: 2
         requiredPlateCount: 5
       - color: 4
         requiredPlateCount: 4
       - color: 6
         requiredPlateCount: 5
+    - row: 5
+      column: 8
+      side: 3
+      startIndex: 5
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
+      goals:
+      - color: 3
+        requiredPlateCount: 3
     disableAutoTables: 1
     tablePlacements:
     - color: 2
@@ -203,347 +156,7 @@ MonoBehaviour:
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
-    platePlacements:
-    - color: 6
-      row: 0
-      column: 0
-      count: 1
-    - color: 6
-      row: 0
-      column: 1
-      count: 1
-    - color: 1
-      row: 0
-      column: 2
-      count: 1
-    - color: 2
-      row: 0
-      column: 3
-      count: 1
-    - color: 3
-      row: 0
-      column: 4
-      count: 1
-    - color: 6
-      row: 0
-      column: 5
-      count: 1
-    - color: 3
-      row: 0
-      column: 6
-      count: 1
-    - color: 6
-      row: 1
-      column: 0
-      count: 1
-    - color: 6
-      row: 1
-      column: 1
-      count: 1
-    - color: 1
-      row: 1
-      column: 2
-      count: 1
-    - color: 2
-      row: 1
-      column: 3
-      count: 1
-    - color: 3
-      row: 1
-      column: 4
-      count: 1
-    - color: 6
-      row: 1
-      column: 5
-      count: 1
-    - color: 1
-      row: 1
-      column: 6
-      count: 1
-    - color: 2
-      row: 1
-      column: 7
-      count: 1
-    - color: 6
-      row: 2
-      column: 0
-      count: 1
-    - color: 1
-      row: 2
-      column: 2
-      count: 1
-    - color: 2
-      row: 2
-      column: 3
-      count: 1
-    - color: 3
-      row: 2
-      column: 4
-      count: 1
-    - color: 2
-      row: 2
-      column: 5
-      count: 1
-    - color: 3
-      row: 2
-      column: 6
-      count: 1
-    - color: 3
-      row: 2
-      column: 8
-      count: 1
-    - color: 6
-      row: 3
-      column: 0
-      count: 1
-    - color: 1
-      row: 3
-      column: 1
-      count: 1
-    - color: 6
-      row: 3
-      column: 2
-      count: 1
-    - color: 2
-      row: 3
-      column: 3
-      count: 1
-    - color: 3
-      row: 3
-      column: 5
-      count: 1
-    - color: 4
-      row: 3
-      column: 6
-      count: 1
-    - color: 1
-      row: 3
-      column: 7
-      count: 1
-    - color: 3
-      row: 3
-      column: 8
-      count: 1
-    - color: 6
-      row: 4
-      column: 0
-      count: 1
-    - color: 2
-      row: 4
-      column: 1
-      count: 1
-    - color: 6
-      row: 4
-      column: 2
-      count: 1
-    - color: 6
-      row: 4
-      column: 3
-      count: 1
-    - color: 3
-      row: 4
-      column: 4
-      count: 1
-    - color: 1
-      row: 4
-      column: 5
-      count: 1
-    - color: 2
-      row: 4
-      column: 6
-      count: 1
-    - color: 3
-      row: 4
-      column: 7
-      count: 1
-    - color: 3
-      row: 4
-      column: 8
-      count: 1
-    - color: 2
-      row: 5
-      column: 0
-      count: 1
-    - color: 2
-      row: 5
-      column: 1
-      count: 1
-    - color: 3
-      row: 5
-      column: 3
-      count: 1
-    - color: 3
-      row: 5
-      column: 4
-      count: 1
-    - color: 1
-      row: 5
-      column: 5
-      count: 1
-    - color: 6
-      row: 5
-      column: 7
-      count: 1
-    - color: 1
-      row: 5
-      column: 8
-      count: 1
-    - color: 6
-      row: 6
-      column: 2
-      count: 1
-    - color: 6
-      row: 6
-      column: 3
-      count: 1
-    - color: 6
-      row: 6
-      column: 5
-      count: 1
-    - color: 6
-      row: 6
-      column: 6
-      count: 1
-    - color: 1
-      row: 7
-      column: 1
-      count: 1
-    - color: 1
-      row: 7
-      column: 2
-      count: 1
-    - color: 2
-      row: 7
-      column: 3
-      count: 1
-    - color: 3
-      row: 7
-      column: 4
-      count: 1
-    - color: 2
-      row: 7
-      column: 6
-      count: 1
-    - color: 2
-      row: 7
-      column: 7
-      count: 1
-    - color: 4
-      row: 8
-      column: 1
-      count: 1
-    - color: 4
-      row: 8
-      column: 2
-      count: 1
-    - color: 2
-      row: 8
-      column: 3
-      count: 1
-    - color: 3
-      row: 8
-      column: 4
-      count: 1
-    - color: 3
-      row: 8
-      column: 5
-      count: 1
-    - color: 1
-      row: 8
-      column: 6
-      count: 1
-    - color: 4
-      row: 8
-      column: 7
-      count: 1
-    - color: 4
-      row: 9
-      column: 1
-      count: 1
-    - color: 2
-      row: 9
-      column: 2
-      count: 1
-    - color: 1
-      row: 9
-      column: 3
-      count: 1
-    - color: 1
-      row: 9
-      column: 5
-      count: 1
-    - color: 4
-      row: 9
-      column: 7
-      count: 1
-    - color: 2
-      row: 10
-      column: 2
-      count: 1
-    - color: 4
-      row: 10
-      column: 3
-      count: 1
-    - color: 4
-      row: 10
-      column: 5
-      count: 1
-    - color: 4
-      row: 10
-      column: 7
-      count: 1
-    - color: 4
-      row: 10
-      column: 8
-      count: 1
-    - color: 4
-      row: 11
-      column: 0
-      count: 1
-    - color: 2
-      row: 11
-      column: 1
-      count: 1
-    - color: 2
-      row: 11
-      column: 2
-      count: 1
-    - color: 4
-      row: 11
-      column: 5
-      count: 1
-    - color: 4
-      row: 11
-      column: 8
-      count: 1
-    - color: 4
-      row: 12
-      column: 0
-      count: 1
-    - color: 2
-      row: 12
-      column: 1
-      count: 1
-    - color: 2
-      row: 12
-      column: 2
-      count: 1
-    - color: 4
-      row: 12
-      column: 5
-      count: 1
-    - color: 1
-      row: 12
-      column: 6
-      count: 1
-    - color: 1
-      row: 12
-      column: 7
-      count: 1
-    - color: 4
-      row: 12
-      column: 8
-      count: 1
+    platePlacements: []
     stickmanSpawnMode: 0
     fixedStickmanCell:
       row: 7

@@ -40,6 +40,11 @@ namespace CarryBlockJam
         [Header("Plates")]
         public List<CarryBlockJamPlatePlacement> platePlacements = new List<CarryBlockJamPlatePlacement>();
 
+        [Tooltip(
+            "When enabled, gate goal plates spawn as an ordered stack on CharTable " +
+            "(all exits' 1st goals, then all 2nd goals, etc.; top plate delivers first) instead of on the board.")]
+        public bool startWithGateOrderedCarryStack;
+
         [Header("Stickman Spawn")]
         [Tooltip("How the stickman is placed on the grid.")]
         public CarryBlockJamStickmanSpawnMode stickmanSpawnMode = CarryBlockJamStickmanSpawnMode.Center;

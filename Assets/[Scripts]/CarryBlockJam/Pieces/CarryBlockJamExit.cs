@@ -249,6 +249,15 @@ namespace CarryBlockJam
         }
 
         /// <summary>
+        /// World point at the gate mouth where delivered plates should fly to.
+        /// </summary>
+        public Vector3 GetPlateDeliveryWorldPosition(int stackOffset = 0)
+        {
+            Vector3 origin = GetGateVfxOrigin(0.45f);
+            return origin + Vector3.up * (0.05f * Mathf.Max(0, stackOffset));
+        }
+
+        /// <summary>
         /// Plays the per-plate gate delivery burst at the gate mesh (not CharTable).
         /// Uses <c>VFX_Star_Splash</c> (stars only; soft splash bubbles stripped).
         /// </summary>

@@ -37,11 +37,16 @@ MonoBehaviour:
     - PPv2URPConverters
     - StompyRobot.SRF
     - ToonyColorsPro2.Demo
+    - Firebase.App.Internal
     - StompyRobot.SRDebugger.Editor
     - ToonyColorsPro.Runtime
     - UniTask.Linq
+    - MaxSdk.Scripts
+    - MaxSdk.Scripts.IntegrationManager.Editor
+    - AdjustSdk.Scripts
     - StompyRobot.SRF.Editor
     - UniTask.TextMeshPro
+    - AdjustSdk.Editor
     - UniTask.Addressables
     - UniTask.Editor
     - KinoBloom.Runtime
