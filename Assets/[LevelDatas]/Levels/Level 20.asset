@@ -15,7 +15,695 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 1
+    column: 0
+    color: 2
+    flag: 2
+    flagValue: 21
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 1
+    color: 2
+    flag: 2
+    flagValue: 21
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 2
+    color: 2
+    flag: 2
+    flagValue: 21
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 6
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 7
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 1
+    column: 8
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 0
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 1
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 2
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 5
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 7
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 2
+    column: 8
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 0
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 2
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 3
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 5
+    color: 6
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 6
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 7
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 3
+    column: 8
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 0
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 1
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 2
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 3
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 4
+    color: 6
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 5
+    color: 6
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 6
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 7
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 8
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 0
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 1
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 2
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 3
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 4
+    color: 6
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 5
+    color: 6
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 6
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 7
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 8
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 0
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 1
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 2
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 3
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 4
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 5
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 6
+    color: 1
+    flag: 2
+    flagValue: 50
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 8
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 0
+    color: 3
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 1
+    color: 3
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 2
+    color: 3
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 3
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 4
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 5
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 6
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 7
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 8
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 0
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 1
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 3
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 4
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 5
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 6
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 7
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 8
+    color: 4
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 0
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 2
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 3
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 4
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 5
+    color: 5
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 6
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 7
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 9
+    column: 8
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 0
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 1
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 4
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 5
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 6
+    color: 6
+    flag: 1
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 7
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 10
+    column: 8
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 11
+    column: 6
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 11
+    column: 7
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 11
+    column: 8
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
     timeLimitSeconds: 360
@@ -38,11 +726,17 @@ MonoBehaviour:
       rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
+      - color: 3
+        requiredPlateCount: 4
+      - color: 6
+        requiredPlateCount: 3
       - color: 2
         requiredPlateCount: 3
-      - color: 4
-        requiredPlateCount: 3
+      - color: 5
+        requiredPlateCount: 4
       - color: 3
+        requiredPlateCount: 5
+      - color: 4
         requiredPlateCount: 3
     - row: 12
       column: 2
@@ -53,12 +747,16 @@ MonoBehaviour:
       rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
-      - color: 4
-        requiredPlateCount: 3
-      - color: 3
-        requiredPlateCount: 3
+      - color: 5
+        requiredPlateCount: 4
       - color: 1
         requiredPlateCount: 3
+      - color: 6
+        requiredPlateCount: 4
+      - color: 1
+        requiredPlateCount: 4
+      - color: 3
+        requiredPlateCount: 5
     - row: 0
       column: 2
       side: 0
@@ -70,10 +768,16 @@ MonoBehaviour:
       goals:
       - color: 6
         requiredPlateCount: 3
-      - color: 3
-        requiredPlateCount: 3
       - color: 2
+        requiredPlateCount: 5
+      - color: 3
+        requiredPlateCount: 4
+      - color: 1
         requiredPlateCount: 3
+      - color: 4
+        requiredPlateCount: 4
+      - color: 2
+        requiredPlateCount: 4
     - row: 0
       column: 6
       side: 0
@@ -86,9 +790,15 @@ MonoBehaviour:
       - color: 1
         requiredPlateCount: 3
       - color: 6
+        requiredPlateCount: 2
+      - color: 2
+        requiredPlateCount: 5
+      - color: 4
         requiredPlateCount: 3
       - color: 1
         requiredPlateCount: 3
+      - color: 5
+        requiredPlateCount: 5
     disableAutoTables: 1
     tablePlacements:
     - color: 1
@@ -115,7 +825,247 @@ MonoBehaviour:
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
-    platePlacements: []
+    platePlacements:
+    - color: 1
+      row: 1
+      column: 4
+      count: 1
+    - color: 5
+      row: 1
+      column: 6
+      count: 1
+    - color: 5
+      row: 1
+      column: 7
+      count: 1
+    - color: 5
+      row: 1
+      column: 8
+      count: 1
+    - color: 3
+      row: 2
+      column: 0
+      count: 1
+    - color: 3
+      row: 2
+      column: 1
+      count: 1
+    - color: 3
+      row: 2
+      column: 2
+      count: 1
+    - color: 1
+      row: 2
+      column: 4
+      count: 1
+    - color: 1
+      row: 2
+      column: 5
+      count: 1
+    - color: 1
+      row: 2
+      column: 6
+      count: 1
+    - color: 5
+      row: 2
+      column: 7
+      count: 1
+    - color: 5
+      row: 2
+      column: 8
+      count: 1
+    - color: 3
+      row: 3
+      column: 0
+      count: 1
+    - color: 1
+      row: 3
+      column: 2
+      count: 1
+    - color: 1
+      row: 3
+      column: 3
+      count: 1
+    - color: 1
+      row: 3
+      column: 4
+      count: 1
+    - color: 6
+      row: 3
+      column: 5
+      count: 1
+    - color: 5
+      row: 3
+      column: 6
+      count: 1
+    - color: 5
+      row: 3
+      column: 7
+      count: 1
+    - color: 5
+      row: 3
+      column: 8
+      count: 1
+    - color: 3
+      row: 4
+      column: 0
+      count: 1
+    - color: 3
+      row: 4
+      column: 1
+      count: 1
+    - color: 3
+      row: 4
+      column: 2
+      count: 1
+    - color: 1
+      row: 4
+      column: 3
+      count: 1
+    - color: 6
+      row: 4
+      column: 4
+      count: 1
+    - color: 6
+      row: 4
+      column: 5
+      count: 1
+    - color: 1
+      row: 5
+      column: 3
+      count: 1
+    - color: 6
+      row: 5
+      column: 4
+      count: 1
+    - color: 6
+      row: 5
+      column: 5
+      count: 1
+    - color: 2
+      row: 5
+      column: 6
+      count: 1
+    - color: 2
+      row: 5
+      column: 7
+      count: 1
+    - color: 2
+      row: 5
+      column: 8
+      count: 1
+    - color: 2
+      row: 6
+      column: 8
+      count: 1
+    - color: 4
+      row: 7
+      column: 3
+      count: 1
+    - color: 5
+      row: 7
+      column: 4
+      count: 1
+    - color: 5
+      row: 7
+      column: 5
+      count: 1
+    - color: 2
+      row: 7
+      column: 6
+      count: 1
+    - color: 2
+      row: 7
+      column: 7
+      count: 1
+    - color: 2
+      row: 7
+      column: 8
+      count: 1
+    - color: 2
+      row: 8
+      column: 0
+      count: 1
+    - color: 2
+      row: 8
+      column: 1
+      count: 1
+    - color: 2
+      row: 8
+      column: 2
+      count: 1
+    - color: 4
+      row: 8
+      column: 3
+      count: 1
+    - color: 5
+      row: 8
+      column: 4
+      count: 1
+    - color: 5
+      row: 8
+      column: 5
+      count: 1
+    - color: 2
+      row: 9
+      column: 0
+      count: 1
+    - color: 4
+      row: 9
+      column: 2
+      count: 1
+    - color: 4
+      row: 9
+      column: 3
+      count: 1
+    - color: 5
+      row: 9
+      column: 5
+      count: 1
+    - color: 3
+      row: 9
+      column: 6
+      count: 1
+    - color: 3
+      row: 9
+      column: 7
+      count: 1
+    - color: 3
+      row: 9
+      column: 8
+      count: 1
+    - color: 2
+      row: 10
+      column: 0
+      count: 1
+    - color: 2
+      row: 10
+      column: 1
+      count: 1
+    - color: 2
+      row: 10
+      column: 2
+      count: 1
+    - color: 3
+      row: 10
+      column: 7
+      count: 1
+    - color: 3
+      row: 10
+      column: 8
+      count: 1
+    - color: 3
+      row: 11
+      column: 6
+      count: 1
+    - color: 3
+      row: 11
+      column: 7
+      count: 1
+    - color: 3
+      row: 11
+      column: 8
+      count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
       row: 0
