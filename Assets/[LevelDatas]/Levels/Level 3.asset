@@ -15,10 +15,210 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 4
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 3
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 4
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 5
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 3
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 4
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 5
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 3
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 4
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 5
+    color: 4
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 2
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 3
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 4
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 5
+    color: 3
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 3
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 4
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 5
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
-    timeLimitSeconds: 360
+    timeLimitSeconds: 120
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
     gridSpacingZ: 1
@@ -39,49 +239,60 @@ MonoBehaviour:
       modelScale: {x: 1, y: 1, z: 1}
       goals:
       - color: 1
-        requiredPlateCount: 4
+        requiredPlateCount: 5
       - color: 2
+        requiredPlateCount: 10
+    - row: 12
+      column: 4
+      side: 1
+      startIndex: 4
+      length: 1
+      positionOffset: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0}
+      modelScale: {x: 1, y: 1, z: 1}
+      goals:
+      - color: 3
         requiredPlateCount: 4
-      - color: 1
-        requiredPlateCount: 4
+      - color: 4
+        requiredPlateCount: 6
     disableAutoTables: 1
     tablePlacements:
     - color: 1
-      row: 4
-      column: 1
+      row: 6
+      column: 0
       isHidden: 0
       isFrozen: 0
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
     - color: 2
-      row: 8
-      column: 5
+      row: 6
+      column: 8
       isHidden: 0
       isFrozen: 0
       isCurtain: 0
       curtainColor: 0
       unlockMoves: 0
     platePlacements:
-    - color: 1
-      row: 0
+    - color: 2
+      row: 4
+      column: 2
+      count: 1
+    - color: 2
+      row: 4
+      column: 3
+      count: 1
+    - color: 4
+      row: 4
+      column: 4
+      count: 1
+    - color: 4
+      row: 4
       column: 5
       count: 1
     - color: 1
-      row: 0
-      column: 6
-      count: 1
-    - color: 1
-      row: 1
-      column: 4
-      count: 1
-    - color: 1
-      row: 2
-      column: 4
-      count: 1
-    - color: 1
       row: 4
-      column: 4
+      column: 6
       count: 1
     - color: 2
       row: 5
@@ -89,13 +300,53 @@ MonoBehaviour:
       count: 1
     - color: 2
       row: 5
+      column: 3
+      count: 1
+    - color: 4
+      row: 5
       column: 4
+      count: 1
+    - color: 4
+      row: 5
+      column: 5
+      count: 1
+    - color: 1
+      row: 5
+      column: 6
+      count: 1
+    - color: 2
+      row: 6
+      column: 2
+      count: 1
+    - color: 2
+      row: 6
+      column: 3
+      count: 1
+    - color: 4
+      row: 6
+      column: 4
+      count: 1
+    - color: 4
+      row: 6
+      column: 5
       count: 1
     - color: 1
       row: 6
       column: 6
       count: 1
-    - color: 1
+    - color: 3
+      row: 7
+      column: 2
+      count: 1
+    - color: 3
+      row: 7
+      column: 3
+      count: 1
+    - color: 3
+      row: 7
+      column: 4
+      count: 1
+    - color: 3
       row: 7
       column: 5
       count: 1
@@ -111,10 +362,22 @@ MonoBehaviour:
       row: 8
       column: 3
       count: 1
+    - color: 2
+      row: 8
+      column: 4
+      count: 1
+    - color: 2
+      row: 8
+      column: 5
+      count: 1
+    - color: 1
+      row: 8
+      column: 6
+      count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 7
-      column: 4
+      row: 8
+      column: 0
   hasTutorial: 0
   tutorialTextWorldPosition: {x: 0, y: 0, z: 0}
   tutorialStages: []

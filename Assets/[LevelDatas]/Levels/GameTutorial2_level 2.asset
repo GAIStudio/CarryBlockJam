@@ -15,10 +15,58 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 4
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 6
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 1
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 2
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 8
+    column: 3
+    color: 2
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
-    timeLimitSeconds: 360
+    timeLimitSeconds: 120
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
     gridSpacingZ: 1
@@ -38,26 +86,15 @@ MonoBehaviour:
       rotation: {x: 0, y: 0, z: 0}
       modelScale: {x: 1, y: 1, z: 1}
       goals:
-      - color: 1
-        requiredPlateCount: 3
-    - row: 0
-      column: 3
-      side: 0
-      startIndex: 3
-      length: 1
-      positionOffset: {x: 0, y: 0, z: 0}
-      rotation: {x: 0, y: 0, z: 0}
-      modelScale: {x: 1, y: 1, z: 1}
-      goals:
       - color: 2
         requiredPlateCount: 3
       - color: 1
-        requiredPlateCount: 2
+        requiredPlateCount: 3
     disableAutoTables: 1
     tablePlacements:
     - color: 1
-      row: 6
-      column: 4
+      row: 9
+      column: 6
       isHidden: 0
       isFrozen: 0
       isCurtain: 0
@@ -65,41 +102,33 @@ MonoBehaviour:
       unlockMoves: 0
     platePlacements:
     - color: 1
-      row: 6
-      column: 1
-      count: 1
-    - color: 1
-      row: 10
-      column: 5
-      count: 1
-    - color: 1
-      row: 10
-      column: 1
-      count: 1
-    - color: 2
-      row: 2
-      column: 3
-      count: 1
-    - color: 2
-      row: 3
-      column: 5
-      count: 1
-    - color: 2
       row: 4
-      column: 3
+      column: 6
       count: 1
     - color: 1
-      row: 8
-      column: 5
+      row: 5
+      column: 6
       count: 1
     - color: 1
+      row: 6
+      column: 6
+      count: 1
+    - color: 2
       row: 8
       column: 1
+      count: 1
+    - color: 2
+      row: 8
+      column: 2
+      count: 1
+    - color: 2
+      row: 8
+      column: 3
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 4
-      column: 5
+      row: 1
+      column: 6
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -6}
   tutorialStages:

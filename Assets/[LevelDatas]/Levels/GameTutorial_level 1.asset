@@ -15,10 +15,50 @@ MonoBehaviour:
   mechanicType: 0
   gridRows: 13
   gridColumns: 9
-  colorCells: []
+  colorCells:
+  - row: 3
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 4
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 5
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 6
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
+  - row: 7
+    column: 4
+    color: 1
+    flag: 0
+    flagValue: 0
+    direction: 0
+    tunnelPieces: 
+    secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
-    timeLimitSeconds: 60
+    timeLimitSeconds: 120
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
     gridSpacingZ: 1
@@ -30,9 +70,9 @@ MonoBehaviour:
       maxPlateStacks: 2
     exits:
     - row: 0
-      column: 2
+      column: 4
       side: 0
-      startIndex: 2
+      startIndex: 4
       length: 1
       positionOffset: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0}
@@ -44,29 +84,29 @@ MonoBehaviour:
     tablePlacements: []
     platePlacements:
     - color: 1
+      row: 3
+      column: 4
+      count: 1
+    - color: 1
       row: 4
-      column: 2
+      column: 4
+      count: 1
+    - color: 1
+      row: 5
+      column: 4
+      count: 1
+    - color: 1
+      row: 6
+      column: 4
       count: 1
     - color: 1
       row: 7
-      column: 2
-      count: 1
-    - color: 1
-      row: 7
-      column: 5
-      count: 1
-    - color: 1
-      row: 9
-      column: 2
-      count: 1
-    - color: 1
-      row: 9
-      column: 5
+      column: 4
       count: 1
     stickmanSpawnMode: 2
     fixedStickmanCell:
-      row: 5
-      column: 5
+      row: 10
+      column: 4
   hasTutorial: 1
   tutorialTextWorldPosition: {x: 0, y: 0, z: -8}
   tutorialStages:
@@ -74,8 +114,8 @@ MonoBehaviour:
     instruction: Collect Plates
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 5, y: 5}
-    targetCell: {x: 9, y: 5}
+    startCell: {x: 10, y: 4}
+    targetCell: {x: 3, y: 4}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
