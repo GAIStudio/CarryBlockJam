@@ -130,14 +130,14 @@ MonoBehaviour:
       row: 1
       column: 6
   hasTutorial: 1
-  tutorialTextWorldPosition: {x: 0, y: 0, z: -6}
+  tutorialTextWorldPosition: {x: 0, y: 0, z: -9}
   tutorialStages:
   - stageName: 1
     instruction: Collect Plates
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 4, y: 5}
-    targetCell: {x: 10, y: 5}
+    startCell: {x: 1, y: 6}
+    targetCell: {x: 7, y: 6}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 1, y: 0, z: 0}
@@ -146,37 +146,11 @@ MonoBehaviour:
     handPauseAtEnds: 0.25
     clickableCells: []
   - stageName: Stage 2
-    instruction: Collect Plates
+    instruction: You can rest plates on tables
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 10, y: 5}
-    targetCell: {x: 10, y: 1}
-    startPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPos: {x: 0, y: 0, z: 0}
-    handRotation: {x: 0, y: 0, z: 0}
-    handMoveDuration: 0.7
-    handPauseAtEnds: 0.25
-    clickableCells: []
-  - stageName: Stage 3
-    instruction: Collect Plates
-    hideHand: 0
-    useGridHandPath: 1
-    startCell: {x: 10, y: 1}
-    targetCell: {x: 6, y: 1}
-    startPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPos: {x: 0, y: 0, z: 0}
-    handRotation: {x: 0, y: 0, z: 0}
-    handMoveDuration: 0.7
-    handPauseAtEnds: 0.25
-    clickableCells: []
-  - stageName: Stage 4
-    instruction: You can rest the plates on the table
-    hideHand: 0
-    useGridHandPath: 1
-    startCell: {x: 6, y: 1}
-    targetCell: {x: 6, y: 4}
+    startCell: {x: 6, y: 6}
+    targetCell: {x: 9, y: 6}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}

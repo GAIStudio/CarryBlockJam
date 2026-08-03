@@ -124,37 +124,11 @@ MonoBehaviour:
     handPauseAtEnds: 0.25
     clickableCells: []
   - stageName: Stage 2
-    instruction: Collect Plates
+    instruction: 'Bring the plates to check out '
     hideHand: 0
     useGridHandPath: 1
-    startCell: {x: 9, y: 5}
-    targetCell: {x: 9, y: 2}
-    startPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPos: {x: 0, y: 0, z: 0}
-    handRotation: {x: 0, y: 0, z: 0}
-    handMoveDuration: 0.7
-    handPauseAtEnds: 0.25
-    clickableCells: []
-  - stageName: Stage 3
-    instruction: Collect Plates
-    hideHand: 0
-    useGridHandPath: 1
-    startCell: {x: 9, y: 2}
-    targetCell: {x: 4, y: 2}
-    startPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPositionOffset: {x: 0.1, y: 0, z: 0}
-    targetPos: {x: 0, y: 0, z: 0}
-    handRotation: {x: 0, y: 0, z: 0}
-    handMoveDuration: 0.7
-    handPauseAtEnds: 0.25
-    clickableCells: []
-  - stageName: Stage 4
-    instruction: Bring the plates to Check Out
-    hideHand: 0
-    useGridHandPath: 1
-    startCell: {x: 4, y: 2}
-    targetCell: {x: 0, y: 2}
+    startCell: {x: 3, y: 4}
+    targetCell: {x: 0, y: 4}
     startPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPositionOffset: {x: 0.1, y: 0, z: 0}
     targetPos: {x: 0, y: 0, z: 0}
