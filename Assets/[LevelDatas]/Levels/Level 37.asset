@@ -922,7 +922,7 @@ MonoBehaviour:
     secondaryColor: 0
   carryBlockJam:
     hasTimer: 1
-    timeLimitSeconds: 360
+    timeLimitSeconds: 135
     gridCellScale: {x: 1, y: 1, z: 1}
     gridSpacingX: 1
     gridSpacingZ: 1
