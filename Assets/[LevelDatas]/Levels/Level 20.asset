@@ -736,8 +736,6 @@ MonoBehaviour:
         requiredPlateCount: 4
       - color: 3
         requiredPlateCount: 5
-      - color: 4
-        requiredPlateCount: 3
     - row: 12
       column: 2
       side: 1
@@ -750,13 +748,13 @@ MonoBehaviour:
       - color: 5
         requiredPlateCount: 4
       - color: 1
-        requiredPlateCount: 3
+        requiredPlateCount: 7
       - color: 6
-        requiredPlateCount: 4
-      - color: 1
         requiredPlateCount: 4
       - color: 3
         requiredPlateCount: 5
+      - color: 4
+        requiredPlateCount: 3
     - row: 0
       column: 2
       side: 0
@@ -793,12 +791,12 @@ MonoBehaviour:
         requiredPlateCount: 2
       - color: 2
         requiredPlateCount: 5
-      - color: 4
-        requiredPlateCount: 3
-      - color: 1
-        requiredPlateCount: 3
       - color: 5
         requiredPlateCount: 5
+      - color: 1
+        requiredPlateCount: 3
+      - color: 4
+        requiredPlateCount: 3
     disableAutoTables: 1
     tablePlacements:
     - color: 1
